@@ -1,33 +1,7 @@
-// import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-// import { useState } from 'react';
-// import AuthPage from './components/AuthPage';
-// import ChatPage from './components/ChatPage';
-
-// function App() {
-//   const [user, setUser] = useState(null);
-
-//   return (
-//     <Router>
-//       <Routes>
-//         <Route 
-//           path="/" 
-//           element={!user ? <AuthPage onLogin={(data) => setUser(data)} /> : <Navigate to="/chat" />} 
-//         />
-//         <Route 
-//           path="/chat" 
-//           element={user ? <ChatPage user={user} /> : <Navigate to="/" />} 
-//         />
-//       </Routes>
-//     </Router>
-//   );
-// }
-
-// export default App;
-
 // frontend/src/App.jsx
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import AuthPage from './components/AuthPage';
+import AuthPage from './components/auth/AuthPage'; 
 import ChatPage from './components/ChatPage';
 
 function App() {
