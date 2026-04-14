@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { useState, useEffect } from 'react';
 import AuthPage from './components/auth/AuthPage'; 
 import ChatPage from './components/ChatPage';
+import ChatbotWidget from './components/ChatbotWidget';
 
 function App() {
   // Khởi tạo user từ localStorage nếu có
@@ -27,6 +28,7 @@ function App() {
         {/* Truyền thêm setUser vào ChatPage để làm tính năng Logout */}
         <Route path="/chat" element={user ? <ChatPage user={user} setUser={setUser} /> : <Navigate to="/" />} />
       </Routes>
+      <ChatbotWidget />
     </Router>
   );
 }
