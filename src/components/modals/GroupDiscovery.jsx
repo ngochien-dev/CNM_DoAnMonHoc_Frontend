@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { FaGlobe, FaLock, FaUserCheck, FaSearch, FaUsers, FaArrowRight, FaHashtag, FaFilter, FaUserPlus, FaGhost } from 'react-icons/fa';
+import { FaGlobe, FaLock, FaUserCheck, FaSearch, FaUsers, FaArrowRight, FaHashtag, FaFilter, FaUserPlus, FaGhost, FaComments } from 'react-icons/fa';
 
-const GroupDiscovery = ({ allGroups, user, handleRequestJoin, darkMode }) => {
+const GroupDiscovery = ({ allGroups, user, handleRequestJoin, darkMode, onJoinSuccess }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [filterType, setFilterType] = useState('all');
 
@@ -29,8 +29,7 @@ const GroupDiscovery = ({ allGroups, user, handleRequestJoin, darkMode }) => {
     ];
 
     return (
-        <div className="flex-1 flex flex-col h-full bg-transparent overflow-hidden animate-in fade-in slide-in-from-right-4 duration-500">
-            {/* --- HEADER TRANG (Không còn nút X thoát modal) --- */}
+        <div className="flex-1 flex flex-col h-full bg-transparent overflow-hidden animate-in fade-in slide-in-from-right-4 duration-500 font-black italic uppercase tracking-tighter">
             <div className="p-8 pb-6">
                 <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 mb-8">
                     <div>
@@ -55,7 +54,6 @@ const GroupDiscovery = ({ allGroups, user, handleRequestJoin, darkMode }) => {
                     </div>
                 </div>
 
-                {/* --- FILTER BAR --- */}
                 <div className="flex flex-wrap gap-2 items-center border-b border-black/5 dark:border-white/5 pb-6">
                     <div className="flex items-center gap-2 mr-4 text-gray-400 text-[9px] font-black uppercase tracking-widest">
                         <FaFilter/> Lọc theo:
@@ -76,7 +74,6 @@ const GroupDiscovery = ({ allGroups, user, handleRequestJoin, darkMode }) => {
                 </div>
             </div>
 
-            {/* --- GRID DANH SÁCH --- */}
             <div className="flex-1 overflow-y-auto p-8 pt-2 scrollbar-hide">
                 {filteredGroups.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center text-gray-400 opacity-30">
@@ -84,20 +81,23 @@ const GroupDiscovery = ({ allGroups, user, handleRequestJoin, darkMode }) => {
                         <p className="font-black uppercase tracking-[10px] text-xl">Empty Space</p>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 2xl:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 2xl:grid-cols-3 gap-6 pb-10">
                         {filteredGroups.map(g => {
                             const isJoined = g.members?.includes(user.username) || g.owner === user.username;
                             const isPending = g.pendingRequests?.includes(user.username);
 
                             return (
                                 <div key={g.groupId} className="group relative">
-                                    <div className={`relative h-full flex flex-col p-8 rounded-[40px] border transition-all duration-500 ${darkMode ? 'bg-white/5 border-white/5 hover:bg-white/10 hover:border-indigo-500/50' : 'bg-gray-50 border-gray-200 hover:bg-white hover:shadow-xl'}`}>
+                                    <div 
+                                        onClick={() => isJoined && onJoinSuccess(g.groupId, g.groupName)}
+                                        className={`relative h-full flex flex-col p-8 rounded-[40px] border transition-all duration-500 ${isJoined ? 'cursor-pointer' : ''} ${darkMode ? 'bg-white/5 border-white/5 hover:bg-white/10 hover:border-indigo-500/50' : 'bg-gray-50 border-gray-200 hover:bg-white hover:shadow-xl'}`}
+                                    >
                                         <div className="flex justify-between items-start mb-8">
                                             <div className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-[2px] flex items-center gap-2 ${g.isPublic ? 'bg-emerald-500/10 text-emerald-500' : 'bg-orange-500/10 text-orange-500'}`}>
                                                 {g.isPublic ? <FaGlobe/> : <FaLock/>} {g.isPublic ? 'Public' : 'Private'}
                                             </div>
-                                            <div className="bg-black/10 dark:bg-white/10 px-3 py-1.5 rounded-xl flex items-center gap-2 text-[10px] font-black">
-                                                <FaUsers className="text-indigo-500"/> {g.members?.length || 0}
+                                            <div className="bg-black/10 dark:bg-white/10 px-3 py-1.5 rounded-xl flex items-center gap-2 text-[10px] font-black text-indigo-500">
+                                                <FaUsers /> {g.members?.length || 0}
                                             </div>
                                         </div>
 
@@ -106,19 +106,22 @@ const GroupDiscovery = ({ allGroups, user, handleRequestJoin, darkMode }) => {
 
                                         <div className="mt-auto pt-6 border-t border-black/5 dark:border-white/5">
                                             {isJoined ? (
-                                                <div className="w-full py-4 rounded-2xl bg-emerald-500/10 text-emerald-500 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-3">
-                                                    <FaUserCheck size={14}/> Đã tham gia
-                                                </div>
+                                                <button 
+                                                    onClick={() => onJoinSuccess(g.groupId, g.groupName)}
+                                                    className="w-full py-4 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-black uppercase tracking-[3px] transition-all shadow-lg shadow-emerald-500/20 active:scale-95 flex items-center justify-center gap-3"
+                                                >
+                                                    <FaComments size={14}/> Vào đoạn chat
+                                                </button>
                                             ) : isPending ? (
-                                                <div className="w-full py-4 rounded-2xl bg-orange-500/10 text-orange-500 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-3 animate-pulse">
+                                                <div className="w-full py-4 rounded-2xl bg-orange-500/10 text-orange-500 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-3 animate-pulse border border-orange-500/20">
                                                     Chờ phê duyệt
                                                 </div>
                                             ) : (
                                                 <button 
-                                                    onClick={() => handleRequestJoin(g.groupId)}
-                                                    className="w-full py-4 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-black uppercase tracking-[3px] transition-all shadow-lg shadow-indigo-600/20 active:scale-95 flex items-center justify-center gap-3"
+                                                    onClick={(e) => { e.stopPropagation(); handleRequestJoin(g.groupId); }}
+                                                    className="w-full py-4 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-black uppercase tracking-[3px] transition-all shadow-lg shadow-indigo-500/20 active:scale-95 flex items-center justify-center gap-3"
                                                 >
-                                                    Gia nhập vú trụ <FaArrowRight/>
+                                                    Gia nhập vũ trụ <FaArrowRight/>
                                                 </button>
                                             )}
                                         </div>

@@ -7,7 +7,7 @@ import {
     FaChevronLeft, FaChevronRight, FaFileAlt, FaTrash, FaUndo, FaBroom, FaShieldAlt, 
     FaChartBar, FaImage, FaSmile, FaMoon, FaSun, 
     FaGlobe, FaCog, FaUserMinus, FaPauseCircle, FaPlayCircle, 
-    FaUserFriends, FaCommentDots, FaUserPlus, FaTimes, FaUserCheck, FaLock, FaUsers 
+    FaUserFriends, FaCommentDots, FaUserPlus, FaTimes, FaUserCheck, FaLock, FaUsers, FaSearch 
 } from 'react-icons/fa';
 
 import UserProfileModal from './user/UserProfileModal';
@@ -17,6 +17,7 @@ import GroupDiscovery from './modals/GroupDiscovery';
 import Home from './chat/Home';
 import RightSidebar from './chat/RightSidebar';
 import CreateChat from './function/CreateChat';
+import MessageSearch from './chat/MessageSearch';
 
 const socket = io('http://localhost:3001');
 
@@ -31,6 +32,7 @@ const ChatPage = ({ user, setUser }) => {
     const [showFriendsTab, setShowFriendsTab] = useState(false);
     const [showDiscoveryTab, setShowDiscoveryTab] = useState(false);
     const [isAdminMode, setIsAdminMode] = useState(false);
+    const [showSearch, setShowSearch] = useState(false); // 2. CHÈN STATE
     const [darkMode, setDarkMode] = useState(localStorage.getItem('theme') === 'dark');
     const [isSidebarVisible, setIsSidebarVisible] = useState(true);
     const [isRightSidebarVisible, setIsRightSidebarVisible] = useState(true);
@@ -76,7 +78,11 @@ const ChatPage = ({ user, setUser }) => {
     };
 
     const handleSwitchRoom = (room) => { 
-        setActiveRoom(room); setShowFriendsTab(false); setShowDiscoveryTab(false); setIsAdminMode(false); 
+        setActiveRoom(room); 
+        setShowFriendsTab(false); 
+        setShowDiscoveryTab(false); 
+        setIsAdminMode(false); 
+        setShowSearch(false); // Tự đóng search khi đổi phòng
         if (room) setUnreadCounts(prev => ({ ...prev, [room.id]: 0 })); 
     };
 
@@ -170,7 +176,7 @@ const ChatPage = ({ user, setUser }) => {
     useEffect(() => { scrollRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, activeRoom]);
 
     const currentGroup = allGroups.find(g => g.groupId === activeRoom?.id);
-    const isAdminOfGroup = currentGroup?.owner === user.username; // FIX 1: Chỉ chủ phòng thực sự mới có quyền duyệt
+    const isAdminOfGroup = currentGroup?.owner === user.username; 
     const isMember = !activeRoom || activeRoom.id === 'chung' || activeRoom.id.startsWith('dm_') || (activeRoom && currentGroup?.isPublic) || currentGroup?.members?.includes(user.username);
 
     return (
@@ -199,7 +205,7 @@ const ChatPage = ({ user, setUser }) => {
                 {showFriendsTab ? (
                     <FriendsTab user={user} friends={user.friends || []} friendRequests={user.friendRequests || []} loadData={loadData} onlineUsers={onlineUsers} handleStartDM={handleStartDM} handleOpenProfile={handleOpenProfile} />
                 ) : showDiscoveryTab ? (
-                    <GroupDiscovery allGroups={allGroups} user={user} handleRequestJoin={handleRequestJoin} darkMode={darkMode} />
+                    <GroupDiscovery allGroups={allGroups} user={user} handleRequestJoin={handleRequestJoin} darkMode={darkMode} onJoinSuccess={(id, name) => handleSwitchRoom({id, name})} />
                 ) : isAdminMode ? (
                     <AdminStats stats={stats} darkMode={darkMode} />
                 ) : activeRoom ? (
@@ -210,6 +216,9 @@ const ChatPage = ({ user, setUser }) => {
                                 {activeRoom.isDM ? <span className="text-indigo-400 text-sm">@ {activeRoom.name}</span> : <span className="text-sm"># {activeRoom.name}</span>}
                             </div>
                             <div className="flex items-center gap-4">
+                                {/* 3. CHÈN NÚT TÌM KIẾM Ở ĐÂY */}
+                                <button onClick={() => setShowSearch(!showSearch)} className={`p-1.5 rounded-lg transition-all ${showSearch ? 'text-indigo-500 bg-indigo-500/10' : 'text-gray-500 hover:text-white bg-white/5'}`}><FaSearch size={18}/></button>
+                                
                                 {isAdminOfGroup && !activeRoom.isDM && activeRoom.id !== 'chung' && (<button onClick={() => setShowGroupSettings(true)} className="text-gray-500 hover:text-white transition-all bg-white/5 p-1.5 rounded-lg"><FaCog/></button>)}
                                 <button onClick={clearChatHistory} className="text-gray-500 hover:text-red-500 transition-all bg-white/5 p-1.5 rounded-lg" title="Clear Chat History"><FaBroom/></button>
                                 <button onClick={() => setIsRightSidebarVisible(!isRightSidebarVisible)} className={`p-1.5 rounded-lg transition-all ${isRightSidebarVisible ? 'text-indigo-500 bg-indigo-500/10' : 'text-gray-500 hover:text-white bg-white/5'}`}>{isRightSidebarVisible ? <FaChevronRight size={18}/> : <FaUsers size={18}/>}</button>
@@ -219,7 +228,7 @@ const ChatPage = ({ user, setUser }) => {
                         {isAdminOfGroup && currentGroup?.pendingRequests?.length > 0 && (
                             <div className="bg-indigo-600/90 backdrop-blur-md text-white px-6 py-3 flex items-center justify-between animate-in slide-in-from-top duration-500 shadow-xl z-10 border-b border-white/10"><div className="flex items-center gap-3 font-black uppercase text-[10px] italic tracking-widest"><FaUserPlus className="animate-bounce" /> {currentGroup.pendingRequests.filter(un => un !== user.username).length} YÊU CẦU GIA NHẬP</div><div className="flex gap-2 overflow-x-auto py-1 max-w-[60%] scrollbar-hide">
                                 {currentGroup.pendingRequests.map(uname => {
-                                    if (uname === user.username) return null; // FIX 2: Admin không thấy nút duyệt cho chính mình
+                                    if (uname === user.username) return null; 
                                     return (
                                         <div key={uname} className="bg-black/40 px-3 py-1.5 rounded-full flex items-center gap-3 border border-white/10 shrink-0 shadow-inner group"><span className="text-[10px] font-black italic">@{uname}</span><div className="flex gap-1"><button onClick={() => handleApprove(currentGroup.groupId, uname, 'accept')} className="bg-emerald-500 p-1.5 rounded-lg hover:scale-110 shadow-lg transition-all"><FaUserCheck size={10}/></button><button onClick={() => handleApprove(currentGroup.groupId, uname, 'reject')} className="bg-red-500 p-1.5 rounded-lg hover:scale-110 shadow-lg transition-all"><FaTimes size={10}/></button></div></div>
                                     )
@@ -241,7 +250,10 @@ const ChatPage = ({ user, setUser }) => {
                 )}
             </div>
 
-            <RightSidebar user={user} onlineUsers={onlineUsers} activeRoom={activeRoom} allGroups={allGroups} handleOpenProfile={handleOpenProfile} handleStartDM={handleStartDM} darkMode={darkMode} isVisible={isRightSidebarVisible} />
+            <RightSidebar user={user} onlineUsers={onlineUsers} activeRoom={activeRoom} allGroups={allGroups} handleOpenProfile={handleOpenProfile} handleStartDM={handleStartDM} darkMode={darkMode} isVisible={isRightSidebarVisible && !showSearch} />
+
+            {/* 4. CHÈN MESSAGE SEARCH COMPONENT */}
+            {showSearch && <MessageSearch darkMode={darkMode} messages={messages} activeRoom={activeRoom} user={user} onClose={() => setShowSearch(false)} />}
 
             <CreateChat user={user} isOpen={showGroupCreator} onClose={() => setShowGroupCreator(false)} onCreateGroup={handleCreateGroup} darkMode={darkMode} />
             {showGroupSettings && (
