@@ -5,6 +5,10 @@ import {
   FaCommentDots,
   FaUsers,
   FaCrown,
+  FaTimes,
+  FaArrowUp,
+  FaArrowDown,
+  FaShieldAlt,
 } from "react-icons/fa";
 
 const RightSidebar = ({
@@ -16,12 +20,20 @@ const RightSidebar = ({
   handleStartDM,
   darkMode,
   isVisible,
+  handleKick,
+  handleToggleRole,
 }) => {
   // Nếu bị ẩn bởi nút thu/phóng thì không render gì cả
   if (!isVisible) return null;
 
   // Tìm thông tin group hiện tại nếu đang ở trong một phòng chat
   const currentGroup = allGroups.find((g) => g.groupId === activeRoom?.id);
+
+  // Quyền quản trị trong nhóm
+  const isSysAdmin = user?.role === 'admin';
+  const isOwner = currentGroup?.owner === user?.username;
+  const isMod = currentGroup?.mods?.includes(user?.username);
+  const canManage = isSysAdmin || isOwner || isMod;
 
   // --- CHẾ ĐỘ 1: HIỂN THỊ THÀNH VIÊN NHÓM ---
   const renderGroupMembers = () => {
@@ -30,8 +42,8 @@ const RightSidebar = ({
 
     return (
       <>
-        <div className="flex items-center justify-between mb-6 border-b border-white/5 pb-4">
-          <p className="text-[10px] font-black uppercase tracking-[3px] italic text-indigo-400">
+        <div className={`flex items-center justify-between mb-6 border-b pb-4 ${darkMode ? 'border-white/5' : 'border-gray-200'}`}>
+          <p className={`text-[10px] font-black uppercase tracking-[3px] italic ${darkMode ? 'text-indigo-400' : 'text-indigo-500'}`}>
             Thành viên — {members.length}
           </p>
           <FaUsers className="text-indigo-500 opacity-50" size={14} />
@@ -40,11 +52,12 @@ const RightSidebar = ({
           {members.map((uname) => {
             const isOnline = !!onlineUsers[uname];
             const isOwner = uname === currentGroup.owner;
+            const isUserMod = currentGroup?.mods?.includes(uname);
             return (
               <div
                 key={uname}
                 onClick={() => handleOpenProfile(uname)}
-                className={`group flex items-center justify-between p-2 rounded-2xl cursor-pointer transition-all hover:bg-white/5 ${!isOnline && "opacity-50"}`}
+                className={`group flex items-center justify-between p-2 rounded-2xl cursor-pointer transition-all ${darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-100'} ${!isOnline && "opacity-50"}`}
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="relative shrink-0">
@@ -62,11 +75,11 @@ const RightSidebar = ({
                       )}
                     </div>
                     <FaCircle
-                      className={`absolute -bottom-0.5 -right-0.5 text-[10px] border-2 ${darkMode ? "border-[#0f172a]" : "border-white"} ${isOnline ? "text-emerald-500" : "text-gray-500"}`}
+                      className={`absolute -bottom-0.5 -right-0.5 text-[10px] border-2 ${darkMode ? "border-[#0f172a]" : "border-white"} ${isOnline ? "text-emerald-500" : "text-gray-400"}`}
                     />
                   </div>
                   <div className="truncate">
-                    <p className="text-[11px] font-black uppercase italic tracking-tighter flex items-center gap-1">
+                    <p className={`text-[11px] font-black uppercase italic tracking-tighter flex items-center gap-1 ${darkMode ? 'text-white' : 'text-slate-800'}`}>
                       {onlineUsers[uname]?.displayName || uname}
                       {isOwner && (
                         <FaCrown
@@ -75,11 +88,38 @@ const RightSidebar = ({
                           title="Chủ vùng đất"
                         />
                       )}
+                      {isUserMod && !isOwner && (
+                        <FaShieldAlt
+                          className="text-indigo-400"
+                          size={10}
+                          title="Phó nhóm (MOD)"
+                        />
+                      )}
                     </p>
-                    <p className="text-[7px] font-bold text-gray-600 tracking-widest">
+                    <p className={`text-[7px] font-bold tracking-widest ${darkMode ? 'text-gray-600' : 'text-slate-400'}`}>
                       {isOnline ? "ĐANG HIỆN DIỆN" : "VẮNG MẶT"}
                     </p>
                   </div>
+                </div>
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                  {user.username === currentGroup.owner && uname !== user.username && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleToggleRole(uname, isUserMod ? 'revoke' : 'grant'); }}
+                      className={`p-2 rounded-lg transition-all transform hover:scale-125 ${isUserMod ? 'text-orange-500 hover:text-orange-400 bg-orange-500/10' : 'text-emerald-500 hover:text-emerald-400 bg-emerald-500/10'}`}
+                      title={isUserMod ? "Giáng chức" : "Thăng cấp MOD"}
+                    >
+                      {isUserMod ? <FaArrowDown size={12}/> : <FaArrowUp size={12}/>}
+                    </button>
+                  )}
+                  {canManage && uname !== user.username && uname !== currentGroup.owner && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleKick(uname); }}
+                      className="p-2 text-red-500 hover:text-red-400 transition-all transform hover:scale-125 bg-red-500/10 rounded-lg"
+                      title="Đuổi khỏi nhóm"
+                    >
+                      <FaTimes size={12} />
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -96,8 +136,8 @@ const RightSidebar = ({
     );
     return (
       <>
-        <div className="flex items-center justify-between mb-6 border-b border-white/5 pb-4">
-          <p className="text-[10px] font-black uppercase tracking-[3px] italic text-gray-500">
+        <div className={`flex items-center justify-between mb-6 border-b pb-4 ${darkMode ? 'border-white/5' : 'border-gray-200'}`}>
+          <p className={`text-[10px] font-black uppercase tracking-[3px] italic ${darkMode ? 'text-gray-500' : 'text-slate-400'}`}>
             Đồng minh — {user.friends?.length || 0}
           </p>
           <FaUserFriends className="text-indigo-500 opacity-50" size={14} />
@@ -108,7 +148,7 @@ const RightSidebar = ({
             return (
               <div
                 key={fName}
-                className={`group flex items-center justify-between p-2 rounded-2xl cursor-pointer transition-all hover:bg-white/5 ${!isOnline && "opacity-60"}`}
+                className={`group flex items-center justify-between p-2 rounded-2xl cursor-pointer transition-all ${darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-100'} ${!isOnline && "opacity-60"}`}
               >
                 <div
                   className="flex items-center gap-3 min-w-0"
@@ -129,14 +169,14 @@ const RightSidebar = ({
                       )}
                     </div>
                     <FaCircle
-                      className={`absolute -bottom-0.5 -right-0.5 text-[10px] border-2 ${darkMode ? "border-[#0f172a]" : "border-white"} ${isOnline ? "text-emerald-500" : "text-gray-500"}`}
+                      className={`absolute -bottom-0.5 -right-0.5 text-[10px] border-2 ${darkMode ? "border-[#0f172a]" : "border-white"} ${isOnline ? "text-emerald-500" : "text-gray-400"}`}
                     />
                   </div>
                   <div className="truncate">
-                    <p className="text-[11px] font-black uppercase italic tracking-tighter">
+                    <p className={`text-[11px] font-black uppercase italic tracking-tighter ${darkMode ? 'text-white' : 'text-slate-800'}`}>
                       {onlineUsers[fName]?.displayName || fName}
                     </p>
-                    <p className="text-[7px] font-bold text-gray-600 tracking-widest">
+                    <p className={`text-[7px] font-bold tracking-widest ${darkMode ? 'text-gray-600' : 'text-slate-400'}`}>
                       {isOnline ? "VỪA MỚI ĐÂY" : "ĐANG NGỦ"}
                     </p>
                   </div>
@@ -157,7 +197,7 @@ const RightSidebar = ({
 
   return (
     <div
-      className={`w-64 border-l border-white/5 hidden lg:flex flex-col p-5 shrink-0 transition-all duration-500 ${darkMode ? "bg-[#0f172a]/30 backdrop-blur-xl" : "bg-[#f2f3f5]"}`}
+      className={`w-64 border-l hidden lg:flex flex-col p-5 shrink-0 transition-all duration-500 ${darkMode ? "border-white/5 bg-[#0f172a]/30 backdrop-blur-xl" : "border-gray-200 bg-slate-50"}`}
     >
       {activeRoom ? renderGroupMembers() : renderFriends()}
     </div>

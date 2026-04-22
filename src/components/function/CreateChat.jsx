@@ -19,7 +19,7 @@ const CreateChat = ({ user, isOpen, onClose, onCreateGroup, darkMode }) => {
 
     return (
         <div className="fixed inset-0 bg-[#020617]/80 flex items-center justify-center z-[300] backdrop-blur-md p-4 animate-in zoom-in-95">
-            <div className={`w-[420px] rounded-[40px] p-10 shadow-2xl border border-white/10 ${darkMode ? 'bg-slate-900 text-white' : 'bg-white text-gray-900'}`}>
+            <div className={`w-[420px] rounded-[40px] p-10 shadow-2xl border ${darkMode ? 'bg-slate-900 border-white/10 text-white' : 'bg-white border-gray-100 text-slate-800'}`}>
                 
                 {/* Header Modal */}
                 <div className="flex justify-between items-center mb-8">
@@ -34,7 +34,7 @@ const CreateChat = ({ user, isOpen, onClose, onCreateGroup, darkMode }) => {
                     {/* Nút Công cộng: Chỉ Admin mới bấm được */}
                     <div 
                         onClick={() => user.role === 'admin' && setIsPublic(true)} 
-                        className={`flex-1 p-5 rounded-[25px] border-2 transition-all text-center ${isPublic ? 'border-indigo-500 bg-indigo-500/10' : 'border-white/5 opacity-20 ' + (user.role !== 'admin' ? 'cursor-not-allowed' : 'cursor-pointer')}`}
+                        className={`flex-1 p-5 rounded-[25px] border-2 transition-all text-center ${isPublic ? 'border-indigo-500 bg-indigo-500/10' : (darkMode ? 'border-white/5 opacity-20 ' : 'border-gray-200 opacity-50 bg-slate-50 ') + (user.role !== 'admin' ? 'cursor-not-allowed' : 'cursor-pointer')}`}
                         title={user.role !== 'admin' ? "Chỉ Admin mới có thể tạo kênh cộng đồng" : ""}
                     >
                         <FaGlobe className="mx-auto mb-2 text-2xl text-indigo-500"/>
@@ -44,7 +44,7 @@ const CreateChat = ({ user, isOpen, onClose, onCreateGroup, darkMode }) => {
                     {/* Nút Riêng tư: Ai cũng bấm được */}
                     <div 
                         onClick={() => setIsPublic(false)} 
-                        className={`flex-1 p-5 rounded-[25px] border-2 cursor-pointer transition-all text-center ${!isPublic ? 'border-orange-500 bg-orange-500/10' : 'border-white/5 opacity-40'}`}
+                        className={`flex-1 p-5 rounded-[25px] border-2 cursor-pointer transition-all text-center ${!isPublic ? 'border-orange-500 bg-orange-500/10' : (darkMode ? 'border-white/5 opacity-40' : 'border-gray-200 opacity-60 bg-slate-50')}`}
                     >
                         <FaLock className="mx-auto mb-2 text-xl text-orange-500"/>
                         <p className="text-[10px] font-black uppercase">Riêng tư</p>
@@ -55,7 +55,7 @@ const CreateChat = ({ user, isOpen, onClose, onCreateGroup, darkMode }) => {
                 <input 
                     value={groupName}
                     onChange={(e) => setGroupName(e.target.value)}
-                    className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl mb-8 outline-none font-black text-center text-lg focus:border-indigo-500 transition-all placeholder:text-gray-700" 
+                    className={`w-full border p-5 rounded-2xl mb-8 outline-none font-black text-center text-lg focus:border-indigo-500 transition-all ${darkMode ? 'bg-white/5 border-white/10 placeholder:text-gray-700' : 'bg-white border-gray-200 placeholder:text-slate-400'}`} 
                     placeholder="TÊN VŨ TRỤ..."
                 />
 
