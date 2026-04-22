@@ -1,55 +1,35 @@
-import React, { useState, useEffect, useRef } from "react";
-import {
-  FaTimes,
-  FaUserEdit,
-  FaCamera,
-  FaShieldAlt,
-  FaCommentDots,
-  FaUserPlus,
-  FaUserMinus,
-  FaClock,
-  FaLock,
-} from "react-icons/fa";
-import axios from "axios";
-import ProfileView from "./ProfileView";
-import ProfileEdit from "./ProfileEdit";
-import ChangePassword from "./ChangePassword";
+import React, { useState, useEffect, useRef } from 'react';
+import { FaTimes, FaUserEdit, FaCamera, FaShieldAlt, FaCommentDots, FaUserPlus, FaUserMinus, FaLock, FaVideo } from 'react-icons/fa';
+import ProfileView from './ProfileView';
+import ProfileEdit from './ProfileEdit';
+import ChangePassword from './ChangePassword';
+import api from '../../services/api';
+import useCall from '../../context/useCall';
+ 
+const UserProfileModal = ({ isOpen, onClose, targetUsername, currentUser, onStartDM }) => {
+    const [viewingUser, setViewingUser] = useState(null);
+    const [isEditing, setIsEditing] = useState(false);
+    const [isChangingPass, setIsChangingPass] = useState(false);
+    const [editForm, setEditForm] = useState({});
+    const [passForm, setPassForm] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' });
+    const [myInfo, setMyInfo] = useState(null);
+    const fileRef = useRef();
+    const { startCall, isCallBusy } = useCall();
 
-// Modal thông tin người dùng
-const UserProfileModal = ({
-  isOpen,
-  onClose,
-  targetUsername,
-  currentUser,
-  onUpdateSuccess,
-  onStartDM,
-}) => {
-  const [viewingUser, setViewingUser] = useState(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [isChangingPass, setIsChangingPass] = useState(false);
-  const [editForm, setEditForm] = useState({});
-  const [passForm, setPassForm] = useState({
-    oldPassword: "",
-    newPassword: "",
-    confirmPassword: "",
-  });
-  const [myInfo, setMyInfo] = useState(null);
-  const fileRef = useRef();
-
-  const fetchData = async () => {
-    try {
-      const [targetRes, meRes] = await Promise.all([
-        axios.get(`http://localhost:3001/api/users/${targetUsername}`),
-        axios.get(`http://localhost:3001/api/users/${currentUser.username}`),
-      ]);
-      setViewingUser(targetRes.data);
-      setEditForm(targetRes.data);
-      setMyInfo(meRes.data);
-    } catch (err) {
-      console.error(err);
-      onClose();
-    }
-  };
+    useEffect(() => {
+        if (isOpen && targetUsername) {
+            const fetchData = async () => {
+                try {
+                    const [targetRes, meRes] = await Promise.all([
+                        api.get(`/users/${targetUsername}`),
+                        api.get(`/users/${currentUser.username}`)
+                    ]);
+                    setViewingUser(targetRes.data); setEditForm(targetRes.data); setMyInfo(meRes.data);
+                } catch (err) { console.error(err); onClose(); }
+            };
+            fetchData();
+        }
+    }, [currentUser.username, isOpen, onClose, targetUsername]);
 
   useEffect(() => {
     if (isOpen && targetUsername) {
@@ -149,12 +129,14 @@ const UserProfileModal = ({
     };
   };
 
-  if (!isOpen) return null;
-  const isMe = currentUser?.username === targetUsername;
-  const isFriend = myInfo?.friends?.includes(targetUsername);
-  const hasSentRequest = viewingUser?.friendRequests?.includes(
-    currentUser.username,
-  );
+    if (!isOpen) return null;
+    const isMe = currentUser?.username === targetUsername;
+    const isFriend = myInfo?.friends?.includes(targetUsername);
+    const hasSentRequest = viewingUser?.friendRequests?.includes(currentUser.username);
+    const dmRoomId =
+        currentUser?.username && viewingUser?.username
+            ? `dm_${[currentUser.username, viewingUser.username].sort().join('_')}`
+            : null;
 
   return (
     <div className="fixed inset-0 bg-[#0f172a]/80 backdrop-blur-md flex items-center justify-center z-[1000] p-4 font-sans uppercase italic">
@@ -201,16 +183,41 @@ const UserProfileModal = ({
               </div>
             </div>
 
-            <div className="text-center mt-4 space-y-1">
-              <h2 className="text-2xl font-black flex items-center justify-center gap-2 uppercase italic">
-                {viewingUser.displayName}{" "}
-                {viewingUser.role === "admin" && (
-                  <FaShieldAlt className="text-red-500 animate-pulse" />
-                )}
-              </h2>
-              <p className="text-purple-400 font-bold text-[10px] tracking-[3px] mb-8 opacity-60">
-                @{viewingUser.username}
-              </p>
+                        <div className="text-center mt-4">
+                            <h2 className="text-2xl font-black flex items-center justify-center gap-2 tracking-tight uppercase">
+                                {viewingUser.displayName} 
+                                {viewingUser.role === 'admin' && <FaShieldAlt className="text-red-500 animate-pulse" title="Admin hệ thống"/>}
+                            </h2>
+                            <p className="text-purple-400 font-bold text-xs tracking-[2px] mb-8 opacity-80">@{viewingUser.username}</p>
+                            
+                            {!isMe && (
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">
+                                    <button onClick={() => { onStartDM(viewingUser.username); onClose(); }} className="bg-white/10 hover:bg-white/20 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 border border-white/5"><FaCommentDots className="inline mr-2" size={14}/> Nhắn tin</button>
+                                    <button
+                                        onClick={() => {
+                                            if (dmRoomId && onStartDM) {
+                                                onStartDM(viewingUser.username);
+                                            }
+                                            startCall(viewingUser.username, dmRoomId);
+                                            onClose();
+                                        }}
+                                        disabled={isCallBusy}
+                                        className={`py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border ${
+                                            isCallBusy
+                                                ? 'bg-white/5 text-gray-500 border-white/5 cursor-not-allowed'
+                                                : 'bg-cyan-500/15 text-cyan-300 border-cyan-500/20 hover:bg-cyan-500/25 active:scale-95'
+                                        }`}
+                                    >
+                                        <FaVideo className="inline mr-2" size={14}/> Gọi video
+                                    </button>
+                                    {isFriend ? (
+                                        <button onClick={() => {/* handleFriendAction unfriend */}} className="bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-red-500/20 transition-all"><FaUserMinus className="inline mr-2"/> Hủy bạn</button>
+                                    ) : (
+                                        <button onClick={() => {/* handleFriendAction request */}} className="bg-gradient-to-r from-purple-600 to-indigo-600 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-purple-500/20 hover:scale-105 transition-all"><FaUserPlus className="inline mr-2"/> {hasSentRequest ? 'Đã gửi lời mời' : 'Kết bạn'}</button>
+                                    )}
+                                </div>
+                            )}
+                        </div>
 
               {!isMe && (
                 <div className="flex justify-center gap-3 mb-8 pt-4">

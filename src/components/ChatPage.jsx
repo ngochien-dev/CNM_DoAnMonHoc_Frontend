@@ -1,25 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { io } from 'socket.io-client';
-import axios from 'axios';
 import EmojiPicker, { Theme } from 'emoji-picker-react';
 import { 
     FaHashtag, FaPlusCircle, FaPaperPlane, FaSignOutAlt, FaCircle, 
     FaChevronLeft, FaChevronRight, FaFileAlt, FaTrash, FaUndo, FaBroom, FaShieldAlt, 
     FaChartBar, FaImage, FaSmile, FaMoon, FaSun, 
     FaGlobe, FaCog, FaUserMinus, FaPauseCircle, FaPlayCircle, 
-    FaUserFriends, FaCommentDots, FaUserPlus, FaTimes, FaUserCheck, FaLock, FaUsers, FaSearch 
+    FaUserFriends, FaCommentDots, FaUserPlus, FaTimes, FaUserCheck, FaLock, FaVideo
 } from 'react-icons/fa';
 
 import UserProfileModal from './user/UserProfileModal';
 import AdminStats from './statistics/AdminStats';
-import FriendsTab from './friends/FriendsTab';
-import GroupDiscovery from './modals/GroupDiscovery'; 
-import Home from './chat/Home';
-import RightSidebar from './chat/RightSidebar';
-import CreateChat from './function/CreateChat';
-import MessageSearch from './chat/MessageSearch';
+import api from '../services/api';
+import { connectSocket } from '../services/socket';
+import useCall from '../context/useCall';
 
-const socket = io('http://localhost:3001');
+const axios = api;
 
 const ChatPage = ({ user, setUser }) => {
     const [msgInput, setMsgInput] = useState('');
@@ -41,30 +36,74 @@ const ChatPage = ({ user, setUser }) => {
     const [showGroupSettings, setShowGroupSettings] = useState(false);
     const [profileModal, setProfileModal] = useState({ isOpen: false, username: '' });
     const [stats, setStats] = useState(null);
-
+    const [callHistory, setCallHistory] = useState([]);
     const scrollRef = useRef(null);
     const fileInputRef = useRef(null);
     const emojiPickerRef = useRef(null);
+    const { startCall, isCallBusy, callHistoryVersion } = useCall();
+    const socket = connectSocket();
 
     const loadData = async () => {
         try {
-            const [m, g, u] = await Promise.all([
-                axios.get(`http://localhost:3001/api/messages/${user.username}`),
-                axios.get(`http://localhost:3001/api/groups/all`),
-                axios.get(`http://localhost:3001/api/users/${user.username}`)
+            const [m, g, u, c] = await Promise.all([
+                api.get(`/messages/${user.username}`),
+                api.get('/groups/all'),
+                api.get(`/users/${user.username}`),
+                api.get('/calls/history?limit=12').catch(() => ({ data: { items: [] } }))
             ]);
             setMessages(m.data.filter(msg => !(u.data.deletedMessages || []).includes(msg.messageId)));
             setAllGroups(g.data);
-            if (u.data.username === user.username) setUser(prev => ({ ...prev, ...u.data }));
-        } catch (err) { console.error("Load data error:", err); }
+            setFriends(u.data.friends || []);
+            setFriendRequests(u.data.friendRequests || []);
+            setCallHistory(Array.isArray(c.data) ? c.data : c.data?.items || []);
+            if (u.data.username === user.username) {
+                setUser(prev => ({ ...prev, ...u.data }));
+            }
+        } catch (err) { console.error(err); }
     };
 
-    const handleUpdateSuccess = (updatedData) => {
-        if (updatedData) setUser(prev => ({ ...prev, ...updatedData }));
+    useEffect(() => {
+        if (!user) return;
+        const socket = connectSocket();
+        socket.emit('user_online', { ...user });
         loadData();
+        socket.on('groups_updated', loadData);
+        socket.on('receive_message', (d) => {
+            setMessages(p => [...p, d]);
+            if (d.roomId !== activeRoom.id && d.senderUsername !== user.username) {
+                const rId = d.roomId || 'chung';
+                setUnreadCounts(prev => ({ ...prev, [rId]: (prev[rId] || 0) + 1 }));
+            }
+        });
+        socket.on('update_user_list', (u) => setOnlineUsers(u));
+        socket.on('message_revoked', (id) => setMessages(p => p.map(m => m.messageId === id ? { ...m, text: "Tin nhắn này đã bị thu hồi", isRevoked: true, fileData: null, fileType: null } : m)));
+        return () => { socket.off('groups_updated'); socket.off('receive_message'); socket.off('update_user_list'); socket.off('message_revoked'); };
+    }, [user.username, activeRoom.id]);
+
+    useEffect(() => {
+        if (!user) return;
+        loadData();
+    }, [user.username, callHistoryVersion]);
+
+    useEffect(() => { scrollRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, activeRoom]);
+
+    const deleteForMe = async (id) => {
+        if (window.confirm("Xóa phía bạn?")) {
+            await api.post('/messages/delete-for-me', { username: user.username, messageId: id });
+            setMessages(prev => prev.filter(m => m.messageId !== id));
+        }
     };
 
-    const handleOpenProfile = (uname) => setProfileModal({ isOpen: true, username: uname });
+    const clearChatHistory = async () => {
+        if (window.confirm(`Xóa sạch chat tại ${activeRoom.name}?`)) {
+            await api.post('/messages/clear-history', { username: user.username, roomId: activeRoom.id });
+            setMessages(prev => prev.filter(m => m.roomId !== activeRoom.id));
+        }
+    };
+
+    const unsendEverywhere = (id) => {
+        if (window.confirm("Thu hồi tin nhắn?")) socket.emit('revoke_message', id);
+    };
 
     const getRecentChatUsers = () => {
         const chatUsers = new Set();
@@ -77,13 +116,20 @@ const ChatPage = ({ user, setUser }) => {
         return Array.from(chatUsers);
     };
 
-    const handleSwitchRoom = (room) => { 
-        setActiveRoom(room); 
-        setShowFriendsTab(false); 
-        setShowDiscoveryTab(false); 
-        setIsAdminMode(false); 
-        setShowSearch(false); // Tự đóng search khi đổi phòng
-        if (room) setUnreadCounts(prev => ({ ...prev, [room.id]: 0 })); 
+    const handleSwitchRoom = (room) => { setActiveRoom(room); setShowFriendsTab(false); setIsAdminMode(false); setUnreadCounts(prev => ({ ...prev, [room.id]: 0 })); };
+    const handleStartDM = (friendUname) => { const dmId = `dm_${[user.username, friendUname].sort().join("_")}`; handleSwitchRoom({ id: dmId, name: friendUname, isDM: true }); };
+    const handleOpenProfile = (uname) => setProfileModal({ isOpen: true, username: uname });
+    const handleVideoCall = (targetUsername = activeRoom.name) => {
+        if (!targetUsername || isCallBusy) return;
+        startCall(targetUsername, activeRoom.isDM ? activeRoom.id : undefined);
+    };
+
+    const handleSendText = () => {
+        const currentG = allGroups.find(g => g.groupId === activeRoom.id);
+        if (currentG?.isDisabled) return alert("Kênh đã khóa!");
+        if (!msgInput.trim()) return;
+        socket.emit('send_message', { sender: user.displayName, senderUsername: user.username, text: msgInput, roomId: activeRoom.id, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+        setMsgInput(''); setShowEmojiPicker(false);
     };
 
     const handleStartDM = (friendUname) => { 
@@ -91,93 +137,82 @@ const ChatPage = ({ user, setUser }) => {
         handleSwitchRoom({ id: dmId, name: friendUname, isDM: true }); 
     };
 
-    const handleCreateGroup = async (name, isPublic) => {
-        const publicStatus = user.role === 'admin' ? isPublic : false;
-        await axios.post('http://localhost:3001/api/groups/create', { groupName: name, owner: user.username, isPublic: publicStatus });
+    const handleCreateGroup = async (name) => {
+        if(!name.trim()) return;
+        await api.post('/groups/create', { groupName: name, owner: user.username, isPublic: isNewGroupPublic });
         setShowGroupCreator(false);
         loadData();
     };
 
     const handleRequestJoin = async (groupId) => {
-        await axios.post('http://localhost:3001/api/groups/request', { groupId, username: user.username });
-        alert("Đã gửi tín hiệu!");
+        await api.post('/groups/request', { groupId, username: user.username });
+        alert("Đã gửi yêu cầu!");
         loadData();
     };
 
     const handleApprove = async (groupId, targetUsername, action) => {
-        await axios.post('http://localhost:3001/api/groups/approve', { groupId, targetUsername, action });
+        await api.post('/groups/approve', { groupId, targetUsername, action });
         loadData();
     };
 
     const handleManageGroup = async (action) => {
         if(window.confirm(`Xác nhận?`)) {
-            await axios.post('http://localhost:3001/api/groups/manage', { groupId: activeRoom.id, action });
-            if(action === 'delete') { handleSwitchRoom(null); setShowGroupSettings(false); }
+            await api.post('/groups/manage', { groupId: activeRoom.id, action });
+            if(action === 'delete') { setActiveRoom({ id: 'chung', name: 'Chung' }); setShowGroupSettings(false); }
             loadData();
         }
     };
 
     const handleKick = async (target) => {
         if(window.confirm(`Kích @${target}?`)) {
-            await axios.post('http://localhost:3001/api/groups/remove-member', { groupId: activeRoom.id, targetUsername: target });
+            await api.post('/groups/remove-member', { groupId: activeRoom.id, targetUsername: target });
             loadData();
         }
     };
 
-    const clearChatHistory = async () => {
-        if (window.confirm(`Xóa lịch sử tại đây?`)) {
-            await axios.post('http://localhost:3001/api/messages/clear-history', { username: user.username, roomId: activeRoom.id });
-            setMessages(prev => prev.filter(m => m.roomId !== activeRoom.id));
-        }
+    const callStatusLabelMap = {
+        ringing: 'Dang do chuong',
+        connecting: 'Dang ket noi',
+        in_call: 'Dang trong cuoc goi',
+        ended: 'Da ket thuc',
+        cancelled: 'Da huy',
+        rejected: 'Bi tu choi',
+        missed: 'Nho cuoc goi',
+        timeout: 'Het gio cho',
+        busy: 'May ban',
+        failed: 'That bai',
     };
 
-    const handleSendText = () => {
-        const currentG = allGroups.find(g => g.groupId === activeRoom.id);
-        if (currentG?.isDisabled) return alert("Kênh đã phong tỏa!");
-        if (!msgInput.trim()) return;
-        socket.emit('send_message', { sender: user.displayName, senderUsername: user.username, text: msgInput, roomId: activeRoom.id, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
-        setMsgInput(''); setShowEmojiPicker(false);
+    const formatCallDuration = (durationSec = 0) => {
+        const safeDuration = Math.max(0, Number(durationSec) || 0);
+        const minutes = Math.floor(safeDuration / 60).toString().padStart(2, '0');
+        const seconds = (safeDuration % 60).toString().padStart(2, '0');
+        return `${minutes}:${seconds}`;
     };
 
-    const handleFileUpload = (e) => {
-        const file = e.target.files[0];
-        if (!file || file.size > 5000000) return alert("File quá nặng!");
-        const reader = new FileReader();
-        reader.onloadend = () => socket.emit('send_message', { sender: user.displayName, senderUsername: user.username, fileData: reader.result, fileType: file.type.split('/')[0], fileName: file.name, roomId: activeRoom.id, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
-        reader.readAsDataURL(file);
-    };
+    const formatCallTime = (value) => {
+        if (!value) return 'Chua co thoi gian';
 
-    const unsendEverywhere = (id) => { if (window.confirm("Thu hồi?")) socket.emit('revoke_message', id); };
+        const parsed = new Date(value);
+        if (Number.isNaN(parsed.getTime())) return 'Chua co thoi gian';
 
-    const deleteForMe = async (id) => {
-        if (window.confirm("Xóa phía bạn?")) {
-            await axios.post('http://localhost:3001/api/messages/delete-for-me', { username: user.username, messageId: id });
-            setMessages(prev => prev.filter(m => m.messageId !== id));
-        }
-    };
-
-    useEffect(() => {
-        if (!user) return;
-        socket.emit('user_online', { ...user });
-        loadData();
-        socket.on('groups_updated', loadData);
-        socket.on('receive_message', (d) => {
-            setMessages(p => [...p, d]);
-            if (activeRoom && d.roomId !== activeRoom.id && d.senderUsername !== user.username) {
-                const rId = d.roomId || 'chung';
-                setUnreadCounts(prev => ({ ...prev, [rId]: (prev[rId] || 0) + 1 }));
-            }
+        return parsed.toLocaleString('vi-VN', {
+            hour: '2-digit',
+            minute: '2-digit',
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
         });
-        socket.on('update_user_list', (u) => setOnlineUsers(u));
-        socket.on('message_revoked', (id) => setMessages(p => p.map(m => m.messageId === id ? { ...m, text: "Tín hiệu đã bị thu hồi", isRevoked: true, fileData: null, fileType: null } : m)));
-        return () => { socket.off('groups_updated'); socket.off('receive_message'); socket.off('update_user_list'); socket.off('message_revoked'); };
-    }, [user.username, activeRoom?.id]);
+    };
 
-    useEffect(() => { scrollRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, activeRoom]);
+    const getCallPeerUsername = (call) => {
+        if (!call) return 'unknown';
+        return call.callerUsername === user.username ? call.calleeUsername : call.callerUsername;
+    };
 
-    const currentGroup = allGroups.find(g => g.groupId === activeRoom?.id);
-    const isAdminOfGroup = currentGroup?.owner === user.username; 
-    const isMember = !activeRoom || activeRoom.id === 'chung' || activeRoom.id.startsWith('dm_') || (activeRoom && currentGroup?.isPublic) || currentGroup?.members?.includes(user.username);
+    const currentGroup = allGroups.find(g => g.groupId === activeRoom.id);
+    const isAdminOfGroup = currentGroup?.owner === user.username || user.role === 'admin';
+    const isMember = activeRoom.id === 'chung' || activeRoom.id.startsWith('dm_') || currentGroup?.isPublic || currentGroup?.members?.includes(user.username) || user.role === 'admin';
 
     return (
         <div className={`flex h-screen overflow-hidden font-sans transition-colors duration-500 ${darkMode ? 'bg-[#0f172a] text-[#dbdee1]' : 'bg-white text-[#313338]'}`}>
@@ -187,8 +222,13 @@ const ChatPage = ({ user, setUser }) => {
                 <div onClick={() => {setShowDiscoveryTab(true); setShowFriendsTab(false); setIsAdminMode(false); setActiveRoom(null);}} className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all relative ${showDiscoveryTab ? 'bg-emerald-500 text-white shadow-lg' : 'bg-white/5 text-emerald-500 hover:bg-emerald-500 hover:text-white'}`}><FaGlobe size={22}/></div>
                 <div className="w-8 h-[2px] bg-gray-600 rounded-full opacity-20"></div>
                 <div onClick={() => { localStorage.setItem('theme', !darkMode ? 'dark' : 'light'); setDarkMode(!darkMode); }} className="w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer bg-white/10 hover:bg-white/20 transition-all">{darkMode ? <FaSun className="text-yellow-400"/> : <FaMoon/>}</div>
-                {user.role === 'admin' && (<div onClick={() => { setIsAdminMode(!isAdminMode); setShowFriendsTab(false); setShowDiscoveryTab(false); setActiveRoom(null); if(!isAdminMode) axios.get('http://localhost:3001/api/admin/stats').then(res => setStats(res.data)); }} className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all ${isAdminMode ? 'bg-red-500 text-white animate-pulse' : 'bg-white text-red-500 shadow-lg'}`}><FaShieldAlt size={22} /></div>)}
-                <div onClick={() => setShowGroupCreator(true)} className="w-12 h-12 bg-[#23a559] text-white rounded-2xl flex items-center justify-center cursor-pointer hover:rounded-xl transition-all shadow-md group relative"><FaPlusCircle size={22}/></div>
+                {user.role === 'admin' && (
+                    <div onClick={() => { setIsAdminMode(!isAdminMode); if(!isAdminMode) api.get('/admin/stats').then(res => setStats(res.data)); }}
+                        className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all ${isAdminMode ? 'bg-red-500 text-white animate-pulse' : 'bg-white text-red-500 shadow-lg'}`}><FaShieldAlt size={22} /></div>
+                )}
+                {user.role === 'admin' && (
+                    <div onClick={() => setShowGroupCreator(true)} className="w-12 h-12 bg-[#23a559] text-white rounded-2xl flex items-center justify-center cursor-pointer hover:rounded-xl transition-all shadow-md"><FaPlusCircle size={22}/></div>
+                )}
             </div>
 
             <div className={`flex flex-col border-r transition-all duration-300 ${isSidebarVisible ? 'w-64' : 'w-0 overflow-hidden'} ${darkMode ? 'bg-[#1e293b]/50 backdrop-blur-xl border-white/5' : 'bg-[#f2f3f5]'}`}>
@@ -203,9 +243,49 @@ const ChatPage = ({ user, setUser }) => {
 
             <div className={`flex-1 flex flex-col min-w-0 ${darkMode ? 'bg-transparent' : 'bg-white'}`}>
                 {showFriendsTab ? (
-                    <FriendsTab user={user} friends={user.friends || []} friendRequests={user.friendRequests || []} loadData={loadData} onlineUsers={onlineUsers} handleStartDM={handleStartDM} handleOpenProfile={handleOpenProfile} />
-                ) : showDiscoveryTab ? (
-                    <GroupDiscovery allGroups={allGroups} user={user} handleRequestJoin={handleRequestJoin} darkMode={darkMode} onJoinSuccess={(id, name) => handleSwitchRoom({id, name})} />
+                    <div className="flex-1 p-8 overflow-y-auto animate-in fade-in slide-in-from-right-4 font-bold text-gray-700 dark:text-gray-200">
+                        <p className="text-xs text-cyan-500 font-black uppercase tracking-widest mb-4 italic">Call History: {callHistory.length}</p>
+                        <h1 className="text-2xl font-black mb-8 border-b pb-4 text-[#5865f2] uppercase italic tracking-tighter flex items-center gap-3"><FaUserFriends/> Quản lý bạn bè</h1>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                            <div><p className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-4 italic">Lời mời ({friendRequests.length})</p>{friendRequests.map(u => (<div key={u} className="flex items-center justify-between p-4 rounded-2xl bg-black/5 mb-2 transition-all shadow-sm"><div className="flex items-center gap-3 cursor-pointer" onClick={()=>handleOpenProfile(u)}><div className="w-10 h-10 rounded-full bg-gray-500 flex items-center justify-center text-white font-bold uppercase">{u.substring(0,2)}</div><span className="font-bold">@{u}</span></div><button onClick={() => axios.post('/friends/accept', {me:user.username, friendUname:u}).then(loadData)} className="bg-green-500 text-white p-2.5 rounded-xl hover:scale-110 shadow-lg transition-all"><FaUserCheck/></button></div>))}</div>
+                            <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 italic">Bạn bè ({friends.length})</p>{friends.map(u => (<div key={u} className="flex items-center justify-between p-4 rounded-2xl bg-black/5 mb-2 transition-all shadow-sm"><div className="flex items-center gap-3 cursor-pointer" onClick={()=>handleOpenProfile(u)}><div className="relative"><div className="w-10 h-10 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold uppercase">{u.substring(0,2)}</div><FaCircle className={`absolute bottom-0 right-0 text-xs ${onlineUsers[u] ? 'text-green-500' : 'text-gray-400'} border-2 border-[#313338]`}/></div><span className="font-bold">@{u}</span></div><button onClick={() => handleStartDM(u)} className="bg-[#5865f2] text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase hover:scale-105 shadow-lg flex items-center gap-2"><FaCommentDots/> NHẮN TIN</button></div>))}</div>
+                        </div>
+                        <div className="mt-10">
+                            <p className="text-[10px] font-black text-cyan-500 uppercase tracking-widest mb-4 italic">Cuộc gọi gần đây</p>
+                            {callHistory.length === 0 ? (
+                                <div className="rounded-3xl border border-dashed border-cyan-500/20 bg-cyan-500/5 px-5 py-6 text-sm text-gray-400">
+                                    Chua co lich su cuoc goi. Hay thu goi video giua 2 tai khoan de kiem tra luong 1-1.
+                                </div>
+                            ) : (
+                                <div className="space-y-3">
+                                    {callHistory.slice(0, 6).map((call) => {
+                                        const peerUsername = getCallPeerUsername(call);
+                                        return (
+                                            <div key={call.callId} className="flex flex-col gap-3 rounded-3xl border border-black/5 bg-black/5 px-5 py-4 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+                                                <div>
+                                                    <p className="text-sm font-black uppercase tracking-tight">@{peerUsername}</p>
+                                                    <p className="mt-1 text-xs text-gray-400">
+                                                        {callStatusLabelMap[call.status] || call.status || 'Khong ro trang thai'} • {formatCallTime(call.createdAt)}
+                                                    </p>
+                                                    <p className="mt-1 text-xs text-gray-400">
+                                                        Duration {formatCallDuration(call.durationSec)} • End reason {call.endReason || 'n/a'}
+                                                    </p>
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                    <button onClick={() => handleStartDM(peerUsername)} className="bg-[#5865f2] text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase hover:scale-105 shadow-lg flex items-center gap-2">
+                                                        <FaCommentDots/> Mở DM
+                                                    </button>
+                                                    <button onClick={() => startCall(peerUsername, call.roomId)} disabled={isCallBusy} className={`${isCallBusy ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-cyan-500 text-white hover:scale-105'} px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-lg flex items-center gap-2 transition-all`}>
+                                                        <FaVideo/> Gọi lại
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 ) : isAdminMode ? (
                     <AdminStats stats={stats} darkMode={darkMode} />
                 ) : activeRoom ? (
@@ -216,12 +296,9 @@ const ChatPage = ({ user, setUser }) => {
                                 {activeRoom.isDM ? <span className="text-indigo-400 text-sm">@ {activeRoom.name}</span> : <span className="text-sm"># {activeRoom.name}</span>}
                             </div>
                             <div className="flex items-center gap-4">
-                                {/* 3. CHÈN NÚT TÌM KIẾM Ở ĐÂY */}
-                                <button onClick={() => setShowSearch(!showSearch)} className={`p-1.5 rounded-lg transition-all ${showSearch ? 'text-indigo-500 bg-indigo-500/10' : 'text-gray-500 hover:text-white bg-white/5'}`}><FaSearch size={18}/></button>
-                                
-                                {isAdminOfGroup && !activeRoom.isDM && activeRoom.id !== 'chung' && (<button onClick={() => setShowGroupSettings(true)} className="text-gray-500 hover:text-white transition-all bg-white/5 p-1.5 rounded-lg"><FaCog/></button>)}
-                                <button onClick={clearChatHistory} className="text-gray-500 hover:text-red-500 transition-all bg-white/5 p-1.5 rounded-lg" title="Clear Chat History"><FaBroom/></button>
-                                <button onClick={() => setIsRightSidebarVisible(!isRightSidebarVisible)} className={`p-1.5 rounded-lg transition-all ${isRightSidebarVisible ? 'text-indigo-500 bg-indigo-500/10' : 'text-gray-500 hover:text-white bg-white/5'}`}>{isRightSidebarVisible ? <FaChevronRight size={18}/> : <FaUsers size={18}/>}</button>
+                                {activeRoom.isDM && <button onClick={() => handleVideoCall(activeRoom.name)} disabled={isCallBusy} className={`${isCallBusy ? 'text-gray-300 cursor-not-allowed' : 'text-cyan-500 hover:text-cyan-400'} transition-colors`} title="Gọi video"><FaVideo size={19}/></button>}
+                                {isAdminOfGroup && !activeRoom.isDM && activeRoom.id !== 'chung' && (<button onClick={() => setShowGroupSettings(true)} className="text-gray-400 hover:text-[#5865f2] transition-colors"><FaCog size={18}/></button>)}
+                                <button onClick={clearChatHistory} className="text-gray-400 hover:text-red-500 transition-colors" title="Xóa lịch sử chat phía bạn"><FaBroom size={20}/></button>
                             </div>
                         </div>
 
@@ -259,7 +336,15 @@ const ChatPage = ({ user, setUser }) => {
             {showGroupSettings && (
                 <div className="fixed inset-0 bg-[#020617]/90 flex items-center justify-center z-[300] backdrop-blur-md p-4 animate-in zoom-in-95"><div className={`w-full max-w-[450px] rounded-[40px] overflow-hidden shadow-2xl border border-white/10 ${darkMode ? 'bg-slate-900' : 'bg-white'}`}><div className="p-8 border-b border-white/5 flex justify-between items-center bg-gradient-to-r from-slate-900 to-indigo-900 text-white shadow-xl"><div><h2 className="text-xl font-black uppercase italic tracking-tighter">Cấu hình #{activeRoom.name}</h2><p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest opacity-60 italic uppercase">Admin Control Center</p></div><button onClick={()=>setShowGroupSettings(false)} className="w-10 h-10 flex items-center justify-center bg-white/5 hover:bg-red-500 rounded-full transition-all"><FaTimes/></button></div><div className="p-8 space-y-8 font-bold"><div className="grid grid-cols-2 gap-4"><button onClick={() => handleManageGroup('disable')} className={`p-4 rounded-2xl border-2 flex items-center justify-center gap-2 uppercase text-[10px] font-black transition-all ${currentGroup?.isDisabled ? 'border-emerald-500 text-emerald-500 bg-emerald-500/5 shadow-inner' : 'border-red-500 text-red-500 bg-red-500/5 shadow-inner'}`}>{currentGroup?.isDisabled ? <><FaPlayCircle size={14}/> Mở cửa</> : <><FaPauseCircle size={14}/> Khóa chat</>}</button><button onClick={() => handleManageGroup('delete')} className="p-4 rounded-2xl border-2 border-gray-600 text-gray-400 flex items-center justify-center gap-2 uppercase text-[10px] font-black hover:bg-red-600 hover:text-white transition-all shadow-md"><FaTrash size={14}/> Giải tán</button></div>{!currentGroup?.isPublic && (<div className="space-y-3 max-h-[300px] overflow-y-auto scrollbar-hide"><p className="text-[9px] font-black uppercase text-gray-500 tracking-[2px] italic mb-4 border-l-2 border-indigo-500 pl-3 uppercase">Đội ngũ thám hiểm ({currentGroup?.members?.length})</p>{currentGroup?.members?.map(u => (<div key={u} className="flex items-center justify-between p-3 rounded-2xl bg-white/5 border border-white/5 group/user hover:border-indigo-500/30 transition-all shadow-sm"><span className="text-sm font-bold italic text-indigo-100 truncate flex-1 uppercase tracking-tighter">@{u} {u === currentGroup.owner && <span className="text-[8px] bg-indigo-500 text-white px-2 py-0.5 rounded-full uppercase ml-1 shadow-md">Host</span>}</span>{u !== currentGroup.owner && <button onClick={() => handleKick(u)} className="text-red-400 opacity-0 group-hover/user:opacity-100 transition-all hover:scale-110 active:text-red-600"><FaUserMinus size={16}/></button>}</div>))}</div>)}</div></div></div>
             )}
-            <UserProfileModal isOpen={profileModal.isOpen} onClose={()=>setProfileModal({isOpen:false, username:''})} targetUsername={profileModal.username} currentUser={user} onUpdateSuccess={handleUpdateSuccess} onStartDM={handleStartDM} />
+
+            <UserProfileModal 
+                key={`${profileModal.isOpen ? 'open' : 'closed'}-${profileModal.username || 'profile-modal'}`}
+                isOpen={profileModal.isOpen} 
+                onClose={()=>setProfileModal({isOpen:false, username:''})} 
+                targetUsername={profileModal.username} 
+                currentUser={user} 
+                onStartDM={handleStartDM} 
+            />
         </div>
     );
 };
