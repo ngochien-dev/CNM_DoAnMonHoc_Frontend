@@ -12,7 +12,7 @@ const AdminStats = ({ stats, darkMode }) => {
     );
 
     return (
-        <div className={`flex-1 p-8 overflow-y-auto animate-in fade-in duration-500 ${darkMode ? 'bg-[#313338]' : 'bg-gray-50'}`}>
+        <div className={`flex-1 p-8 overflow-y-auto animate-in fade-in duration-500 ${darkMode ? 'bg-[#0f172a]' : 'bg-[#f8fafc]'}`}>
             <h1 className="text-3xl font-black text-indigo-500 mb-8 uppercase italic flex items-center gap-4 tracking-tighter">
                 <FaChartBar/> Quản trị hệ thống
             </h1>
@@ -39,7 +39,7 @@ const AdminStats = ({ stats, darkMode }) => {
 
             {/* Biểu đồ & Top hoạt động */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-                <div className={`${darkMode ? 'bg-white/5' : 'bg-white'} p-8 rounded-[40px] shadow-sm border border-white/5`}>
+                <div className={`p-8 rounded-[40px] shadow-sm border ${darkMode ? 'bg-white/5 border-white/5' : 'bg-white border-gray-100'}`}>
                     <h3 className="font-black uppercase italic mb-6 text-gray-400 text-xs tracking-widest">Phân bổ dữ liệu</h3>
                     <div className="h-[300px]">
                         <ResponsiveContainer width="100%" height="100%">
@@ -54,12 +54,12 @@ const AdminStats = ({ stats, darkMode }) => {
                     </div>
                 </div>
 
-                <div className={`${darkMode ? 'bg-white/5' : 'bg-white'} p-8 rounded-[40px] shadow-sm border border-white/5`}>
+                <div className={`p-8 rounded-[40px] shadow-sm border ${darkMode ? 'bg-white/5 border-white/5' : 'bg-white border-gray-100'}`}>
                     <h3 className="font-black uppercase italic mb-6 text-green-500 text-xs tracking-widest">Thành viên tích cực</h3>
                     <div className="space-y-6">
                         {(stats.topUsers || []).map((u, i) => (
                             <div key={i} className="group">
-                                <div className="flex justify-between mb-2 items-center">
+                                <div className={`flex justify-between mb-2 items-center ${darkMode ? 'text-white' : 'text-slate-800'}`}>
                                     <span className="font-black italic text-sm">@{u.name}</span>
                                     <span className="text-[10px] font-black px-3 py-1 bg-indigo-500/10 text-indigo-500 rounded-full">{u.count} messages</span>
                                 </div>
