@@ -129,6 +129,7 @@ const AuthPage = ({ onLogin }) => {
                     username: form.username,
                     password: form.password,
                 });
+                localStorage.setItem('user_session', JSON.stringify(response.data));
                 onLogin(response.data);
             } else if (view === 'register') {
                 await api.post('/auth/register', form);

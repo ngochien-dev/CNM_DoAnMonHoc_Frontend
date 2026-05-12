@@ -7,8 +7,9 @@ import {
     FaChartBar, FaImage, FaSmile, FaMoon, FaSun, 
     FaGlobe, FaCog, FaUserMinus, FaPauseCircle, FaPlayCircle, 
     FaUserFriends, FaCommentDots, FaUserPlus, FaTimes, FaUserCheck, FaLock, FaUsers, FaSearch,
-    FaVideo, FaShare, FaThumbtack, FaPoll, FaCalendarAlt, FaReply, FaMicrophone, FaStopCircle, FaSmileBeam
+    FaVideo, FaShare, FaThumbtack, FaPoll, FaCalendarAlt, FaReply, FaMicrophone, FaStopCircle, FaSmileBeam, FaEdit, FaExchangeAlt
 } from 'react-icons/fa';
+import { Toaster, toast } from 'react-hot-toast';
 
 import UserProfileModal from './user/UserProfileModal';
 import AdminStats from './statistics/AdminStats';
@@ -20,10 +21,10 @@ import CreateChat from './function/CreateChat';
 import MessageSearch from './chat/MessageSearch';
 
 import useCall from '../context/useCall'; 
-import { connectSocket, disconnectSocket } from '../services/socket';
+import { getSocket, connectSocket, disconnectSocket } from '../services/socket';
 
 const ChatPage = ({ user, setUser }) => {
-    const socket = connectSocket();
+    const socket = getSocket();
     const [msgInput, setMsgInput] = useState('');
     const [messages, setMessages] = useState([]); 
     const [onlineUsers, setOnlineUsers] = useState({});
@@ -48,8 +49,11 @@ const ChatPage = ({ user, setUser }) => {
     const [showPollModal, setShowPollModal] = useState(false);
     const [showEventModal, setShowEventModal] = useState(false);
     const [stats, setStats] = useState(null);
+    const [previewImage, setPreviewImage] = useState(null);
 
     const scrollRef = useRef(null);
+    const activeRoomRef = useRef(null);
+    useEffect(() => { activeRoomRef.current = activeRoom; }, [activeRoom]);
     const fileInputRef = useRef(null);
     const emojiPickerRef = useRef(null);
     const typingTimeoutRef = useRef(null); // Ref để quản lý timeout debounce typing
@@ -68,11 +72,34 @@ const ChatPage = ({ user, setUser }) => {
     const [showReactionMenu, setShowReactionMenu] = useState(null);
     const [isRecording, setIsRecording] = useState(false);
     const [recordingTime, setRecordingTime] = useState(0);
+    const [editingMessage, setEditingMessage] = useState(null);
+    const [editText, setEditText] = useState('');
+    const [renameGroupValue, setRenameGroupValue] = useState('');
     const mediaRecorderRef = useRef(null);
     const audioChunksRef = useRef([]);
     const recordingTimerRef = useRef(null);
 
+    const playNotificationSound = () => {
+        try {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(587.33, audioCtx.currentTime); 
+            gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+            gainNode.gain.linearRampToValueAtTime(0.1, audioCtx.currentTime + 0.05);
+            gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.2);
+            oscillator.start(audioCtx.currentTime);
+            oscillator.stop(audioCtx.currentTime + 0.2);
+        } catch (e) {
+            console.error("Lỗi phát âm thanh:", e);
+        }
+    };
+
     const loadData = async () => {
+        if (!user?.username) return;
         try {
             const [m, g, u, c] = await Promise.all([
                 api.get(`/v1/messages/${user.username}`),
@@ -80,10 +107,12 @@ const ChatPage = ({ user, setUser }) => {
                 api.get(`/users/${user.username}`),
                 api.get('/calls/history?limit=12').catch(() => ({ data: [] }))
             ]);
+            // Kiểm tra user vẫn còn đăng nhập trước khi cập nhật state
+            if (!localStorage.getItem('user_session')) return;
             setMessages(m.data.filter(msg => !(u.data.deletedMessages || []).includes(msg.messageId)));
             setAllGroups(g.data);
             setCallHistory(Array.isArray(c.data) ? c.data : c.data?.items || []);
-            if (u.data.username === user.username) setUser(prev => ({ ...prev, ...u.data }));
+            if (u.data.username === user.username) setUser(prev => prev ? ({ ...prev, ...u.data }) : null);
         } catch (err) { console.error("Load data error:", err); }
     };
 
@@ -304,6 +333,23 @@ const ChatPage = ({ user, setUser }) => {
 
     const unsendEverywhere = (id) => { if (window.confirm("Thu hồi?")) socket.emit('revoke_message', id); };
 
+    const handleEditMessage = (msg) => {
+        setEditingMessage(msg);
+        setEditText(msg.text || '');
+    };
+
+    const handleSaveEdit = () => {
+        if (!editingMessage || !editText.trim()) return;
+        socket.emit('edit_message', { messageId: editingMessage.messageId, newText: editText.trim() });
+        setEditingMessage(null);
+        setEditText('');
+    };
+
+    const handleCancelEdit = () => {
+        setEditingMessage(null);
+        setEditText('');
+    };
+
     const handleCreatePoll = () => {
         if (!pollQuestion.trim() || pollOptions.some(o => !o.trim())) return alert("Vui lòng điền đủ câu hỏi và các lựa chọn!");
         socket.emit('send_message', { 
@@ -361,15 +407,25 @@ const ChatPage = ({ user, setUser }) => {
     };
 
     useEffect(() => {
-        if (!user) return;
+        if (!user?.username) return;
+        connectSocket();
         socket.emit('user_online', { ...user });
         loadData();
         socket.on('groups_updated', loadData);
         socket.on('receive_message', (d) => {
-            setMessages(p => [...p, d]);
-            if (activeRoom && d.roomId !== activeRoom.id && d.senderUsername !== user.username) {
+            setMessages(p => {
+                if (p.some(msg => msg.messageId === d.messageId)) return p;
+                return [...p, d];
+            });
+            const currentActiveRoom = activeRoomRef.current;
+            if (currentActiveRoom && d.roomId !== currentActiveRoom.id && d.senderUsername !== user.username) {
                 const rId = d.roomId || 'chung';
                 setUnreadCounts(prev => ({ ...prev, [rId]: (prev[rId] || 0) + 1 }));
+                playNotificationSound();
+                toast(`Tin nhắn mới từ ${d.senderUsername}`, {
+                    icon: '💬',
+                    style: { borderRadius: '10px', background: '#333', color: '#fff' }
+                });
             }
         });
         socket.on('update_user_list', (u) => setOnlineUsers(u));
@@ -382,15 +438,30 @@ const ChatPage = ({ user, setUser }) => {
                 return m;
             }));
         });
+        socket.on('message_edited', ({ messageId, newText, isEdited, editedAt }) => {
+            setMessages(prev => prev.map(m => m.messageId === messageId ? { ...m, text: newText, isEdited, editedAt } : m));
+        });
         
         socket.on('user_typing_start', ({ roomId, senderUsername }) => {
-            if (activeRoom && roomId === activeRoom.id && senderUsername !== user.username) {
+            const currentActiveRoom = activeRoomRef.current;
+            if (currentActiveRoom && roomId === currentActiveRoom.id && senderUsername !== user.username) {
                 setTypingUsers(prev => prev.includes(senderUsername) ? prev : [...prev, senderUsername]);
             }
         });
         socket.on('user_typing_end', ({ roomId, senderUsername }) => {
-            if (activeRoom && roomId === activeRoom.id) {
+            const currentActiveRoom = activeRoomRef.current;
+            if (currentActiveRoom && roomId === currentActiveRoom.id) {
                 setTypingUsers(prev => prev.filter(u => u !== senderUsername));
+            }
+        });
+        
+        socket.on('new_friend_request', ({ toUser, fromUser }) => {
+            if (toUser === user.username) {
+                playNotificationSound();
+                toast(`Có lời mời kết bạn từ ${fromUser}`, {
+                    icon: '👋',
+                    style: { borderRadius: '10px', background: '#333', color: '#fff' }
+                });
             }
         });
 
@@ -399,14 +470,16 @@ const ChatPage = ({ user, setUser }) => {
             socket.off('receive_message'); 
             socket.off('update_user_list'); 
             socket.off('message_revoked'); 
+            socket.off('message_edited');
             socket.off('user_typing_start');
             socket.off('user_typing_end');
+            socket.off('new_friend_request');
         };
-    }, [user, activeRoom]);
+    }, [user?.username]);
 
     // Load lại data khi có thay đổi từ cuộc gọi
     useEffect(() => {
-        if (user) loadData();
+        if (user?.username) loadData();
     }, [callHistoryVersion]);
 
     useEffect(() => { scrollRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, activeRoom]);
@@ -418,6 +491,7 @@ const ChatPage = ({ user, setUser }) => {
 
     return (
         <div className={`flex h-screen overflow-hidden font-sans transition-colors duration-500 ${darkMode ? 'bg-[#0f172a] text-[#dbdee1]' : 'bg-[#f8fafc] text-slate-800'}`}>
+            <Toaster position="top-right" />
             {/* Cột 1 & 2 giữ nguyên theo style File A của bạn */}
             <div className={`w-[72px] flex flex-col items-center py-3 space-y-4 shrink-0 shadow-inner z-20 ${darkMode ? 'bg-[#020617]' : 'bg-white border-r border-gray-200 shadow-sm'}`}>
                 <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white font-black cursor-pointer hover:rounded-xl transition-all shadow-md ${(!activeRoom && !showFriendsTab && !showDiscoveryTab && !isAdminMode) ? 'bg-indigo-600 scale-110 shadow-indigo-500/50' : 'bg-gradient-to-tr from-indigo-500 to-purple-600 opacity-60 hover:opacity-100'}`} onClick={() => handleSwitchRoom(null)}>OTT</div>
@@ -436,7 +510,7 @@ const ChatPage = ({ user, setUser }) => {
                     <div><p className={`text-[9px] font-black uppercase tracking-widest px-2 mb-2 italic ${darkMode ? 'text-gray-500' : 'text-slate-400'}`}>Cộng đồng</p><div onClick={() => handleSwitchRoom({id:'chung', name:'Chung'})} className={`p-2.5 rounded-lg flex items-center gap-3 cursor-pointer mb-1 relative transition-all ${activeRoom?.id === 'chung' ? 'bg-[#5865f2] text-white shadow-lg' : (darkMode ? 'hover:bg-white/5 text-gray-400' : 'hover:bg-slate-100 text-slate-600')}`}><FaHashtag size={14}/> <span className="text-sm uppercase tracking-tighter italic">chung</span></div>{allGroups.filter(g => g.isPublic && (g.members?.includes(user.username) || g.owner === user.username)).map(g => (<div key={g.groupId} onClick={() => handleSwitchRoom({id:g.groupId, name:g.groupName})} className={`p-2.5 rounded-lg flex items-center gap-3 cursor-pointer mb-1 relative transition-all ${activeRoom?.id === g.groupId ? 'bg-[#5865f2] text-white shadow-lg' : (darkMode ? 'hover:bg-white/5 text-gray-400' : 'hover:bg-slate-100 text-slate-600')}`}><FaGlobe size={12} className="opacity-60"/> <span className="text-sm truncate uppercase tracking-tighter italic">{g.groupName}</span></div>))}</div>
                     <div><p className={`text-[9px] font-black uppercase tracking-widest px-2 mb-2 italic ${darkMode ? 'text-gray-500' : 'text-slate-400'}`}>Riêng tư</p>{allGroups.filter(g => !g.isPublic && (g.members?.includes(user.username) || g.owner === user.username)).map(g => (<div key={g.groupId} onClick={() => handleSwitchRoom({id:g.groupId, name:g.groupName})} className={`p-2.5 rounded-lg flex items-center gap-3 cursor-pointer mb-1 relative transition-all ${activeRoom?.id===g.groupId ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' : (darkMode ? 'hover:bg-white/5 text-gray-400' : 'hover:bg-slate-100 text-slate-600')}`}><FaLock size={10} className={activeRoom?.id === g.groupId ? 'text-white' : 'text-orange-400'}/><span className="truncate text-sm font-medium uppercase tracking-tighter italic">{g.groupName}</span>{unreadCounts[g.groupId] > 0 && <span className="absolute right-2 w-4 h-4 bg-red-500 text-white text-[8px] flex items-center justify-center rounded-full font-black animate-bounce">{unreadCounts[g.groupId]}</span>}</div>))}</div>
                 </div>
-                <div onClick={() => handleOpenProfile(user.username)} className={`h-16 flex items-center px-3 cursor-pointer border-t transition-colors shrink-0 ${darkMode ? 'bg-[#020617] border-white/5' : 'bg-white border-gray-200 hover:bg-slate-50 shadow-sm'}`}><div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-black shadow-lg overflow-hidden border border-white/20">{user.avatar ? <img src={user.avatar} className="w-full h-full object-cover" alt="" /> : user.displayName[0]}</div><div className="ml-3 truncate flex-1 leading-tight"><div className="text-sm font-black truncate uppercase italic tracking-tighter">{user.displayName}</div><div className="text-[9px] text-green-500 font-black uppercase tracking-widest flex items-center gap-1"><FaCircle size={6}/> Online</div></div><FaSignOutAlt onClick={(e) => { e.stopPropagation(); setUser(null); }} className="text-gray-400 hover:text-red-500 transition-colors" /></div>
+                <div onClick={() => handleOpenProfile(user.username)} className={`h-16 flex items-center px-3 cursor-pointer border-t transition-colors shrink-0 ${darkMode ? 'bg-[#020617] border-white/5' : 'bg-white border-gray-200 hover:bg-slate-50 shadow-sm'}`}><div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-black shadow-lg overflow-hidden border border-white/20">{user.avatar ? <img src={user.avatar} className="w-full h-full object-cover" alt="" /> : user.displayName[0]}</div><div className="ml-3 truncate flex-1 leading-tight"><div className="text-sm font-black truncate uppercase italic tracking-tighter">{user.displayName}</div><div className="text-[9px] text-green-500 font-black uppercase tracking-widest flex items-center gap-1"><FaCircle size={6}/> Online</div></div><button onClick={(e) => { e.stopPropagation(); disconnectSocket(); localStorage.removeItem('user_session'); setUser(null); }} className="relative z-10 p-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-500/10 transition-all active:scale-90" title="Đăng xuất"><FaSignOutAlt size={16} /></button></div>
             </div>
 
             <div className={`flex-1 flex flex-col min-w-0 ${darkMode ? 'bg-transparent' : 'bg-[#f8fafc]'}`}>
@@ -560,6 +634,9 @@ const ChatPage = ({ user, setUser }) => {
 
                                                                 {(isMe || user.role === 'admin') && (
                                                                     <>
+                                                                        {isMe && msg.text && !msg.fileData && !msg.msgType && (
+                                                                            <button onClick={() => handleEditMessage(msg)} className="p-1 text-gray-400 hover:text-emerald-400" title="Chỉnh sửa"><FaEdit size={12}/></button>
+                                                                        )}
                                                                         <button onClick={() => deleteForMe(msg.messageId)} className="p-1 text-gray-400 hover:text-red-500" title="Xóa phía tôi"><FaTrash size={12}/></button>
                                                                         <button onClick={() => unsendEverywhere(msg.messageId)} className="p-1 text-indigo-400 hover:text-indigo-300" title="Thu hồi"><FaUndo size={12}/></button>
                                                                     </>
@@ -612,13 +689,28 @@ const ChatPage = ({ user, setUser }) => {
                                                                 </div>
                                                             ) : (
                                                                 <>
-                                                                    {msg.text}
+                                                                    {editingMessage?.messageId === msg.messageId ? (
+                                                                        <div className="space-y-2 min-w-[200px]">
+                                                                            <input value={editText} onChange={e => setEditText(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSaveEdit()} className="w-full p-2 rounded-lg bg-black/30 border border-white/20 text-sm outline-none focus:border-indigo-400 text-white" autoFocus />
+                                                                            <div className="flex gap-2 text-[9px]">
+                                                                                <button onClick={handleSaveEdit} className="px-3 py-1 bg-emerald-500 text-white rounded-lg font-black uppercase">Lưu</button>
+                                                                                <button onClick={handleCancelEdit} className="px-3 py-1 bg-white/10 text-gray-400 rounded-lg font-black uppercase">Hủy</button>
+                                                                            </div>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <>
+                                                                            {msg.text}
+                                                                            {msg.isEdited && <span className={`text-[9px] italic ml-2 ${isMe ? 'opacity-60' : 'text-gray-500'}`}>(đã chỉnh sửa)</span>}
+                                                                        </>
+                                                                    )}
                                                                     {!msg.isRevoked && msg.fileData && (
                                                                         <div className="mt-3">
                                                                             {msg.fileType === 'audio' ? (
                                                                                 <audio controls src={msg.fileData} className="max-w-[200px] h-10" />
                                                                             ) : msg.fileType === 'image' ? (
-                                                                                <img src={msg.fileData} className="max-w-xs rounded-xl shadow-2xl border border-white/10" />
+                                                                                <img src={msg.fileData} onClick={() => setPreviewImage(msg.fileData)} className="max-w-xs rounded-xl shadow-2xl border border-white/10 cursor-pointer hover:opacity-80 transition-all hover:scale-105" alt="attachment" />
+                                                                            ) : msg.fileType === 'video' ? (
+                                                                                <video controls src={msg.fileData} className="max-w-xs rounded-xl shadow-2xl border border-white/10" />
                                                                             ) : (
                                                                                 <a href={msg.fileData} download={msg.fileName} className="flex items-center gap-3 p-3 bg-black/30 rounded-xl text-xs font-black text-indigo-400"><FaFileAlt/> {msg.fileName}</a>
                                                                             )}
@@ -822,6 +914,34 @@ const ChatPage = ({ user, setUser }) => {
                         </div>
                         
                         <div className="p-8 space-y-8 font-bold">
+                            {/* Rename Group */}
+                            {(isAdminOfGroup || isModOfGroup) && (
+                                <div className="space-y-3">
+                                    <p className="text-[9px] font-black uppercase text-gray-500 tracking-[2px] italic border-l-2 border-purple-500 pl-3">Đổi tên nhóm</p>
+                                    <div className="flex gap-2">
+                                        <input 
+                                            value={renameGroupValue} 
+                                            onChange={e => setRenameGroupValue(e.target.value)} 
+                                            placeholder={activeRoom.name} 
+                                            className={`flex-1 p-3 rounded-xl border text-sm outline-none focus:border-purple-500 ${darkMode ? 'bg-black/20 border-white/10 text-white' : 'bg-gray-50 border-gray-200 text-slate-800'}`} 
+                                        />
+                                        <button 
+                                            onClick={async () => { 
+                                                if (!renameGroupValue.trim()) return; 
+                                                await api.post('/groups/rename', { groupId: activeRoom.id, newName: renameGroupValue.trim() }); 
+                                                setRenameGroupValue(''); 
+                                                setShowGroupSettings(false);
+                                                loadData(); 
+                                                handleSwitchRoom({ id: activeRoom.id, name: renameGroupValue.trim() });
+                                            }} 
+                                            className="px-4 py-3 bg-purple-600 text-white rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-purple-500 transition-all shadow-lg"
+                                        >
+                                            Lưu
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
                             {isAdminOfGroup && (
                                 <div className="grid grid-cols-2 gap-4">
                                     <button onClick={() => handleManageGroup('disable')} className={`p-4 rounded-2xl border-2 flex items-center justify-center gap-2 uppercase text-[10px] font-black transition-all ${currentGroup?.isDisabled ? 'border-emerald-500 text-emerald-500 bg-emerald-500/5 shadow-inner' : 'border-red-500 text-red-500 bg-red-500/5 shadow-inner'}`}>
@@ -835,7 +955,7 @@ const ChatPage = ({ user, setUser }) => {
 
                             {!currentGroup?.isPublic && (
                                 <div className="space-y-3 max-h-[300px] overflow-y-auto scrollbar-hide">
-                                    <p className="text-[9px] font-black uppercase text-gray-500 tracking-[2px] italic mb-4 border-l-2 border-indigo-500 pl-3 uppercase">Đội ngũ thám hiểm ({currentGroup?.members?.length})</p>
+                                    <p className="text-[9px] font-black uppercase text-gray-500 tracking-[2px] italic mb-4 border-l-2 border-indigo-500 pl-3">Đội ngũ thám hiểm ({currentGroup?.members?.length})</p>
                                     {currentGroup?.members?.map(u => {
                                         const isHost = u === currentGroup.owner;
                                         const isMod = currentGroup.mods?.includes(u);
@@ -854,12 +974,26 @@ const ChatPage = ({ user, setUser }) => {
                                                 </span>
                                                 <div className="flex gap-2 opacity-0 group-hover/user:opacity-100 transition-all">
                                                     {myRoleIsHost && !isHost && (
-                                                        <button 
-                                                            onClick={() => handleUpdateRole(u, isMod ? 'revoke' : 'grant')} 
-                                                            className={`text-[9px] px-2 py-1 uppercase rounded-lg font-black transition-all ${isMod ? 'bg-orange-500 text-white' : 'bg-emerald-500 text-white'}`}
-                                                        >
-                                                            {isMod ? 'Hủy Mod' : 'Phong Mod'}
-                                                        </button>
+                                                        <>
+                                                            <button 
+                                                                onClick={() => handleUpdateRole(u, isMod ? 'revoke' : 'grant')} 
+                                                                className={`text-[9px] px-2 py-1 uppercase rounded-lg font-black transition-all ${isMod ? 'bg-orange-500 text-white' : 'bg-emerald-500 text-white'}`}
+                                                            >
+                                                                {isMod ? 'Hủy Mod' : 'Phong Mod'}
+                                                            </button>
+                                                            <button 
+                                                                onClick={async () => { 
+                                                                    if (!window.confirm(`Chuyển quyền chủ nhóm cho @${u}?`)) return; 
+                                                                    await api.post('/groups/transfer-ownership', { groupId: activeRoom.id, newOwner: u }); 
+                                                                    loadData(); 
+                                                                    setShowGroupSettings(false);
+                                                                }} 
+                                                                className="text-[9px] px-2 py-1 uppercase rounded-lg font-black bg-cyan-500 text-white transition-all hover:bg-cyan-400"
+                                                                title="Chuyển quyền chủ nhóm"
+                                                            >
+                                                                <FaExchangeAlt size={10} className="inline mr-1"/> Chuyển
+                                                            </button>
+                                                        </>
                                                     )}
                                                     {canKick && (
                                                         <button onClick={() => handleKick(u)} className="text-red-400 hover:scale-110 active:text-red-600 bg-red-500/10 p-1.5 rounded-lg">
@@ -874,6 +1008,16 @@ const ChatPage = ({ user, setUser }) => {
                             )}
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* Modal Xem Ảnh */}
+            {previewImage && (
+                <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[1000] p-4 animate-in zoom-in-95 backdrop-blur-sm" onClick={() => setPreviewImage(null)}>
+                    <button onClick={() => setPreviewImage(null)} className="absolute top-6 right-6 text-white bg-white/10 p-2 rounded-full hover:bg-white/20 transition-all">
+                        <FaTimes size={24}/>
+                    </button>
+                    <img src={previewImage} className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl" alt="Preview" onClick={(e) => e.stopPropagation()} />
                 </div>
             )}
         </div>

@@ -451,7 +451,7 @@ export function CallProvider({ children, user }) {
         return () => {
             isCancelled = true;
         };
-    }, [user]);
+    }, [user?.username]);
 
     useEffect(() => {
         clearRingCountdownTimer();

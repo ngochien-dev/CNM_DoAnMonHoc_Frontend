@@ -313,6 +313,47 @@ const UserProfileModal = ({ isOpen, onClose, targetUsername, currentUser, onStar
     const fileRef = useRef();
     const { startCall, isCallBusy } = useCall();
 
+    const handleUpdate = async () => {
+        try {
+            const res = await api.post('/users/update', {
+                username: currentUser.username,
+                displayName: editForm.displayName,
+                phone: editForm.phone,
+                bio: editForm.bio,
+                address: editForm.address,
+                avatar: editForm.avatar,
+            });
+            alert('Cập nhật thành công!');
+            setIsEditing(false);
+            setViewingUser(res.data);
+        } catch (err) {
+            alert(err.response?.data?.message || 'Lỗi cập nhật!');
+        }
+    };
+
+    const handleChangePass = async () => {
+        const { oldPassword, newPassword, confirmPassword } = passForm;
+        if (!oldPassword || !newPassword || !confirmPassword)
+            return alert('Vui lòng nhập đầy đủ mật khẩu!');
+        if (newPassword !== confirmPassword)
+            return alert('Mật khẩu xác nhận không khớp!');
+        if (newPassword.length < 6)
+            return alert('Mật khẩu mới phải từ 6 ký tự trở lên!');
+
+        try {
+            await api.post('/auth/change-password', {
+                username: currentUser.username,
+                oldPassword,
+                newPassword,
+            });
+            alert('Đổi mật khẩu thành công! Vui lòng đăng nhập lại.');
+            localStorage.removeItem('user_session');
+            window.location.reload();
+        } catch (err) {
+            alert(err.response?.data?.message || 'Lỗi đổi mật khẩu!');
+        }
+    };
+
     useEffect(() => {
         if (isOpen && targetUsername) {
             const fetchData = async () => {
@@ -445,9 +486,9 @@ const UserProfileModal = ({ isOpen, onClose, targetUsername, currentUser, onStar
 
                         <div className="mt-2">
                             {isEditing ? (
-                                <ProfileEdit editForm={editForm} setEditForm={setEditForm} setIsEditing={setIsEditing} />
+                                <ProfileEdit editForm={editForm} setEditForm={setEditForm} setIsEditing={setIsEditing} handleUpdate={handleUpdate} />
                             ) : isChangingPass ? (
-                                <ChangePassword setPassForm={setPassForm} passForm={passForm} setIsChangingPass={setIsChangingPass} />
+                                <ChangePassword setPassForm={setPassForm} passForm={passForm} setIsChangingPass={setIsChangingPass} handleChangePass={handleChangePass} />
                             ) : (
                                 <>
                                     <ProfileView viewingUser={viewingUser} />

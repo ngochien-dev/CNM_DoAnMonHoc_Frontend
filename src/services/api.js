@@ -26,4 +26,16 @@ api.interceptors.request.use((config) => {
     return config;
 });
 
-export default api;
+// Ngăn vòng lặp 401 vô hạn: khi nhận 401, reject ngay và không retry
+api.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        if (error.response?.status === 401) {
+            // Token hết hạn hoặc đã bị xóa — không retry
+            console.warn('[API] 401 Unauthorized — bỏ qua request');
+        }
+        return Promise.reject(error);
+    }
+);
+
+export default api;
