@@ -71,7 +71,7 @@ const Sidebar = ({
                     <div className="text-sm font-black truncate uppercase italic tracking-tighter">{user.displayName}</div>
                     <div className="text-[9px] text-green-500 font-black uppercase tracking-widest flex items-center gap-1"><FaCircle size={6}/> Online</div>
                 </div>
-                <FaSignOutAlt onClick={(e) => { e.stopPropagation(); setUser(null); }} className="text-gray-500 hover:text-red-500 transition-colors" />
+                <button onClick={(e) => { e.stopPropagation(); setUser(null); }} className="relative z-10 p-2 rounded-lg text-gray-500 hover:text-red-500 hover:bg-red-500/10 transition-all active:scale-90" title="Đăng xuất"><FaSignOutAlt size={16} /></button>
             </div>
         </div>
     );

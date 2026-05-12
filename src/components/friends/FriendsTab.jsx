@@ -137,6 +137,13 @@ const FriendsTab = ({ user, friends, friendRequests, loadData, onlineUsers, hand
     } catch (err) { alert("Lỗi!"); }
   };
 
+  const rejectFriend = async (friendUname) => {
+    try {
+      await api.post("/friends/reject", { me: user.username, friendUname });
+      loadData();
+    } catch (err) { alert("Lỗi!"); }
+  };
+
   const processedFriends = useMemo(() => {
     let result = (friends || []).map((fName) => {
       const uname = typeof fName === 'string' ? fName : fName.S;
@@ -166,7 +173,7 @@ const FriendsTab = ({ user, friends, friendRequests, loadData, onlineUsers, hand
             <span className={`text-[7px] font-black uppercase ${incoming ? "text-indigo-400" : "text-yellow-600"}`}>{status}</span>
           </div>
         </div>
-        {incoming && <button onClick={() => acceptFriend(uname)} className="p-1.5 bg-emerald-500 rounded-lg text-white"><FaCheck size={10} /></button>}
+        {incoming && <div className="flex gap-1"><button onClick={() => acceptFriend(uname)} className="p-1.5 bg-emerald-500 rounded-lg text-white hover:scale-110 transition-transform" title="Chấp nhận"><FaCheck size={10} /></button><button onClick={() => rejectFriend(uname)} className="p-1.5 bg-red-500 rounded-lg text-white hover:scale-110 transition-transform" title="Từ chối"><FaTimes size={10} /></button></div>}
       </div>
     );
   };
