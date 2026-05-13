@@ -465,6 +465,21 @@ const ChatPage = ({ user, setUser }) => {
             }
         });
 
+        socket.on('force_logout', ({ username, reason }) => {
+            if (username === user.username) {
+                disconnectSocket();
+                localStorage.removeItem('user_session');
+                setUser(null);
+                if (reason === 'banned') {
+                    alert('Tài khoản của bạn đã bị khóa bởi Admin!');
+                } else if (reason === 'password_reset') {
+                    alert('Mật khẩu của bạn đã được đặt lại bởi Admin. Vui lòng đăng nhập lại!');
+                } else if (reason === 'password_changed') {
+                    alert('Mật khẩu của bạn đã được thay đổi. Vui lòng đăng nhập lại!');
+                }
+            }
+        });
+
         return () => { 
             socket.off('groups_updated'); 
             socket.off('receive_message'); 
@@ -474,6 +489,7 @@ const ChatPage = ({ user, setUser }) => {
             socket.off('user_typing_start');
             socket.off('user_typing_end');
             socket.off('new_friend_request');
+            socket.off('force_logout');
         };
     }, [user?.username]);
 
