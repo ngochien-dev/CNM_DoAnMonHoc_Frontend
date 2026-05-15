@@ -65,7 +65,7 @@ const Home = ({ user, onlineUsers, allGroups, onSwitchTab, darkMode }) => {
                     <div className={`${darkMode ? 'bg-white/2 border-white/5' : 'bg-white border-gray-100'} border rounded-[35px] p-6 space-y-3 shadow-inner`}>
                         <div className={`flex items-center gap-4 p-4 rounded-2xl border transition-colors ${darkMode ? 'bg-white/5 border-white/5 hover:bg-white/10' : 'bg-slate-50 border-gray-100 hover:bg-slate-100'}`}>
                             <FaShieldAlt className="text-red-500 shrink-0" size={18} />
-                            <span className={`text-[13px] font-semibold tracking-wide ${darkMode ? 'text-gray-300' : 'text-slate-700'}`}>Mã hóa đầu cuối đã được kích hoạt.</span>
+                            <span className={`text-[13px] font-semibold tracking-wide ${darkMode ? 'text-gray-300' : 'text-slate-700'}`}>Kết nối bảo mật đã được kích hoạt.</span>
                         </div>
                         <div className={`flex items-center gap-4 p-4 rounded-2xl border transition-colors ${darkMode ? 'bg-white/5 border-white/5 hover:bg-white/10' : 'bg-slate-50 border-gray-100 hover:bg-slate-100'}`}>
                             <FaRocket className="text-orange-500 shrink-0" size={18} />

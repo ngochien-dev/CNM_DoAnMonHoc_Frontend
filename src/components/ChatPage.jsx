@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import api from '../services/api';
 import EmojiPicker, { Theme } from 'emoji-picker-react';
 import { 
@@ -33,6 +33,9 @@ const ChatPage = ({ user, setUser }) => {
     const [unreadCounts, setUnreadCounts] = useState({}); 
     const [callHistory, setCallHistory] = useState([]); // State cho lịch sử cuộc gọi
     const [typingUsers, setTypingUsers] = useState([]); // Danh sách người đang gõ trong phòng hiện tại
+    const [loadingMessages, setLoadingMessages] = useState(false); // P0: Loading state cho pagination
+    const [hasMoreMessages, setHasMoreMessages] = useState({}); // P0: Track nếu còn tin nhắn cũ hơn per room
+    const [notificationPermission, setNotificationPermission] = useState('default'); // P0: Notification permission
 
     const [showFriendsTab, setShowFriendsTab] = useState(false);
     const [showDiscoveryTab, setShowDiscoveryTab] = useState(false);
@@ -57,6 +60,8 @@ const ChatPage = ({ user, setUser }) => {
     const fileInputRef = useRef(null);
     const emojiPickerRef = useRef(null);
     const typingTimeoutRef = useRef(null); // Ref để quản lý timeout debounce typing
+    const chatContainerRef = useRef(null); // P0: Ref for scroll container (pagination)
+    const readObserverRef = useRef(null); // P0: IntersectionObserver for read receipts
 
     // Tích hợp hook cuộc gọi
     const { startCall, isCallBusy, callHistoryVersion } = useCall();
@@ -98,6 +103,83 @@ const ChatPage = ({ user, setUser }) => {
         }
     };
 
+    // P0: Send browser notification when tab is not focused
+    const sendBrowserNotification = useCallback((title, body, icon) => {
+        if (document.hasFocus()) return; // Don't notify if user is looking at the tab
+        if (notificationPermission !== 'granted') return;
+        try {
+            const notif = new Notification(title, {
+                body: body || '',
+                icon: icon || '/favicon.ico',
+                tag: 'ott-message', // Prevents duplicate notifications
+                silent: false,
+            });
+            notif.onclick = () => { window.focus(); notif.close(); };
+            setTimeout(() => notif.close(), 5000);
+        } catch (e) { /* Browser doesn't support Notification */ }
+    }, [notificationPermission]);
+
+    // P0: Request notification permission on mount
+    useEffect(() => {
+        if ('Notification' in window) {
+            setNotificationPermission(Notification.permission);
+            if (Notification.permission === 'default') {
+                Notification.requestPermission().then(perm => setNotificationPermission(perm));
+            }
+        }
+    }, []);
+
+    // P0: Mark messages as read when viewing a room
+    const markMessagesAsRead = useCallback((roomMessages) => {
+        if (!user?.username || !activeRoomRef.current) return;
+        const unreadMsgIds = roomMessages
+            .filter(m => m.senderUsername !== user.username && !(m.readBy || []).includes(user.username))
+            .map(m => m.messageId);
+        if (unreadMsgIds.length === 0) return;
+        // Emit via socket for real-time + batch update
+        socket.emit('message_read', { messageIds: unreadMsgIds, roomId: activeRoomRef.current.id });
+    }, [user?.username, socket]);
+
+    // P0: Pagination — load messages for a specific room
+    const loadRoomMessages = useCallback(async (roomId, before = null) => {
+        if (!roomId || loadingMessages) return;
+        setLoadingMessages(true);
+        try {
+            const params = new URLSearchParams({ roomId, limit: '50' });
+            if (before) params.append('before', before);
+            const res = await api.get(`/v1/messages/${user.username}?${params.toString()}`);
+            const data = res.data;
+            
+            if (data.messages) {
+                // Paginated response
+                const newMsgs = data.messages;
+                if (before) {
+                    // Prepend older messages
+                    setMessages(prev => {
+                        const existingIds = new Set(prev.map(m => m.messageId));
+                        const unique = newMsgs.filter(m => !existingIds.has(m.messageId));
+                        return [...unique, ...prev];
+                    });
+                } else {
+                    // Initial load for room — merge with existing
+                    setMessages(prev => {
+                        const otherRoomMsgs = prev.filter(m => m.roomId !== roomId);
+                        return [...otherRoomMsgs, ...newMsgs];
+                    });
+                }
+                setHasMoreMessages(prev => ({ ...prev, [roomId]: data.hasMore }));
+            } else {
+                // Legacy non-paginated response (fallback)
+                const filtered = (Array.isArray(data) ? data : []).filter(msg => !(user.deletedMessages || []).includes(msg.messageId));
+                setMessages(filtered);
+            }
+        } catch (err) {
+            console.error('Load room messages error:', err);
+        } finally {
+            setLoadingMessages(false);
+        }
+    }, [user?.username, loadingMessages]);
+
     const loadData = async () => {
         if (!user?.username) return;
         try {
@@ -109,7 +191,12 @@ const ChatPage = ({ user, setUser }) => {
             ]);
             // Kiểm tra user vẫn còn đăng nhập trước khi cập nhật state
             if (!localStorage.getItem('user_session')) return;
-            setMessages(m.data.filter(msg => !(u.data.deletedMessages || []).includes(msg.messageId)));
+            const msgData = m.data;
+            if (Array.isArray(msgData)) {
+                setMessages(msgData.filter(msg => !(u.data.deletedMessages || []).includes(msg.messageId)));
+            } else if (msgData.messages) {
+                setMessages(msgData.messages.filter(msg => !(u.data.deletedMessages || []).includes(msg.messageId)));
+            }
             setAllGroups(g.data);
             setCallHistory(Array.isArray(c.data) ? c.data : c.data?.items || []);
             if (u.data.username === user.username) setUser(prev => prev ? ({ ...prev, ...u.data }) : null);
@@ -153,7 +240,11 @@ const ChatPage = ({ user, setUser }) => {
         setShowSearch(false);
         setReplyingToMessage(null);
         setShowReactionMenu(null);
-        if (room) setUnreadCounts(prev => ({ ...prev, [room.id]: 0 })); 
+        if (room) {
+            setUnreadCounts(prev => ({ ...prev, [room.id]: 0 }));
+            // P0: Load messages for the new room (pagination)
+            loadRoomMessages(room.id);
+        }
     };
 
     const handleStartDM = (friendUname) => { 
@@ -418,14 +509,24 @@ const ChatPage = ({ user, setUser }) => {
                 return [...p, d];
             });
             const currentActiveRoom = activeRoomRef.current;
-            if (currentActiveRoom && d.roomId !== currentActiveRoom.id && d.senderUsername !== user.username) {
-                const rId = d.roomId || 'chung';
-                setUnreadCounts(prev => ({ ...prev, [rId]: (prev[rId] || 0) + 1 }));
-                playNotificationSound();
-                toast(`Tin nhắn mới từ ${d.senderUsername}`, {
-                    icon: '💬',
-                    style: { borderRadius: '10px', background: '#333', color: '#fff' }
-                });
+            if (d.senderUsername !== user.username) {
+                if (currentActiveRoom && d.roomId === currentActiveRoom.id) {
+                    // P0: Auto-mark as read if user is viewing this room
+                    socket.emit('message_read', { messageIds: [d.messageId], roomId: d.roomId });
+                } else {
+                    const rId = d.roomId || 'chung';
+                    setUnreadCounts(prev => ({ ...prev, [rId]: (prev[rId] || 0) + 1 }));
+                    playNotificationSound();
+                    // P0: Browser push notification
+                    sendBrowserNotification(
+                        `Tin nhắn mới từ ${d.senderUsername}`,
+                        d.text || 'Đã gửi một tệp đính kèm',
+                    );
+                    toast(`Tin nhắn mới từ ${d.senderUsername}`, {
+                        icon: '💬',
+                        style: { borderRadius: '10px', background: '#333', color: '#fff' }
+                    });
+                }
             }
         });
         socket.on('update_user_list', (u) => setOnlineUsers(u));
@@ -440,6 +541,16 @@ const ChatPage = ({ user, setUser }) => {
         });
         socket.on('message_edited', ({ messageId, newText, isEdited, editedAt }) => {
             setMessages(prev => prev.map(m => m.messageId === messageId ? { ...m, text: newText, isEdited, editedAt } : m));
+        });
+
+        // P0: Read receipts — update readBy when others read messages
+        socket.on('messages_read_update', ({ reader, roomId, updates }) => {
+            if (reader === user.username) return; // Skip own reads
+            setMessages(prev => prev.map(m => {
+                const update = updates.find(u => u.messageId === m.messageId);
+                if (update) return { ...m, readBy: update.readBy };
+                return m;
+            }));
         });
         
         socket.on('user_typing_start', ({ roomId, senderUsername }) => {
@@ -458,6 +569,7 @@ const ChatPage = ({ user, setUser }) => {
         socket.on('new_friend_request', ({ toUser, fromUser }) => {
             if (toUser === user.username) {
                 playNotificationSound();
+                sendBrowserNotification('Lời mời kết bạn', `${fromUser} muốn kết bạn với bạn`);
                 toast(`Có lời mời kết bạn từ ${fromUser}`, {
                     icon: '👋',
                     style: { borderRadius: '10px', background: '#333', color: '#fff' }
@@ -486,6 +598,7 @@ const ChatPage = ({ user, setUser }) => {
             socket.off('update_user_list'); 
             socket.off('message_revoked'); 
             socket.off('message_edited');
+            socket.off('messages_read_update');
             socket.off('user_typing_start');
             socket.off('user_typing_end');
             socket.off('new_friend_request');
@@ -499,6 +612,18 @@ const ChatPage = ({ user, setUser }) => {
     }, [callHistoryVersion]);
 
     useEffect(() => { scrollRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, activeRoom]);
+
+    // P0: Mark visible messages as read when switching rooms or receiving new messages
+    useEffect(() => {
+        if (!activeRoom || !user?.username) return;
+        const roomMsgs = messages.filter(m => {
+            if (activeRoom.id === 'chung') return !m.roomId || m.roomId === 'chung';
+            return m.roomId === activeRoom.id;
+        });
+        // Small delay to batch read receipts
+        const timer = setTimeout(() => markMessagesAsRead(roomMsgs), 1000);
+        return () => clearTimeout(timer);
+    }, [activeRoom?.id, messages.length, markMessagesAsRead]);
 
     const currentGroup = allGroups.find(g => g.groupId === activeRoom?.id);
     const isAdminOfGroup = currentGroup?.owner === user.username; 
@@ -603,7 +728,15 @@ const ChatPage = ({ user, setUser }) => {
                             <div className="flex-1 flex flex-col items-center justify-center p-10 text-center animate-in zoom-in-95"><div className="w-24 h-24 bg-orange-500/10 text-orange-500 rounded-[40px] flex items-center justify-center mb-6 shadow-2xl border border-orange-500/20 rotate-12 animate-pulse"><FaLock size={40}/></div><h2 className="text-2xl font-black uppercase mb-2 text-white italic">Khu vực hạn chế</h2><p className="text-gray-500 max-w-sm mb-10 font-bold text-sm italic">Bạn chưa gia nhập vùng đất này. Hãy gửi tín hiệu thâm nhập!</p><button onClick={() => handleRequestJoin(activeRoom.id)} className="bg-indigo-600 text-white px-12 py-5 rounded-2xl font-black uppercase shadow-2xl hover:bg-indigo-500 tracking-[3px] text-xs">Gửi yêu cầu thâm nhập</button></div>
                         ) : (
                             <>
-                                <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-hide">
+                                <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-hide" ref={chatContainerRef}
+                                    onScroll={(e) => {
+                                        // P0: Lazy load older messages when scrolling to top
+                                        if (e.target.scrollTop < 100 && hasMoreMessages[activeRoom.id] && !loadingMessages) {
+                                            const oldestMsg = messages.filter(m => m.roomId === activeRoom.id).sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt))[0];
+                                            if (oldestMsg?.createdAt) loadRoomMessages(activeRoom.id, oldestMsg.createdAt);
+                                        }
+                                    }}
+                                >
                                     {/* Pinned Messages Area */}
                                     {messages.filter(m => (activeRoom.id === 'chung' ? !m.roomId || m.roomId === 'chung' : m.roomId === activeRoom.id) && m.isPinned).length > 0 && (
                                         <div className={`p-4 rounded-xl shadow-lg border mb-6 ${darkMode ? 'bg-indigo-900/30 border-indigo-500/30 text-indigo-200' : 'bg-indigo-50 border-indigo-200 text-indigo-800'}`}>
@@ -621,6 +754,13 @@ const ChatPage = ({ user, setUser }) => {
                                         </div>
                                     )}
 
+                                    {/* P0: Loading indicator for pagination */}
+                                    {loadingMessages && (
+                                        <div className="flex justify-center py-4">
+                                            <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                                        </div>
+                                    )}
+
                                     {/* Main Messages Area */}
                                     {messages.filter(m => (activeRoom.id === 'chung' ? !m.roomId || m.roomId === 'chung' : m.roomId === activeRoom.id)).map((msg) => {
                                         const isMe = msg.senderUsername === user.username; 
@@ -629,7 +769,15 @@ const ChatPage = ({ user, setUser }) => {
                                             <div key={msg.messageId} className={`flex gap-4 ${isMe ? 'flex-row-reverse text-right' : ''} group animate-in slide-in-from-bottom-2`}>
                                                 <div onClick={() => handleOpenProfile(msg.senderUsername)} className="w-10 h-10 rounded-xl shadow-lg cursor-pointer overflow-hidden shrink-0 border border-white/5 bg-slate-800 transition-all group-hover:scale-105">{sOnline?.avatar ? <img src={sOnline.avatar} className="w-full h-full object-cover" alt="" /> : <div className="w-full h-full flex items-center justify-center text-white font-black uppercase bg-indigo-500">{msg.sender[0]}</div>}</div>
                                                 <div className={`max-w-[75%] flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
-                                                    <div className={`text-[10px] mb-1.5 font-black uppercase tracking-tighter italic ${darkMode ? 'text-gray-500' : 'text-slate-400'}`}>@{msg.senderUsername} • {msg.time}</div>
+                                                    <div className={`text-[10px] mb-1.5 font-black uppercase tracking-tighter italic flex items-center gap-1 ${darkMode ? 'text-gray-500' : 'text-slate-400'}`}>
+                                                        @{msg.senderUsername} • {msg.time}
+                                                        {/* P0: Read receipt indicator */}
+                                                        {isMe && !msg.isRevoked && (
+                                                            <span className={`ml-1 text-[9px] ${(msg.readBy || []).filter(u => u !== user.username).length > 0 ? 'text-blue-400' : 'text-gray-600'}`} title={(msg.readBy || []).filter(u => u !== user.username).join(', ') || 'Chưa ai đọc'}>
+                                                                {(msg.readBy || []).filter(u => u !== user.username).length > 0 ? '✓✓' : '✓'}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                     <div className="relative group/bubble">
                                                         {!msg.isRevoked && (
                                                             <div className={`absolute top-0 flex gap-2 p-1 bg-[#0f172a] border border-white/10 shadow-2xl rounded-xl opacity-0 group-hover/bubble:opacity-100 transition-all z-10 ${isMe ? 'right-full mr-3' : 'left-full ml-3'}`}>
