@@ -405,16 +405,30 @@ const UserProfileModal = ({ isOpen, onClose, targetUsername, currentUser, onStar
                     friendUname: targetUsername,
                 });
                 alert("Đã hủy kết bạn!");
+            } else if (action === "block") {
+                if (!window.confirm(`Chặn @${targetUsername}? Họ sẽ không thể nhắn tin, gọi điện hoặc kết bạn với bạn.`)) return;
+                await api.post("/friends/block", {
+                    me: currentUser.username,
+                    targetUsername: targetUsername,
+                });
+                alert("Đã chặn người dùng!");
+            } else if (action === "unblock") {
+                await api.post("/friends/unblock", {
+                    me: currentUser.username,
+                    targetUsername: targetUsername,
+                });
+                alert("Đã bỏ chặn người dùng!");
             }
             onClose();
         } catch (err) {
-            alert("Thao tác thất bại!");
+            alert(err.response?.data?.error || "Thao tác thất bại!");
         }
     };
 
     if (!isOpen) return null;
     const isMe = currentUser?.username === targetUsername;
     const isFriend = myInfo?.friends?.includes(targetUsername);
+    const isBlocked = (myInfo?.blockedUsers || []).includes(targetUsername);
     const hasSentRequest = viewingUser?.friendRequests?.includes(currentUser.username);
     const dmRoomId =
         currentUser?.username && viewingUser?.username
@@ -456,6 +470,7 @@ const UserProfileModal = ({ isOpen, onClose, targetUsername, currentUser, onStar
                             <p className="text-purple-400 font-bold text-xs tracking-[2px] mb-8 opacity-80">@{viewingUser.username}</p>
                             
                             {!isMe && (
+                                <>
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">
                                     <button onClick={() => { onStartDM(viewingUser.username); onClose(); }} className="bg-white/10 hover:bg-white/20 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 border border-white/5"><FaCommentDots className="inline mr-2" size={14}/> Nhắn tin</button>
                                     <button
@@ -481,6 +496,14 @@ const UserProfileModal = ({ isOpen, onClose, targetUsername, currentUser, onStar
                                         <button onClick={() => handleFriendAction('request')} className="bg-gradient-to-r from-purple-600 to-indigo-600 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-purple-500/20 hover:scale-105 transition-all"><FaUserPlus className="inline mr-2"/> {hasSentRequest ? 'Đã gửi lời mời' : 'Kết bạn'}</button>
                                     )}
                                 </div>
+                                {/* P1: Block/Unblock button */}
+                                <button 
+                                    onClick={() => handleFriendAction(isBlocked ? 'unblock' : 'block')}
+                                    className={`w-full py-2.5 rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all border ${isBlocked ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500 hover:text-white' : 'bg-white/5 text-gray-500 border-white/5 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30'}`}
+                                >
+                                    {isBlocked ? 'Bỏ chặn người dùng' : 'Chặn người dùng'}
+                                </button>
+                                </>
                             )}
                         </div>
 
