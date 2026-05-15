@@ -3,7 +3,7 @@ import {
   FaUserFriends, FaUserCheck, FaCommentDots, FaCircle, FaUserPlus,
   FaGhost, FaUserShield, FaSearch, FaTimes, FaSortAlphaDown,
   FaSortAlphaUp, FaTags, FaPaperPlane, FaUserTag, FaSave,
-  FaTrashAlt, FaEdit, FaCheck,
+  FaTrashAlt, FaEdit, FaCheck, FaUserMinus,
 } from "react-icons/fa";
 import api from "../../services/api";
 
@@ -307,9 +307,10 @@ const FriendsTab = ({ user, friends, friendRequests, loadData, onlineUsers, hand
                         <button onClick={() => assignTag(f.username, null)} className="p-2 rounded-xl text-gray-400 hover:text-red-500 transition-all"><FaTrashAlt size={14} /></button>
                         </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-4 mt-8">
-                        <button onClick={() => handleStartDM(f.username)} className="bg-indigo-600 hover:bg-indigo-500 text-white py-4 rounded-[20px] text-[10px] font-black transition-all shadow-xl active:scale-95 flex items-center justify-center gap-2 shadow-indigo-500/20"><FaCommentDots size={14} /> CHAT</button>
-                        <button onClick={() => handleOpenProfile(f.username)} className={`py-4 rounded-[20px] text-[10px] font-black transition-all border active:scale-95 shadow-sm uppercase flex items-center justify-center ${darkMode ? 'bg-white/5 hover:bg-white/10 text-gray-400 border-white/5' : 'bg-white hover:bg-slate-50 text-slate-500 border-gray-200'}`}>PROFILE</button>
+                    <div className="grid grid-cols-3 gap-3 mt-8">
+                        <button onClick={() => handleStartDM(f.username)} className="bg-indigo-600 hover:bg-indigo-500 text-white py-3.5 rounded-[20px] text-[10px] font-black transition-all shadow-xl active:scale-95 flex items-center justify-center gap-2 shadow-indigo-500/20"><FaCommentDots size={12} /> CHAT</button>
+                        <button onClick={() => handleOpenProfile(f.username)} className={`py-3.5 rounded-[20px] text-[10px] font-black transition-all border active:scale-95 shadow-sm uppercase flex items-center justify-center ${darkMode ? 'bg-white/5 hover:bg-white/10 text-gray-400 border-white/5' : 'bg-white hover:bg-slate-50 text-slate-500 border-gray-200'}`}>PROFILE</button>
+                        <button onClick={async () => { if (!window.confirm(`Hủy kết bạn với @${f.username}?`)) return; try { await api.post('/friends/unfriend', { me: user.username, friendUname: f.username }); loadData(); } catch { alert('Lỗi!'); } }} className={`py-3.5 rounded-[20px] text-[10px] font-black transition-all border active:scale-95 uppercase flex items-center justify-center gap-1 ${darkMode ? 'bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white border-red-500/20' : 'bg-red-50 hover:bg-red-500 text-red-500 hover:text-white border-red-200'}`}><FaUserMinus size={11}/> HỦY</button>
                     </div>
                     </div>
                 ))}

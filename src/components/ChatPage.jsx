@@ -53,6 +53,11 @@ const ChatPage = ({ user, setUser }) => {
     const [showEventModal, setShowEventModal] = useState(false);
     const [stats, setStats] = useState(null);
     const [previewImage, setPreviewImage] = useState(null);
+    const [mutedRooms, setMutedRooms] = useState(() => {
+        try { return JSON.parse(localStorage.getItem('mutedRooms') || '{}'); } catch { return {}; }
+    }); // P1: Mute notifications per room
+    const [showInviteModal, setShowInviteModal] = useState(false); // P1: Invite to group modal
+    const [lastSeenMap, setLastSeenMap] = useState({}); // P1: Last seen timestamps
 
     const scrollRef = useRef(null);
     const activeRoomRef = useRef(null);
@@ -62,6 +67,7 @@ const ChatPage = ({ user, setUser }) => {
     const typingTimeoutRef = useRef(null); // Ref để quản lý timeout debounce typing
     const chatContainerRef = useRef(null); // P0: Ref for scroll container (pagination)
     const readObserverRef = useRef(null); // P0: IntersectionObserver for read receipts
+    const mutedRoomsRef = useRef(mutedRooms); // P1: Ref to access current muted state in socket closure
 
     // Tích hợp hook cuộc gọi
     const { startCall, isCallBusy, callHistoryVersion } = useCall();
@@ -128,6 +134,27 @@ const ChatPage = ({ user, setUser }) => {
             }
         }
     }, []);
+
+    // P1: Toggle mute for a room
+    const toggleMuteRoom = useCallback((roomId) => {
+        setMutedRooms(prev => {
+            const next = { ...prev, [roomId]: !prev[roomId] };
+            if (!next[roomId]) delete next[roomId];
+            localStorage.setItem('mutedRooms', JSON.stringify(next));
+            mutedRoomsRef.current = next; // Keep ref in sync
+            return next;
+        });
+    }, []);
+
+    // P1: Fetch last seen for offline friends
+    useEffect(() => {
+        if (!user?.friends?.length) return;
+        const offlineFriends = (user.friends || []).filter(f => !onlineUsers[f]);
+        if (offlineFriends.length === 0) return;
+        api.get(`/friends/last-seen?usernames=${offlineFriends.slice(0, 30).join(',')}`)
+            .then(res => setLastSeenMap(res.data || {}))
+            .catch(() => {});
+    }, [user?.friends, Object.keys(onlineUsers).length]);
 
     // P0: Mark messages as read when viewing a room
     const markMessagesAsRead = useCallback((roomMessages) => {
@@ -516,16 +543,20 @@ const ChatPage = ({ user, setUser }) => {
                 } else {
                     const rId = d.roomId || 'chung';
                     setUnreadCounts(prev => ({ ...prev, [rId]: (prev[rId] || 0) + 1 }));
-                    playNotificationSound();
-                    // P0: Browser push notification
-                    sendBrowserNotification(
-                        `Tin nhắn mới từ ${d.senderUsername}`,
-                        d.text || 'Đã gửi một tệp đính kèm',
-                    );
-                    toast(`Tin nhắn mới từ ${d.senderUsername}`, {
-                        icon: '💬',
-                        style: { borderRadius: '10px', background: '#333', color: '#fff' }
-                    });
+                    // P1: Check if room is muted before playing sound/notification
+                    const isMuted = mutedRoomsRef.current[rId];
+                    if (!isMuted) {
+                        playNotificationSound();
+                        // P0: Browser push notification
+                        sendBrowserNotification(
+                            `Tin nhắn mới từ ${d.senderUsername}`,
+                            d.text || 'Đã gửi một tệp đính kèm',
+                        );
+                        toast(`Tin nhắn mới từ ${d.senderUsername}`, {
+                            icon: '💬',
+                            style: { borderRadius: '10px', background: '#333', color: '#fff' }
+                        });
+                    }
                 }
             }
         });
@@ -634,7 +665,7 @@ const ChatPage = ({ user, setUser }) => {
         <div className={`flex h-screen overflow-hidden font-sans transition-colors duration-500 ${darkMode ? 'bg-[#0f172a] text-[#dbdee1]' : 'bg-[#f8fafc] text-slate-800'}`}>
             <Toaster position="top-right" />
             {/* Cột 1 & 2 giữ nguyên theo style File A của bạn */}
-            <div className={`w-[72px] flex flex-col items-center py-3 space-y-4 shrink-0 shadow-inner z-20 ${darkMode ? 'bg-[#020617]' : 'bg-white border-r border-gray-200 shadow-sm'}`}>
+            <div className={`w-[72px] hidden sm:flex flex-col items-center py-3 space-y-4 shrink-0 shadow-inner z-20 ${darkMode ? 'bg-[#020617]' : 'bg-white border-r border-gray-200 shadow-sm'}`}>
                 <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white font-black cursor-pointer hover:rounded-xl transition-all shadow-md ${(!activeRoom && !showFriendsTab && !showDiscoveryTab && !isAdminMode) ? 'bg-indigo-600 scale-110 shadow-indigo-500/50' : 'bg-gradient-to-tr from-indigo-500 to-purple-600 opacity-60 hover:opacity-100'}`} onClick={() => handleSwitchRoom(null)}>OTT</div>
                 <div onClick={() => {setShowFriendsTab(true); setShowDiscoveryTab(false); setIsAdminMode(false); setActiveRoom(null);}} className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all relative ${showFriendsTab ? 'bg-[#5865f2] text-white shadow-lg' : 'bg-white/5 text-gray-500 hover:bg-[#5865f2] hover:text-white'}`}><FaUserFriends size={22}/>{user.friendRequests?.length > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center border-2 border-[#1e1f22] font-black animate-bounce">{user.friendRequests.length}</span>}</div>
                 <div onClick={() => {setShowDiscoveryTab(true); setShowFriendsTab(false); setIsAdminMode(false); setActiveRoom(null);}} className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all relative ${showDiscoveryTab ? 'bg-emerald-500 text-white shadow-lg' : 'bg-white/5 text-emerald-500 hover:bg-emerald-500 hover:text-white'}`}><FaGlobe size={22}/></div>
@@ -644,7 +675,7 @@ const ChatPage = ({ user, setUser }) => {
                 <div onClick={() => setShowGroupCreator(true)} className="w-12 h-12 bg-[#23a559] text-white rounded-2xl flex items-center justify-center cursor-pointer hover:rounded-xl transition-all shadow-md group relative"><FaPlusCircle size={22}/></div>
             </div>
 
-            <div className={`flex flex-col border-r transition-all duration-300 ${isSidebarVisible ? 'w-64' : 'w-0 overflow-hidden'} ${darkMode ? 'bg-[#1e293b]/50 backdrop-blur-xl border-white/5' : 'bg-slate-50 border-gray-200'}`}>
+            <div className={`flex flex-col border-r transition-all duration-300 ${isSidebarVisible ? 'w-52 md:w-64' : 'w-0 overflow-hidden'} ${darkMode ? 'bg-[#1e293b]/50 backdrop-blur-xl border-white/5' : 'bg-slate-50 border-gray-200'}`}>
                 <div className={`h-12 px-4 flex items-center border-b font-black uppercase text-[11px] tracking-widest opacity-60 italic ${darkMode ? 'border-white/5 text-indigo-400' : 'border-gray-200 text-indigo-600'}`}>OTT Community</div>
                 <div className="flex-1 p-2 mt-2 overflow-y-auto space-y-6 font-bold scrollbar-hide">
                     <div><p className={`text-[9px] font-black uppercase tracking-widest px-2 mb-2 italic ${darkMode ? 'text-gray-500' : 'text-slate-400'}`}>Hội thoại</p>{getRecentChatUsers().map(f => (<div key={f} onClick={() => handleStartDM(f)} className={`p-2.5 rounded-lg flex items-center gap-3 cursor-pointer mb-1 relative transition-all ${activeRoom?.name === f && activeRoom?.isDM ? 'bg-[#5865f2] text-white shadow-lg' : (darkMode ? 'hover:bg-white/5 text-gray-400' : 'hover:bg-slate-100 text-slate-600')}`}><div className="relative shrink-0" onClick={(e) => { e.stopPropagation(); handleOpenProfile(f); }}><div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-white text-xs font-bold uppercase overflow-hidden border border-white/10">{onlineUsers[f]?.avatar ? <img src={onlineUsers[f].avatar} className="w-full h-full object-cover" alt="" /> : f[0]}</div><FaCircle className={`absolute -bottom-0.5 -right-0.5 text-[8px] border-2 ${darkMode ? 'border-[#1e293b]' : 'border-white'} ${onlineUsers[f] ? 'text-green-500' : 'text-gray-400'}`} /></div><span className="truncate text-sm font-medium italic">@{f}</span>{unreadCounts[`dm_${[user.username, f].sort().join("_")}`] > 0 && <span className="absolute right-2 w-4 h-4 bg-red-500 text-white text-[8px] flex items-center justify-center rounded-full font-black animate-bounce">{unreadCounts[`dm_${[user.username, f].sort().join("_")}`]}</span>}</div>))}</div>
@@ -703,6 +734,12 @@ const ChatPage = ({ user, setUser }) => {
                                 )}
                                 
                                 {(isAdminOfGroup || isModOfGroup) && !activeRoom.isDM && activeRoom.id !== 'chung' && (<button onClick={() => setShowGroupSettings(true)} className="text-gray-500 hover:text-white transition-all bg-white/5 p-1.5 rounded-lg" title="Cài đặt"><FaCog size={18}/></button>)}
+                                {/* P1: Invite to group button */}
+                                {(isAdminOfGroup || isModOfGroup) && !activeRoom.isDM && activeRoom.id !== 'chung' && (
+                                    <button onClick={() => setShowInviteModal(true)} className="text-gray-500 hover:text-emerald-400 transition-all bg-white/5 p-1.5 rounded-lg" title="Mời thành viên"><FaUserPlus size={18}/></button>
+                                )}
+                                {/* P1: Mute toggle */}
+                                <button onClick={() => toggleMuteRoom(activeRoom.id)} className={`p-1.5 rounded-lg transition-all ${mutedRooms[activeRoom.id] ? 'text-orange-400 bg-orange-500/10' : 'text-gray-500 hover:text-white bg-white/5'}`} title={mutedRooms[activeRoom.id] ? 'Bỏ tắt thông báo' : 'Tắt thông báo'}>{mutedRooms[activeRoom.id] ? <FaPauseCircle size={18}/> : <FaPlayCircle size={18}/>}</button>
                                 <button onClick={clearChatHistory} className="text-gray-500 hover:text-red-500 transition-all bg-white/5 p-1.5 rounded-lg" title="Clear Chat History"><FaBroom/></button>
                                 <button onClick={() => setIsRightSidebarVisible(!isRightSidebarVisible)} className={`p-1.5 rounded-lg transition-all ${isRightSidebarVisible ? 'text-indigo-500 bg-indigo-500/10' : 'text-gray-500 hover:text-white bg-white/5'}`}>{isRightSidebarVisible ? <FaChevronRight size={18}/> : <FaUsers size={18}/>}</button>
                             </div>
@@ -863,7 +900,23 @@ const ChatPage = ({ user, setUser }) => {
                                                                         </div>
                                                                     ) : (
                                                                         <>
-                                                                            {msg.text}
+                                                                            {(() => {
+                                                                                const emojiMap = { ':)': '😊', ':D': '😃', ':(': '😢', ';)': '😉', ':P': '😛', '<3': '❤️', ':o': '😮', 'B)': '😎', ':*': '😘', 'xD': '🤣', 'XD': '🤣', ':3': '😺', 'o_O': '😳', '-_-': '😑' };
+                                                                                const text = msg.text || '';
+                                                                                const urlRegex = /(https?:\/\/[^\s]+)/g;
+                                                                                const parts = text.split(urlRegex);
+                                                                                return parts.map((part, i) => {
+                                                                                    if (urlRegex.test(part)) {
+                                                                                        urlRegex.lastIndex = 0;
+                                                                                        return <a key={i} href={part} target="_blank" rel="noopener noreferrer" className={`underline font-bold break-all ${isMe ? 'text-blue-200 hover:text-white' : 'text-indigo-400 hover:text-indigo-300'}`}>{part.length > 60 ? part.substring(0, 57) + '...' : part}</a>;
+                                                                                    }
+                                                                                    let converted = part;
+                                                                                    Object.entries(emojiMap).forEach(([code, emoji]) => {
+                                                                                        converted = converted.split(code).join(emoji);
+                                                                                    });
+                                                                                    return <span key={i}>{converted}</span>;
+                                                                                });
+                                                                            })()}
                                                                             {msg.isEdited && <span className={`text-[9px] italic ml-2 ${isMe ? 'opacity-60' : 'text-gray-500'}`}>(đã chỉnh sửa)</span>}
                                                                         </>
                                                                     )}
@@ -968,7 +1021,7 @@ const ChatPage = ({ user, setUser }) => {
             </div>
 
             {/* Cột 4 Right Sidebar */}
-            <RightSidebar user={user} onlineUsers={onlineUsers} activeRoom={activeRoom} allGroups={allGroups} handleOpenProfile={handleOpenProfile} handleStartDM={handleStartDM} darkMode={darkMode} isVisible={isRightSidebarVisible && !showSearch} handleKick={handleKick} handleToggleRole={handleToggleRole} />
+            <RightSidebar user={user} onlineUsers={onlineUsers} activeRoom={activeRoom} allGroups={allGroups} handleOpenProfile={handleOpenProfile} handleStartDM={handleStartDM} darkMode={darkMode} isVisible={isRightSidebarVisible && !showSearch} handleKick={handleKick} handleToggleRole={handleToggleRole} lastSeenMap={lastSeenMap} />
 
             {/* Modals & Components phụ */}
             {showSearch && <MessageSearch darkMode={darkMode} messages={messages} activeRoom={activeRoom} user={user} onClose={() => setShowSearch(false)} />}
@@ -1182,6 +1235,57 @@ const ChatPage = ({ user, setUser }) => {
                         <FaTimes size={24}/>
                     </button>
                     <img src={previewImage} className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl" alt="Preview" onClick={(e) => e.stopPropagation()} />
+                </div>
+            )}
+
+            {/* P1: Invite to Group Modal */}
+            {showInviteModal && activeRoom && (
+                <div className="fixed inset-0 bg-[#020617]/80 flex items-center justify-center z-[300] backdrop-blur-md p-4 animate-in zoom-in-95">
+                    <div className={`w-[420px] rounded-[40px] p-8 shadow-2xl border ${darkMode ? 'bg-slate-900 border-white/10 text-white' : 'bg-white border-gray-100 text-slate-800'}`}>
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-xl font-black uppercase italic tracking-tighter text-indigo-500">Mời thành viên</h2>
+                            <button onClick={() => setShowInviteModal(false)} className="text-gray-500 hover:text-red-500 transition-colors"><FaTimes size={20}/></button>
+                        </div>
+                        <p className={`text-xs mb-6 ${darkMode ? 'text-gray-400' : 'text-slate-500'}`}>Chọn bạn bè để mời vào nhóm <b>{activeRoom.name}</b></p>
+                        <div className="max-h-[300px] overflow-y-auto space-y-2 scrollbar-hide">
+                            {(user.friends || []).filter(f => {
+                                const grp = allGroups.find(g => g.groupId === activeRoom.id);
+                                return grp && !(grp.members || []).includes(f);
+                            }).map(f => (
+                                <div key={f} className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${darkMode ? 'bg-white/2 border-white/5 hover:bg-white/5' : 'bg-slate-50 border-gray-100 hover:bg-slate-100'}`}>
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-white font-black text-sm uppercase overflow-hidden ${darkMode ? 'bg-slate-800' : 'bg-slate-300'}`}>
+                                            {onlineUsers[f]?.avatar ? <img src={onlineUsers[f].avatar} className="w-full h-full object-cover" alt="" /> : f[0]}
+                                        </div>
+                                        <div>
+                                            <p className={`text-sm font-bold ${darkMode ? 'text-white' : 'text-slate-800'}`}>{onlineUsers[f]?.displayName || f}</p>
+                                            <p className={`text-[9px] ${onlineUsers[f] ? 'text-emerald-400' : 'text-gray-500'}`}>{onlineUsers[f] ? 'Online' : 'Offline'}</p>
+                                        </div>
+                                    </div>
+                                    <button 
+                                        onClick={async () => {
+                                            try {
+                                                await api.post('/groups/invite', { groupId: activeRoom.id, targetUsername: f });
+                                                toast(`Đã mời @${f} vào nhóm!`, { icon: '✅', style: { borderRadius: '10px', background: '#333', color: '#fff' } });
+                                                loadData();
+                                            } catch (err) {
+                                                toast(err.response?.data?.error || 'Lỗi mời thành viên!', { icon: '❌' });
+                                            }
+                                        }}
+                                        className="bg-emerald-500 hover:bg-emerald-400 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all active:scale-95 shadow-lg"
+                                    >
+                                        Mời
+                                    </button>
+                                </div>
+                            ))}
+                            {(user.friends || []).filter(f => {
+                                const grp = allGroups.find(g => g.groupId === activeRoom.id);
+                                return grp && !(grp.members || []).includes(f);
+                            }).length === 0 && (
+                                <p className="text-center text-gray-500 py-8 text-sm italic">Tất cả bạn bè đã là thành viên</p>
+                            )}
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

@@ -22,6 +22,7 @@ const RightSidebar = ({
   isVisible,
   handleKick,
   handleToggleRole,
+  lastSeenMap,
 }) => {
   // Nếu bị ẩn bởi nút thu/phóng thì không render gì cả
   if (!isVisible) return null;
@@ -34,6 +35,19 @@ const RightSidebar = ({
   const isOwner = currentGroup?.owner === user?.username;
   const isMod = currentGroup?.mods?.includes(user?.username);
   const canManage = isSysAdmin || isOwner || isMod;
+
+  // P1: Format last seen time relative to now
+  const formatLastSeen = (isoStr) => {
+    if (!isoStr) return null;
+    const diff = Date.now() - new Date(isoStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'Vừa mới đây';
+    if (mins < 60) return `${mins} phút trước`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours} giờ trước`;
+    const days = Math.floor(hours / 24);
+    return `${days} ngày trước`;
+  };
 
   // --- CHẾ ĐỘ 1: HIỂN THỊ THÀNH VIÊN NHÓM ---
   const renderGroupMembers = () => {
@@ -97,7 +111,7 @@ const RightSidebar = ({
                       )}
                     </p>
                     <p className={`text-[7px] font-bold tracking-widest ${darkMode ? 'text-gray-600' : 'text-slate-400'}`}>
-                      {isOnline ? "ĐANG HIỆN DIỆN" : "VẮNG MẶT"}
+                      {isOnline ? "ĐANG HIỆN DIỆN" : (formatLastSeen(lastSeenMap?.[uname]) || "VẮNG MẶT")}
                     </p>
                   </div>
                 </div>
@@ -177,7 +191,7 @@ const RightSidebar = ({
                       {onlineUsers[fName]?.displayName || fName}
                     </p>
                     <p className={`text-[7px] font-bold tracking-widest ${darkMode ? 'text-gray-600' : 'text-slate-400'}`}>
-                      {isOnline ? "VỪA MỚI ĐÂY" : "ĐANG NGỦ"}
+                      {isOnline ? "VỪA MỚI ĐÂY" : (formatLastSeen(lastSeenMap?.[fName]) || "ĐANG NGỦ")}
                     </p>
                   </div>
                 </div>
