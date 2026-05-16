@@ -19,6 +19,9 @@ import Home from './chat/Home';
 import RightSidebar from './chat/RightSidebar';
 import CreateChat from './function/CreateChat';
 import MessageSearch from './chat/MessageSearch';
+import GlobalSearch from './chat/GlobalSearch';
+import LinkPreview from './chat/LinkPreview';
+import StickerPicker from './chat/StickerPicker';
 
 import useCall from '../context/useCall'; 
 import { getSocket, connectSocket, disconnectSocket } from '../services/socket';
@@ -41,12 +44,14 @@ const ChatPage = ({ user, setUser }) => {
     const [showDiscoveryTab, setShowDiscoveryTab] = useState(false);
     const [isAdminMode, setIsAdminMode] = useState(false);
     const [showSearch, setShowSearch] = useState(false);
+    const [showGlobalSearch, setShowGlobalSearch] = useState(false);
     const [darkMode, setDarkMode] = useState(localStorage.getItem('theme') === 'dark');
     const [isSidebarVisible, setIsSidebarVisible] = useState(true);
     const [isRightSidebarVisible, setIsRightSidebarVisible] = useState(true);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [showGroupCreator, setShowGroupCreator] = useState(false);
     const [showGroupSettings, setShowGroupSettings] = useState(false);
+    const [showStickerPicker, setShowStickerPicker] = useState(false);
     const [profileModal, setProfileModal] = useState({ isOpen: false, username: '' });
     const [forwardMessageData, setForwardMessageData] = useState(null); // Lưu tin nhắn cần forward
     const [showPollModal, setShowPollModal] = useState(false);
@@ -265,6 +270,7 @@ const ChatPage = ({ user, setUser }) => {
         setShowDiscoveryTab(false); 
         setIsAdminMode(false); 
         setShowSearch(false);
+        setShowGlobalSearch(false);
         setReplyingToMessage(null);
         setShowReactionMenu(null);
         if (room) {
@@ -524,6 +530,32 @@ const ChatPage = ({ user, setUser }) => {
         alert("Đã chuyển tiếp tin nhắn!");
     };
 
+    const handleSendSticker = (stickerUrl) => {
+        socket.emit('send_message', { 
+            sender: user.displayName, 
+            senderUsername: user.username, 
+            msgType: 'sticker',
+            fileData: stickerUrl, 
+            roomId: activeRoom.id, 
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+        });
+        setShowStickerPicker(false);
+    };
+
+    const handleSelectSearchResult = (result) => {
+        if (result.type === 'user') {
+            handleStartDM(result.data.username);
+        } else if (result.type === 'group') {
+            handleSwitchRoom({ id: result.data.groupId, name: result.data.groupName });
+        } else if (result.type === 'message') {
+            // Find room and switch
+            const room = allGroups.find(g => g.groupId === result.data.roomId) 
+                         || { id: result.data.roomId, name: result.data.roomId.startsWith('dm_') ? result.data.senderUsername : result.data.roomId, isDM: result.data.roomId.startsWith('dm_') };
+            handleSwitchRoom(room);
+        }
+        setShowGlobalSearch(false);
+    };
+
     useEffect(() => {
         if (!user?.username) return;
         connectSocket();
@@ -725,7 +757,8 @@ const ChatPage = ({ user, setUser }) => {
                                     </button>
                                 )}
                                 
-                                <button onClick={() => setShowSearch(!showSearch)} className={`p-1.5 rounded-lg transition-all ${showSearch ? 'text-indigo-500 bg-indigo-500/10' : 'text-gray-500 hover:text-white bg-white/5'}`} title="Tìm kiếm"><FaSearch size={18}/></button>
+                                <button onClick={() => { setShowGlobalSearch(!showGlobalSearch); setShowSearch(false); }} className={`p-1.5 rounded-lg transition-all ${showGlobalSearch ? 'text-indigo-500 bg-indigo-500/10' : 'text-gray-500 hover:text-white bg-white/5'}`} title="Tìm kiếm toàn cầu"><FaGlobe size={18}/></button>
+                                <button onClick={() => { setShowSearch(!showSearch); setShowGlobalSearch(false); }} className={`p-1.5 rounded-lg transition-all ${showSearch ? 'text-indigo-500 bg-indigo-500/10' : 'text-gray-500 hover:text-white bg-white/5'}`} title="Tìm trong phòng"><FaSearch size={18}/></button>
                                 
                                 {isMember && !activeRoom.isDM && activeRoom.id !== 'chung' && currentGroup?.owner !== user.username && (
                                     <button onClick={handleLeaveGroup} className="text-gray-500 hover:text-red-500 transition-all bg-white/5 hover:bg-red-500/10 p-1.5 rounded-lg" title="Rời nhóm">
@@ -844,13 +877,17 @@ const ChatPage = ({ user, setUser }) => {
                                                                 )}
                                                             </div>
                                                         )}
-                                                        <div className={`p-4 rounded-2xl text-[14px] font-medium leading-relaxed shadow-lg ${isMe ? 'bg-indigo-600 text-white rounded-tr-none' : (darkMode ? 'bg-white/5 text-gray-100 border border-white/5 rounded-tl-none' : 'bg-white text-slate-700 border border-gray-100 rounded-tl-none')} ${msg.isRevoked ? 'italic opacity-30 border-2 border-dashed' : ''}`}>
-                                                            {!msg.isRevoked && msg.replyTo && (
-                                                                <div className={`mb-3 pl-3 py-1 border-l-2 text-xs opacity-80 ${isMe ? 'border-white/50 bg-black/10' : 'border-indigo-500 bg-black/5 dark:bg-white/5'} rounded-r-lg`}>
-                                                                    <div className="font-bold">@{msg.replyTo.senderUsername}</div>
-                                                                    <div className="truncate opacity-75">{msg.replyTo.text || 'Đã gửi tệp đính kèm...'}</div>
-                                                                </div>
-                                                            )}
+                                                        <div className={`p-4 rounded-2xl text-[14px] font-medium leading-relaxed shadow-lg ${msg.msgType === 'sticker' ? 'bg-transparent shadow-none border-none' : (isMe ? 'bg-indigo-600 text-white rounded-tr-none' : (darkMode ? 'bg-white/5 text-gray-100 border border-white/5 rounded-tl-none' : 'bg-white text-slate-700 border border-gray-100 rounded-tl-none'))} ${msg.isRevoked ? 'italic opacity-30 border-2 border-dashed' : ''}`}>
+                                                            {!msg.isRevoked && msg.msgType === 'sticker' ? (
+                                                                <img src={msg.fileData} className="w-40 h-40 object-contain animate-in zoom-in-50" alt="sticker" />
+                                                            ) : (
+                                                                <>
+                                                                    {!msg.isRevoked && msg.replyTo && (
+                                                                        <div className={`mb-3 pl-3 py-1 border-l-2 text-xs opacity-80 ${isMe ? 'border-white/50 bg-black/10' : 'border-indigo-500 bg-black/5 dark:bg-white/5'} rounded-r-lg`}>
+                                                                            <div className="font-bold">@{msg.replyTo.senderUsername}</div>
+                                                                            <div className="truncate opacity-75">{msg.replyTo.text || 'Đã gửi tệp đính kèm...'}</div>
+                                                                        </div>
+                                                                    )}
                                                             {msg.msgType === 'poll' ? (
                                                                 <div className="min-w-[200px]">
                                                                     <div className="font-black text-lg mb-4 flex items-center gap-2"><FaPoll className="text-emerald-400"/> {msg.pollData?.question}</div>
@@ -903,7 +940,7 @@ const ChatPage = ({ user, setUser }) => {
                                                                             {(() => {
                                                                                 const emojiMap = { ':)': '😊', ':D': '😃', ':(': '😢', ';)': '😉', ':P': '😛', '<3': '❤️', ':o': '😮', 'B)': '😎', ':*': '😘', 'xD': '🤣', 'XD': '🤣', ':3': '😺', 'o_O': '😳', '-_-': '😑' };
                                                                                 const text = msg.text || '';
-                                                                                const urlRegex = /(https?:\/\/[^\s]+)/g;
+                                                                                const urlRegex = /((?:https?:\/\/|www\.)[^\s]+|[a-zA-Z0-9.-]+\.(?:com|net|org|vn|edu|gov|io)[^\s]*)/g;
                                                                                 const parts = text.split(urlRegex);
                                                                                 return parts.map((part, i) => {
                                                                                     if (urlRegex.test(part)) {
@@ -920,6 +957,13 @@ const ChatPage = ({ user, setUser }) => {
                                                                             {msg.isEdited && <span className={`text-[9px] italic ml-2 ${isMe ? 'opacity-60' : 'text-gray-500'}`}>(đã chỉnh sửa)</span>}
                                                                         </>
                                                                     )}
+                                                                    {!msg.isRevoked && msg.text && (() => {
+                                                                        const urlRegex = /((?:https?:\/\/|www\.)[^\s]+|[a-zA-Z0-9.-]+\.(?:com|net|org|vn|edu|gov|io)[^\s]*)/g;
+                                                                        const urls = msg.text.match(urlRegex);
+                                                                        return urls ? urls.slice(0, 1).map((url, i) => (
+                                                                             <LinkPreview key={i} url={url.replace(/\.+$/, '').trim()} darkMode={darkMode} />
+                                                                         )) : null;
+                                                                    })()}
                                                                     {!msg.isRevoked && msg.fileData && (
                                                                         <div className="mt-3">
                                                                             {msg.fileType === 'audio' ? (
@@ -933,6 +977,8 @@ const ChatPage = ({ user, setUser }) => {
                                                                             )}
                                                                         </div>
                                                                     )}
+                                                                </>
+                                                            )}
                                                                 </>
                                                             )}
                                                         </div>
@@ -981,7 +1027,8 @@ const ChatPage = ({ user, setUser }) => {
                                     <div className={`rounded-2xl flex items-center px-4 py-3 border transition-all ${darkMode ? 'bg-white/5 border-white/10 focus-within:border-indigo-500' : 'bg-white border-gray-200 focus-within:border-indigo-500 shadow-sm'} ${isRecording ? 'border-red-500 animate-pulse bg-red-500/5' : ''}`}>
                                         {!isRecording && (
                                             <div className={`flex gap-4 mr-4 border-r pr-4 ${darkMode ? 'text-gray-500 border-white/5' : 'text-slate-400 border-gray-200'}`}>
-                                                <FaSmile onClick={()=>setShowEmojiPicker(!showEmojiPicker)} className="cursor-pointer hover:text-orange-400 transition-all hover:scale-110" size={20}/>
+                                                <FaSmile onClick={()=>{setShowEmojiPicker(!showEmojiPicker); setShowStickerPicker(false);}} className="cursor-pointer hover:text-orange-400 transition-all hover:scale-110" size={20}/>
+                                                <FaSmileBeam onClick={()=>{setShowStickerPicker(!showStickerPicker); setShowEmojiPicker(false);}} className={`cursor-pointer transition-all hover:scale-110 ${showStickerPicker ? 'text-yellow-400' : 'hover:text-yellow-400'}`} size={20} title="Stickers"/>
                                                 <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
                                                 <FaImage onClick={()=>fileInputRef.current.click()} className="cursor-pointer hover:text-blue-500 transition-all hover:scale-110" size={18}/>
                                                 <FaPoll onClick={()=>setShowPollModal(true)} className="cursor-pointer hover:text-emerald-500 transition-all hover:scale-110" size={18} title="Tạo bình chọn"/>
@@ -1025,6 +1072,8 @@ const ChatPage = ({ user, setUser }) => {
 
             {/* Modals & Components phụ */}
             {showSearch && <MessageSearch darkMode={darkMode} messages={messages} activeRoom={activeRoom} user={user} onClose={() => setShowSearch(false)} />}
+            {showGlobalSearch && <GlobalSearch darkMode={darkMode} onClose={() => setShowGlobalSearch(false)} onSelectResult={handleSelectSearchResult} />}
+            {showStickerPicker && <div className="absolute bottom-24 left-6 z-50"><StickerPicker onSelect={handleSendSticker} darkMode={darkMode} onClose={() => setShowStickerPicker(false)} /></div>}
             <CreateChat user={user} isOpen={showGroupCreator} onClose={() => setShowGroupCreator(false)} onCreateGroup={handleCreateGroup} darkMode={darkMode} />
             <UserProfileModal isOpen={profileModal.isOpen} onClose={()=>setProfileModal({isOpen:false, username:''})} targetUsername={profileModal.username} currentUser={user} onUpdateSuccess={handleUpdateSuccess} onStartDM={handleStartDM} />
             
