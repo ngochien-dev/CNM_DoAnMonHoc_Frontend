@@ -7,9 +7,11 @@ import {
     FaChartBar, FaImage, FaSmile, FaMoon, FaSun, 
     FaGlobe, FaCog, FaUserMinus, FaPauseCircle, FaPlayCircle, 
     FaUserFriends, FaCommentDots, FaUserPlus, FaTimes, FaUserCheck, FaLock, FaUsers, FaSearch,
-    FaVideo, FaShare, FaThumbtack, FaPoll, FaCalendarAlt, FaReply, FaMicrophone, FaStopCircle, FaSmileBeam, FaEdit, FaExchangeAlt, FaTh
+    FaVideo, FaShare, FaThumbtack, FaPoll, FaCalendarAlt, FaReply, FaMicrophone, FaStopCircle, FaSmileBeam, FaEdit, FaExchangeAlt, FaTh, FaPlus
 } from 'react-icons/fa';
 import { Toaster, toast } from 'react-hot-toast';
+import StoryBar from './social/StoryBar';
+import StoryViewer from './social/StoryViewer';
 
 import UserProfileModal from './user/UserProfileModal';
 import AdminStats from './statistics/AdminStats';
@@ -69,6 +71,9 @@ const ChatPage = ({ user, setUser }) => {
     const [selfDestructTimer, setSelfDestructTimer] = useState(0); // 0 = disabled, else seconds
     const [isSecretMode, setIsSecretMode] = useState(false); // P2: Secret Chat (no server logs)
     const [showSelfDestructMenu, setShowSelfDestructMenu] = useState(false); 
+    const [viewingStories, setViewingStories] = useState(null); // { username, stories, allGroupedStories }
+    const [showStoryUpload, setShowStoryUpload] = useState(false);
+    const [storyForm, setStoryForm] = useState({ mediaData: '', caption: '' });
 
     // P2: Periodically clean up expired messages from state
     useEffect(() => {
@@ -301,9 +306,9 @@ const ChatPage = ({ user, setUser }) => {
         handleSwitchRoom({ id: dmId, name: friendUname, isDM: true }); 
     };
 
-    const handleCreateGroup = async (name, isPublic) => {
+    const handleCreateGroup = async (name, isPublic, isChannel = false) => {
         const publicStatus = user.role === 'admin' ? isPublic : false;
-        await api.post('/groups/create', { groupName: name, owner: user.username, isPublic: publicStatus });
+        await api.post('/groups/create', { groupName: name, owner: user.username, isPublic: publicStatus, isChannel });
         setShowGroupCreator(false);
         loadData();
     };
@@ -429,6 +434,50 @@ const ChatPage = ({ user, setUser }) => {
     const handleReactToMessage = async (messageId, emoji) => {
         await api.post('/v1/messages/react', { messageId, username: user.username, emoji });
         setShowReactionMenu(null);
+    };
+
+    const handleStoryUpload = async () => {
+        if (!storyForm.mediaData) return;
+        await api.post('/stories/upload', { 
+            username: user.username, 
+            mediaData: storyForm.mediaData, 
+            caption: storyForm.caption,
+            mediaType: 'image' // Simplified
+        });
+        setShowStoryUpload(false);
+        setStoryForm({ mediaData: '', caption: '' });
+        alert("Khoảnh khắc đã được chia sẻ!");
+    };
+
+    const handleReactStory = async (storyId, emoji) => {
+        await api.post('/stories/react', { storyId, username: user.username, emoji });
+    };
+
+    const handleDeleteStory = async (storyId) => {
+        if (!window.confirm("Bạn có chắc muốn xóa khoảnh khắc này?")) return;
+        try {
+            await api.post('/stories/delete', { storyId });
+            setViewingStories(null);
+            toast.success("Đã xóa khoảnh khắc");
+        } catch (err) {
+            toast.error("Lỗi khi xóa khoảnh khắc");
+        }
+    };
+
+    const handleNextUserStory = () => {
+        if (!viewingStories) return;
+        const usernames = Object.keys(viewingStories.allGroupedStories);
+        const currentIndex = usernames.indexOf(viewingStories.username);
+        if (currentIndex < usernames.length - 1) {
+            const nextUsername = usernames[currentIndex + 1];
+            setViewingStories({
+                username: nextUsername,
+                stories: viewingStories.allGroupedStories[nextUsername],
+                allGroupedStories: viewingStories.allGroupedStories
+            });
+        } else {
+            setViewingStories(null);
+        }
     };
 
     const startRecording = async () => {
@@ -782,6 +831,18 @@ const ChatPage = ({ user, setUser }) => {
                         </button>
                     ))}
                 </div>
+
+                {/* Story Bar */}
+                {(activeSidebarTab === 'all' || activeSidebarTab === 'personal') && (
+                    <StoryBar 
+                        user={user} 
+                        friends={user.friends || []} 
+                        onlineUsers={onlineUsers} 
+                        onOpenStory={(username, stories, allGroupedStories) => setViewingStories({ username, stories, allGroupedStories })}
+                        onUploadStory={() => setShowStoryUpload(true)}
+                        darkMode={darkMode}
+                    />
+                )}
 
                 <div className="flex-1 p-2 mt-2 overflow-y-auto space-y-6 font-bold scrollbar-hide">
                     {(() => {
@@ -1216,49 +1277,57 @@ const ChatPage = ({ user, setUser }) => {
                                 )}
 
                                 <div className="p-6 shrink-0 relative bg-transparent">
-                                    {showEmojiPicker && <div ref={emojiPickerRef} className="absolute bottom-24 left-6 z-50 shadow-2xl rounded-[30px] overflow-hidden border border-white/10 animate-in zoom-in-75"><EmojiPicker onEmojiClick={(e)=>setMsgInput(p=>p+e.emoji)} theme={darkMode ? Theme.DARK : Theme.LIGHT} /></div>}
-                                    
-                                    {replyingToMessage && (
-                                        <div className={`mb-2 p-3 rounded-xl flex justify-between items-center border ${darkMode ? 'bg-indigo-900/30 border-indigo-500/30 text-indigo-200' : 'bg-indigo-50 border-indigo-200 text-indigo-800'}`}>
-                                            <div className="flex-1 truncate text-xs">
-                                                <span className="font-black uppercase tracking-widest mr-2"><FaReply className="inline mr-1"/> Trả lời @{replyingToMessage.senderUsername}:</span>
-                                                <span className="italic">{replyingToMessage.text || 'Đã đính kèm tệp...'}</span>
-                                            </div>
-                                            <button onClick={() => setReplyingToMessage(null)} className="ml-4 hover:text-red-500 transition-colors"><FaTimes size={14}/></button>
+                                    {(currentGroup?.isChannel && user.username !== currentGroup.owner) ? (
+                                        <div className="flex items-center justify-center p-4 bg-indigo-500/10 rounded-2xl text-indigo-400 font-black uppercase tracking-[3px] text-[10px] border border-indigo-500/20 animate-pulse">
+                                            <FaLock className="mr-2"/> Chỉ quản trị viên mới có thể truyền tín hiệu trong kênh này
                                         </div>
+                                    ) : (
+                                        <>
+                                            {showEmojiPicker && <div ref={emojiPickerRef} className="absolute bottom-24 left-6 z-50 shadow-2xl rounded-[30px] overflow-hidden border border-white/10 animate-in zoom-in-75"><EmojiPicker onEmojiClick={(e)=>setMsgInput(p=>p+e.emoji)} theme={darkMode ? Theme.DARK : Theme.LIGHT} /></div>}
+                                            
+                                            {replyingToMessage && (
+                                                <div className={`mb-2 p-3 rounded-xl flex justify-between items-center border ${darkMode ? 'bg-indigo-900/30 border-indigo-500/30 text-indigo-200' : 'bg-indigo-50 border-indigo-200 text-indigo-800'}`}>
+                                                    <div className="flex-1 truncate text-xs">
+                                                        <span className="font-black uppercase tracking-widest mr-2"><FaReply className="inline mr-1"/> Trả lời @{replyingToMessage.senderUsername}:</span>
+                                                        <span className="italic">{replyingToMessage.text || 'Đã đính kèm tệp...'}</span>
+                                                    </div>
+                                                    <button onClick={() => setReplyingToMessage(null)} className="ml-4 hover:text-red-500 transition-colors"><FaTimes size={14}/></button>
+                                                </div>
+                                            )}
+
+                                            <div className={`rounded-2xl flex items-center px-4 py-3 border transition-all ${darkMode ? 'bg-white/5 border-white/10 focus-within:border-indigo-500' : 'bg-white border-gray-200 focus-within:border-indigo-500 shadow-sm'} ${isRecording ? 'border-red-500 animate-pulse bg-red-500/5' : ''}`}>
+                                                {!isRecording && (
+                                                    <div className={`flex gap-4 mr-4 border-r pr-4 ${darkMode ? 'text-gray-500 border-white/5' : 'text-slate-400 border-gray-200'}`}>
+                                                        <FaSmile onClick={()=>{setShowEmojiPicker(!showEmojiPicker); setShowStickerPicker(false);}} className="cursor-pointer hover:text-orange-400 transition-all hover:scale-110" size={20}/>
+                                                        <FaSmileBeam onClick={()=>{setShowStickerPicker(!showStickerPicker); setShowEmojiPicker(false);}} className={`cursor-pointer transition-all hover:scale-110 ${showStickerPicker ? 'text-yellow-400' : 'hover:text-yellow-400'}`} size={20} title="Stickers"/>
+                                                        <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
+                                                        <FaImage onClick={()=>fileInputRef.current.click()} className="cursor-pointer hover:text-blue-500 transition-all hover:scale-110" size={18}/>
+                                                        <FaPoll onClick={()=>setShowPollModal(true)} className="cursor-pointer hover:text-emerald-500 transition-all hover:scale-110" size={18} title="Tạo bình chọn"/>
+                                                        <FaCalendarAlt onClick={()=>setShowEventModal(true)} className="cursor-pointer hover:text-purple-500 transition-all hover:scale-110" size={18} title="Tạo lịch nhóm"/>
+                                                    </div>
+                                                )}
+                                                
+                                                {isRecording ? (
+                                                    <div className="flex-1 flex items-center justify-between text-red-500 font-bold uppercase tracking-widest text-xs">
+                                                        <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-500 animate-ping"></div> Đang thu âm... {formatTime(recordingTime)}</div>
+                                                    </div>
+                                                ) : (
+                                                    <input value={msgInput} onChange={handleInputChange} onKeyDown={(e)=>e.key==='Enter'&&handleSendText()} placeholder={`Nhập tín hiệu...`} className={`bg-transparent w-full outline-none text-sm font-bold ${darkMode ? 'text-white placeholder:text-gray-700' : 'text-slate-800 placeholder:text-gray-400'}`} />
+                                                )}
+
+                                                <div className="flex items-center gap-3 ml-4">
+                                                    {isRecording ? (
+                                                        <button onClick={stopRecording} className="text-red-500 scale-125 transition-all transform hover:scale-150"><FaStopCircle size={20}/></button>
+                                                    ) : (
+                                                        <button onClick={startRecording} className="text-gray-400 hover:text-red-500 transition-all transform hover:scale-125"><FaMicrophone size={18}/></button>
+                                                    )}
+                                                    {!isRecording && (
+                                                        <button onClick={handleSendText} className={`${msgInput.trim() ? 'text-indigo-500 scale-125' : 'text-gray-400'} transition-all transform active:scale-90`}><FaPaperPlane size={20}/></button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </>
                                     )}
-
-                                    <div className={`rounded-2xl flex items-center px-4 py-3 border transition-all ${darkMode ? 'bg-white/5 border-white/10 focus-within:border-indigo-500' : 'bg-white border-gray-200 focus-within:border-indigo-500 shadow-sm'} ${isRecording ? 'border-red-500 animate-pulse bg-red-500/5' : ''}`}>
-                                        {!isRecording && (
-                                            <div className={`flex gap-4 mr-4 border-r pr-4 ${darkMode ? 'text-gray-500 border-white/5' : 'text-slate-400 border-gray-200'}`}>
-                                                <FaSmile onClick={()=>{setShowEmojiPicker(!showEmojiPicker); setShowStickerPicker(false);}} className="cursor-pointer hover:text-orange-400 transition-all hover:scale-110" size={20}/>
-                                                <FaSmileBeam onClick={()=>{setShowStickerPicker(!showStickerPicker); setShowEmojiPicker(false);}} className={`cursor-pointer transition-all hover:scale-110 ${showStickerPicker ? 'text-yellow-400' : 'hover:text-yellow-400'}`} size={20} title="Stickers"/>
-                                                <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
-                                                <FaImage onClick={()=>fileInputRef.current.click()} className="cursor-pointer hover:text-blue-500 transition-all hover:scale-110" size={18}/>
-                                                <FaPoll onClick={()=>setShowPollModal(true)} className="cursor-pointer hover:text-emerald-500 transition-all hover:scale-110" size={18} title="Tạo bình chọn"/>
-                                                <FaCalendarAlt onClick={()=>setShowEventModal(true)} className="cursor-pointer hover:text-purple-500 transition-all hover:scale-110" size={18} title="Tạo lịch nhóm"/>
-                                            </div>
-                                        )}
-                                        
-                                        {isRecording ? (
-                                            <div className="flex-1 flex items-center justify-between text-red-500 font-bold uppercase tracking-widest text-xs">
-                                                <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-500 animate-ping"></div> Đang thu âm... {formatTime(recordingTime)}</div>
-                                            </div>
-                                        ) : (
-                                            <input value={msgInput} onChange={handleInputChange} onKeyDown={(e)=>e.key==='Enter'&&handleSendText()} placeholder={`Nhập tín hiệu...`} className={`bg-transparent w-full outline-none text-sm font-bold ${darkMode ? 'text-white placeholder:text-gray-700' : 'text-slate-800 placeholder:text-gray-400'}`} />
-                                        )}
-
-                                        <div className="flex items-center gap-3 ml-4">
-                                            {isRecording ? (
-                                                <button onClick={stopRecording} className="text-red-500 scale-125 transition-all transform hover:scale-150"><FaStopCircle size={20}/></button>
-                                            ) : (
-                                                <button onClick={startRecording} className="text-gray-400 hover:text-red-500 transition-all transform hover:scale-125"><FaMicrophone size={18}/></button>
-                                            )}
-                                            {!isRecording && (
-                                                <button onClick={handleSendText} className={`${msgInput.trim() ? 'text-indigo-500 scale-125' : 'text-gray-400'} transition-all transform active:scale-90`}><FaPaperPlane size={20}/></button>
-                                            )}
-                                        </div>
-                                    </div>
                                 </div>
                             </>
                         )}
@@ -1534,6 +1603,58 @@ const ChatPage = ({ user, setUser }) => {
                             }).length === 0 && (
                                 <p className="text-center text-gray-500 py-8 text-sm italic">Tất cả bạn bè đã là thành viên</p>
                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Story Viewer Modal */}
+            {viewingStories && (
+                <StoryViewer 
+                    stories={viewingStories.stories} 
+                    username={viewingStories.username} 
+                    currentUser={user}
+                    onClose={() => setViewingStories(null)} 
+                    onReact={handleReactStory}
+                    onDelete={handleDeleteStory}
+                    onNext={handleNextUserStory}
+                    darkMode={darkMode} 
+                />
+            )}
+
+            {/* Story Upload Modal */}
+            {showStoryUpload && (
+                <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[2000] backdrop-blur-md p-4">
+                    <div className="w-full max-w-md bg-[#1e293b] rounded-[40px] border border-white/10 p-8 shadow-2xl">
+                        <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter mb-6 flex items-center gap-2"><FaPlus className="text-indigo-500"/> Đăng khoảnh khắc</h2>
+                        <div className="space-y-6">
+                            <div 
+                                onClick={() => {
+                                    const input = document.createElement('input');
+                                    input.type = 'file';
+                                    input.accept = 'image/*';
+                                    input.onchange = (e) => {
+                                        const file = e.target.files[0];
+                                        const reader = new FileReader();
+                                        reader.onloadend = () => setStoryForm(p => ({ ...p, mediaData: reader.result }));
+                                        reader.readAsDataURL(file);
+                                    };
+                                    input.click();
+                                }}
+                                className="w-full aspect-video rounded-3xl border-2 border-dashed border-white/10 flex items-center justify-center cursor-pointer hover:border-indigo-500 transition-all overflow-hidden"
+                            >
+                                {storyForm.mediaData ? <img src={storyForm.mediaData} className="w-full h-full object-cover" alt=""/> : <span className="text-gray-500 text-xs font-bold uppercase">Chọn ảnh từ thiết bị</span>}
+                            </div>
+                            <input 
+                                value={storyForm.caption} 
+                                onChange={e => setStoryForm(p => ({ ...p, caption: e.target.value }))}
+                                placeholder="Thêm mô tả..." 
+                                className="w-full p-4 bg-white/5 border border-white/10 rounded-2xl text-white text-sm outline-none focus:border-indigo-500"
+                            />
+                            <div className="flex gap-4">
+                                <button onClick={() => setShowStoryUpload(false)} className="flex-1 py-4 bg-white/5 text-gray-400 font-black rounded-2xl uppercase text-[10px] tracking-widest">Hủy</button>
+                                <button onClick={handleStoryUpload} className="flex-1 py-4 bg-indigo-600 text-white font-black rounded-2xl uppercase text-[10px] tracking-widest shadow-lg shadow-indigo-600/30">Chia sẻ ngay</button>
+                            </div>
                         </div>
                     </div>
                 </div>
