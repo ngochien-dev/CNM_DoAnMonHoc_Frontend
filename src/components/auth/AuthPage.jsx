@@ -129,6 +129,10 @@ const AuthPage = ({ onLogin }) => {
                     username: form.username,
                     password: form.password,
                 });
+                if (response.data.requires2FA) {
+                    setView('verify2fa');
+                    return;
+                }
                 localStorage.setItem('user_session', JSON.stringify(response.data));
                 onLogin(response.data);
             } else if (view === 'register') {
@@ -140,6 +144,13 @@ const AuthPage = ({ onLogin }) => {
                     otp: form.otp,
                 });
                 setView('login');
+            } else if (view === 'verify2fa') {
+                const response = await api.post('/auth/verify-2fa', {
+                    username: form.username,
+                    otp: form.otp,
+                });
+                localStorage.setItem('user_session', JSON.stringify(response.data));
+                onLogin(response.data);
             } else if (view === 'forgot') {
                 await api.post('/auth/forgot-password', { email: form.email });
                 setView('reset');
@@ -174,14 +185,14 @@ const AuthPage = ({ onLogin }) => {
                     <p className="text-gray-400 text-sm font-medium tracking-wide uppercase italic">
                         {view === 'login' && 'Chao mung ban tro lai he thong'}
                         {view === 'register' && 'Kham pha khong gian chat moi'}
-                        {(view === 'verify' || view === 'reset') && 'Xac thuc de tiep tuc'}
+                        {(view === 'verify' || view === 'reset' || view === 'verify2fa') && 'Xac thuc de tiep tuc'}
                     </p>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-6">
                     {view === 'login' && <Login form={form} setForm={setForm} setView={setView} />}
                     {view === 'register' && <Register form={form} setForm={setForm} />}
-                    {(view === 'verify' || view === 'forgot' || view === 'reset') && (
+                    {(view === 'verify' || view === 'forgot' || view === 'reset' || view === 'verify2fa') && (
                         <OTPVerify view={view} form={form} setForm={setForm} />
                     )}
 

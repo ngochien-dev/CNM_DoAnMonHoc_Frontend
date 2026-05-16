@@ -354,6 +354,16 @@ const UserProfileModal = ({ isOpen, onClose, targetUsername, currentUser, onStar
         }
     };
 
+    const handleToggle2FA = async (enabled) => {
+        try {
+            await api.post('/users/toggle-2fa', { username: currentUser.username, enabled });
+            setViewingUser(prev => ({ ...prev, is2FAEnabled: enabled }));
+            alert(`Đã ${enabled ? 'bật' : 'tắt'} bảo mật 2 lớp thành công!`);
+        } catch (err) {
+            alert('Lỗi khi thiết lập 2FA');
+        }
+    };
+
     useEffect(() => {
         if (isOpen && targetUsername) {
             const fetchData = async () => {
@@ -517,6 +527,22 @@ const UserProfileModal = ({ isOpen, onClose, targetUsername, currentUser, onStar
                                     <ProfileView viewingUser={viewingUser} />
                                     {isMe && (
                                         <div className="pt-8 space-y-3">
+                                            {/* P2: 2FA Toggle Section */}
+                                            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center justify-between mb-2">
+                                                <div>
+                                                    <div className="text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
+                                                        <FaShieldAlt className="text-purple-400"/> Bảo mật 2 lớp (2FA)
+                                                    </div>
+                                                    <div className="text-[9px] opacity-60 mt-1 uppercase italic">Yêu cầu mã OTP qua Email khi đăng nhập</div>
+                                                </div>
+                                                <button 
+                                                    onClick={() => handleToggle2FA(!viewingUser.is2FAEnabled)}
+                                                    className={`w-12 h-6 rounded-full transition-all relative ${viewingUser.is2FAEnabled ? 'bg-purple-600' : 'bg-gray-700'}`}
+                                                >
+                                                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${viewingUser.is2FAEnabled ? 'right-1' : 'left-1'}`}></div>
+                                                </button>
+                                            </div>
+
                                             <button onClick={() => setIsEditing(true)} className="w-full bg-white text-black py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-purple-400 hover:text-white transition-all transform active:scale-95 shadow-xl"><FaUserEdit className="inline mr-2" size={14}/> Cập nhật hồ sơ</button>
                                             <button onClick={() => setIsChangingPass(true)} className="w-full py-3.5 bg-white/5 border border-white/10 text-gray-400 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:text-white hover:bg-white/10 transition-all"><FaLock className="inline mr-2"/> Đổi mật khẩu</button>
                                         </div>
