@@ -7,7 +7,7 @@ import {
     FaChartBar, FaImage, FaSmile, FaMoon, FaSun, 
     FaGlobe, FaCog, FaUserMinus, FaPauseCircle, FaPlayCircle, 
     FaUserFriends, FaCommentDots, FaUserPlus, FaTimes, FaUserCheck, FaLock, FaUsers, FaSearch,
-    FaVideo, FaShare, FaThumbtack, FaPoll, FaCalendarAlt, FaReply, FaMicrophone, FaStopCircle, FaSmileBeam, FaEdit, FaExchangeAlt
+    FaVideo, FaShare, FaThumbtack, FaPoll, FaCalendarAlt, FaReply, FaMicrophone, FaStopCircle, FaSmileBeam, FaEdit, FaExchangeAlt, FaTh
 } from 'react-icons/fa';
 import { Toaster, toast } from 'react-hot-toast';
 
@@ -22,6 +22,7 @@ import MessageSearch from './chat/MessageSearch';
 import GlobalSearch from './chat/GlobalSearch';
 import LinkPreview from './chat/LinkPreview';
 import StickerPicker from './chat/StickerPicker';
+import MediaGallery from './chat/MediaGallery';
 
 import useCall from '../context/useCall'; 
 import { getSocket, connectSocket, disconnectSocket } from '../services/socket';
@@ -58,6 +59,7 @@ const ChatPage = ({ user, setUser }) => {
     const [showEventModal, setShowEventModal] = useState(false);
     const [stats, setStats] = useState(null);
     const [previewImage, setPreviewImage] = useState(null);
+    const [showMediaGallery, setShowMediaGallery] = useState(false);
     const [mutedRooms, setMutedRooms] = useState(() => {
         try { return JSON.parse(localStorage.getItem('mutedRooms') || '{}'); } catch { return {}; }
     }); // P1: Mute notifications per room
@@ -759,6 +761,7 @@ const ChatPage = ({ user, setUser }) => {
                                 
                                 <button onClick={() => { setShowGlobalSearch(!showGlobalSearch); setShowSearch(false); }} className={`p-1.5 rounded-lg transition-all ${showGlobalSearch ? 'text-indigo-500 bg-indigo-500/10' : 'text-gray-500 hover:text-white bg-white/5'}`} title="Tìm kiếm toàn cầu"><FaGlobe size={18}/></button>
                                 <button onClick={() => { setShowSearch(!showSearch); setShowGlobalSearch(false); }} className={`p-1.5 rounded-lg transition-all ${showSearch ? 'text-indigo-500 bg-indigo-500/10' : 'text-gray-500 hover:text-white bg-white/5'}`} title="Tìm trong phòng"><FaSearch size={18}/></button>
+                                <button onClick={() => setShowMediaGallery(true)} className="p-1.5 rounded-lg text-gray-500 hover:text-indigo-400 bg-white/5 transition-all" title="Kho Media"><FaTh size={18}/></button>
                                 
                                 {isMember && !activeRoom.isDM && activeRoom.id !== 'chung' && currentGroup?.owner !== user.username && (
                                     <button onClick={handleLeaveGroup} className="text-gray-500 hover:text-red-500 transition-all bg-white/5 hover:bg-red-500/10 p-1.5 rounded-lg" title="Rời nhóm">
@@ -1074,6 +1077,7 @@ const ChatPage = ({ user, setUser }) => {
             {showSearch && <MessageSearch darkMode={darkMode} messages={messages} activeRoom={activeRoom} user={user} onClose={() => setShowSearch(false)} />}
             {showGlobalSearch && <GlobalSearch darkMode={darkMode} onClose={() => setShowGlobalSearch(false)} onSelectResult={handleSelectSearchResult} />}
             {showStickerPicker && <div className="absolute bottom-24 left-6 z-50"><StickerPicker onSelect={handleSendSticker} darkMode={darkMode} onClose={() => setShowStickerPicker(false)} /></div>}
+            {showMediaGallery && activeRoom && <MediaGallery roomId={activeRoom.id} darkMode={darkMode} onClose={() => setShowMediaGallery(false)} />}
             <CreateChat user={user} isOpen={showGroupCreator} onClose={() => setShowGroupCreator(false)} onCreateGroup={handleCreateGroup} darkMode={darkMode} />
             <UserProfileModal isOpen={profileModal.isOpen} onClose={()=>setProfileModal({isOpen:false, username:''})} targetUsername={profileModal.username} currentUser={user} onUpdateSuccess={handleUpdateSuccess} onStartDM={handleStartDM} />
             
