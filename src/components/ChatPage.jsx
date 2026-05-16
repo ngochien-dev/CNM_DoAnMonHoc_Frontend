@@ -65,6 +65,18 @@ const ChatPage = ({ user, setUser }) => {
     }); // P1: Mute notifications per room
     const [showInviteModal, setShowInviteModal] = useState(false); // P1: Invite to group modal
     const [lastSeenMap, setLastSeenMap] = useState({}); // P1: Last seen timestamps
+    const [activeSidebarTab, setActiveSidebarTab] = useState('all'); // Folders: all, personal, groups, unread
+    const [selfDestructTimer, setSelfDestructTimer] = useState(0); // 0 = disabled, else seconds
+    const [isSecretMode, setIsSecretMode] = useState(false); // P2: Secret Chat (no server logs)
+    const [showSelfDestructMenu, setShowSelfDestructMenu] = useState(false); 
+
+    // P2: Periodically clean up expired messages from state
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setMessages(prev => prev.filter(m => !m.expiresAt || m.expiresAt > Date.now()));
+        }, 5000); // Check every 5s
+        return () => clearInterval(timer);
+    }, []);
 
     const scrollRef = useRef(null);
     const activeRoomRef = useRef(null);
@@ -275,6 +287,8 @@ const ChatPage = ({ user, setUser }) => {
         setShowGlobalSearch(false);
         setReplyingToMessage(null);
         setShowReactionMenu(null);
+        setIsSecretMode(false); // Reset secret mode on room switch
+        setShowSelfDestructMenu(false);
         if (room) {
             setUnreadCounts(prev => ({ ...prev, [room.id]: 0 }));
             // P0: Load messages for the new room (pagination)
@@ -361,7 +375,19 @@ const ChatPage = ({ user, setUser }) => {
         if (currentG?.isDisabled) return alert("Kênh đã phong tỏa!");
         if (!msgInput.trim()) return;
         
-        const payload = { sender: user.displayName, senderUsername: user.username, text: msgInput, roomId: activeRoom.id, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
+        const payload = { 
+            sender: user.displayName, 
+            senderUsername: user.username, 
+            text: msgInput, 
+            roomId: activeRoom.id, 
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            createdAt: new Date().toISOString()
+        };
+        if (isSecretMode) payload.isSecret = true;
+        if (selfDestructTimer > 0) {
+            payload.expiresAt = Date.now() + (selfDestructTimer * 1000);
+            payload.ttl = Math.floor(payload.expiresAt / 1000); // DynamoDB TTL
+        }
         if (replyingToMessage) {
             payload.replyTo = { messageId: replyingToMessage.messageId, senderUsername: replyingToMessage.senderUsername, text: replyingToMessage.text };
         }
@@ -376,7 +402,21 @@ const ChatPage = ({ user, setUser }) => {
         if (!file || file.size > 5000000) return alert("File quá nặng!");
         const reader = new FileReader();
         reader.onloadend = () => {
-            const payload = { sender: user.displayName, senderUsername: user.username, fileData: reader.result, fileType: file.type.split('/')[0], fileName: file.name, roomId: activeRoom.id, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
+            const payload = { 
+                sender: user.displayName, 
+                senderUsername: user.username, 
+                fileData: reader.result, 
+                fileType: file.type.split('/')[0], 
+                fileName: file.name, 
+                roomId: activeRoom.id, 
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                createdAt: new Date().toISOString()
+            };
+            if (isSecretMode) payload.isSecret = true;
+            if (selfDestructTimer > 0) {
+                payload.expiresAt = Date.now() + (selfDestructTimer * 1000);
+                payload.ttl = Math.floor(payload.expiresAt / 1000);
+            }
             if (replyingToMessage) {
                 payload.replyTo = { messageId: replyingToMessage.messageId, senderUsername: replyingToMessage.senderUsername, text: replyingToMessage.text };
             }
@@ -441,6 +481,19 @@ const ChatPage = ({ user, setUser }) => {
         const m = Math.floor(seconds / 60).toString().padStart(2, '0');
         const s = (seconds % 60).toString().padStart(2, '0');
         return `${m}:${s}`;
+    };
+
+    const handleTogglePin = async (roomId, isPinned) => {
+        try {
+            const action = isPinned ? 'unpin' : 'pin';
+            const res = await api.post('/users/toggle-pin', { username: user.username, roomId, action });
+            if (res.data.success) {
+                setUser(prev => ({ ...prev, pinnedRooms: res.data.pinnedRooms }));
+                toast.success(action === 'pin' ? 'Đã ghim hội thoại' : 'Đã bỏ ghim hội thoại');
+            }
+        } catch (err) {
+            toast.error('Không thể thực hiện yêu cầu');
+        }
     };
 
     const handleInputChange = (e) => {
@@ -575,7 +628,8 @@ const ChatPage = ({ user, setUser }) => {
                     // P0: Auto-mark as read if user is viewing this room
                     socket.emit('message_read', { messageIds: [d.messageId], roomId: d.roomId });
                 } else {
-                    const rId = d.roomId || 'chung';
+                    const rId = d.roomId;
+                    if (!rId) return;
                     setUnreadCounts(prev => ({ ...prev, [rId]: (prev[rId] || 0) + 1 }));
                     // P1: Check if room is muted before playing sound/notification
                     const isMuted = mutedRoomsRef.current[rId];
@@ -682,8 +736,7 @@ const ChatPage = ({ user, setUser }) => {
     useEffect(() => {
         if (!activeRoom || !user?.username) return;
         const roomMsgs = messages.filter(m => {
-            if (activeRoom.id === 'chung') return !m.roomId || m.roomId === 'chung';
-            return m.roomId === activeRoom.id;
+        const roomMsgs = messages.filter(m => m.roomId === activeRoom.id);
         });
         // Small delay to batch read receipts
         const timer = setTimeout(() => markMessagesAsRead(roomMsgs), 1000);
@@ -693,7 +746,7 @@ const ChatPage = ({ user, setUser }) => {
     const currentGroup = allGroups.find(g => g.groupId === activeRoom?.id);
     const isAdminOfGroup = currentGroup?.owner === user.username; 
     const isModOfGroup = currentGroup?.mods?.includes(user.username);
-    const isMember = !activeRoom || activeRoom.id === 'chung' || activeRoom.id.startsWith('dm_') || (activeRoom && currentGroup?.isPublic) || currentGroup?.members?.includes(user.username);
+    const isMember = !activeRoom || activeRoom.id.startsWith('dm_') || (activeRoom && currentGroup?.isPublic) || currentGroup?.members?.includes(user.username);
 
     return (
         <div className={`flex h-screen overflow-hidden font-sans transition-colors duration-500 ${darkMode ? 'bg-[#0f172a] text-[#dbdee1]' : 'bg-[#f8fafc] text-slate-800'}`}>
@@ -711,10 +764,95 @@ const ChatPage = ({ user, setUser }) => {
 
             <div className={`flex flex-col border-r transition-all duration-300 ${isSidebarVisible ? 'w-52 md:w-64' : 'w-0 overflow-hidden'} ${darkMode ? 'bg-[#1e293b]/50 backdrop-blur-xl border-white/5' : 'bg-slate-50 border-gray-200'}`}>
                 <div className={`h-12 px-4 flex items-center border-b font-black uppercase text-[11px] tracking-widest opacity-60 italic ${darkMode ? 'border-white/5 text-indigo-400' : 'border-gray-200 text-indigo-600'}`}>OTT Community</div>
+                
+                {/* Folders/Tabs Bar */}
+                <div className={`flex px-2 py-1 gap-1 border-b ${darkMode ? 'border-white/5 bg-white/2' : 'border-gray-200 bg-gray-50'}`}>
+                    {[
+                        { id: 'all', label: 'Tất cả' },
+                        { id: 'personal', label: 'Cá nhân' },
+                        { id: 'groups', label: 'Nhóm' },
+                        { id: 'unread', label: 'Chưa đọc' }
+                    ].map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveSidebarTab(tab.id)}
+                            className={`flex-1 py-1 text-[9px] font-black uppercase rounded-md transition-all ${activeSidebarTab === tab.id ? (darkMode ? 'bg-indigo-500/20 text-indigo-400' : 'bg-indigo-600 text-white shadow-sm') : (darkMode ? 'text-gray-500 hover:text-gray-400' : 'text-slate-400 hover:text-slate-600')}`}
+                        >
+                            {tab.label}
+                        </button>
+                    ))}
+                </div>
+
                 <div className="flex-1 p-2 mt-2 overflow-y-auto space-y-6 font-bold scrollbar-hide">
-                    <div><p className={`text-[9px] font-black uppercase tracking-widest px-2 mb-2 italic ${darkMode ? 'text-gray-500' : 'text-slate-400'}`}>Hội thoại</p>{getRecentChatUsers().map(f => (<div key={f} onClick={() => handleStartDM(f)} className={`p-2.5 rounded-lg flex items-center gap-3 cursor-pointer mb-1 relative transition-all ${activeRoom?.name === f && activeRoom?.isDM ? 'bg-[#5865f2] text-white shadow-lg' : (darkMode ? 'hover:bg-white/5 text-gray-400' : 'hover:bg-slate-100 text-slate-600')}`}><div className="relative shrink-0" onClick={(e) => { e.stopPropagation(); handleOpenProfile(f); }}><div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-white text-xs font-bold uppercase overflow-hidden border border-white/10">{onlineUsers[f]?.avatar ? <img src={onlineUsers[f].avatar} className="w-full h-full object-cover" alt="" /> : f[0]}</div><FaCircle className={`absolute -bottom-0.5 -right-0.5 text-[8px] border-2 ${darkMode ? 'border-[#1e293b]' : 'border-white'} ${onlineUsers[f] ? 'text-green-500' : 'text-gray-400'}`} /></div><span className="truncate text-sm font-medium italic">@{f}</span>{unreadCounts[`dm_${[user.username, f].sort().join("_")}`] > 0 && <span className="absolute right-2 w-4 h-4 bg-red-500 text-white text-[8px] flex items-center justify-center rounded-full font-black animate-bounce">{unreadCounts[`dm_${[user.username, f].sort().join("_")}`]}</span>}</div>))}</div>
-                    <div><p className={`text-[9px] font-black uppercase tracking-widest px-2 mb-2 italic ${darkMode ? 'text-gray-500' : 'text-slate-400'}`}>Cộng đồng</p><div onClick={() => handleSwitchRoom({id:'chung', name:'Chung'})} className={`p-2.5 rounded-lg flex items-center gap-3 cursor-pointer mb-1 relative transition-all ${activeRoom?.id === 'chung' ? 'bg-[#5865f2] text-white shadow-lg' : (darkMode ? 'hover:bg-white/5 text-gray-400' : 'hover:bg-slate-100 text-slate-600')}`}><FaHashtag size={14}/> <span className="text-sm uppercase tracking-tighter italic">chung</span></div>{allGroups.filter(g => g.isPublic && (g.members?.includes(user.username) || g.owner === user.username)).map(g => (<div key={g.groupId} onClick={() => handleSwitchRoom({id:g.groupId, name:g.groupName})} className={`p-2.5 rounded-lg flex items-center gap-3 cursor-pointer mb-1 relative transition-all ${activeRoom?.id === g.groupId ? 'bg-[#5865f2] text-white shadow-lg' : (darkMode ? 'hover:bg-white/5 text-gray-400' : 'hover:bg-slate-100 text-slate-600')}`}><FaGlobe size={12} className="opacity-60"/> <span className="text-sm truncate uppercase tracking-tighter italic">{g.groupName}</span></div>))}</div>
-                    <div><p className={`text-[9px] font-black uppercase tracking-widest px-2 mb-2 italic ${darkMode ? 'text-gray-500' : 'text-slate-400'}`}>Riêng tư</p>{allGroups.filter(g => !g.isPublic && (g.members?.includes(user.username) || g.owner === user.username)).map(g => (<div key={g.groupId} onClick={() => handleSwitchRoom({id:g.groupId, name:g.groupName})} className={`p-2.5 rounded-lg flex items-center gap-3 cursor-pointer mb-1 relative transition-all ${activeRoom?.id===g.groupId ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' : (darkMode ? 'hover:bg-white/5 text-gray-400' : 'hover:bg-slate-100 text-slate-600')}`}><FaLock size={10} className={activeRoom?.id === g.groupId ? 'text-white' : 'text-orange-400'}/><span className="truncate text-sm font-medium uppercase tracking-tighter italic">{g.groupName}</span>{unreadCounts[g.groupId] > 0 && <span className="absolute right-2 w-4 h-4 bg-red-500 text-white text-[8px] flex items-center justify-center rounded-full font-black animate-bounce">{unreadCounts[g.groupId]}</span>}</div>))}</div>
+                    {(() => {
+                        const pinnedRooms = user.pinnedRooms || [];
+                        const dms = getRecentChatUsers();
+                        const publicGroups = allGroups.filter(g => g.isPublic && (g.members?.includes(user.username) || g.owner === user.username));
+                        const privateGroups = allGroups.filter(g => !g.isPublic && (g.members?.includes(user.username) || g.owner === user.username));
+                        
+                        const allRoomItems = [
+                            ...dms.map(name => ({ id: `dm_${[user.username, name].sort().join("_")}`, name, isDM: true, type: 'personal' })),
+                            ...publicGroups.map(g => ({ id: g.groupId, name: g.groupName, type: 'groups' })),
+                            ...privateGroups.map(g => ({ id: g.groupId, name: g.groupName, type: 'groups' }))
+                        ];
+
+                        // Filter by Tab
+                        let filtered = allRoomItems;
+                        if (activeSidebarTab === 'personal') filtered = allRoomItems.filter(r => r.isDM);
+                        if (activeSidebarTab === 'groups') filtered = allRoomItems.filter(r => !r.isDM);
+                        if (activeSidebarTab === 'unread') filtered = allRoomItems.filter(r => unreadCounts[r.id] > 0);
+
+                        // Separate Pinned and Unpinned
+                        const pinned = filtered.filter(r => pinnedRooms.includes(r.id));
+                        const unpinned = filtered.filter(r => !pinnedRooms.includes(r.id));
+
+                        const renderRoom = (r) => {
+                            const isPinned = pinnedRooms.includes(r.id);
+                            const isActive = activeRoom?.id === r.id || (r.isDM && activeRoom?.name === r.name && activeRoom?.isDM);
+                            const unread = unreadCounts[r.id] || 0;
+
+                            return (
+                                <div key={r.id} onClick={() => r.isDM ? handleStartDM(r.name) : handleSwitchRoom({id: r.id, name: r.name})} className={`group p-2.5 rounded-lg flex items-center gap-3 cursor-pointer mb-1 relative transition-all ${isActive ? 'bg-[#5865f2] text-white shadow-lg' : (darkMode ? 'hover:bg-white/5 text-gray-400' : 'hover:bg-slate-100 text-slate-600')}`}>
+                                    {r.isDM ? (
+                                        <div className="relative shrink-0" onClick={(e) => { e.stopPropagation(); handleOpenProfile(r.name); }}>
+                                            <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-white text-xs font-bold uppercase overflow-hidden border border-white/10">{onlineUsers[r.name]?.avatar ? <img src={onlineUsers[r.name].avatar} className="w-full h-full object-cover" alt="" /> : r.name[0]}</div>
+                                            <FaCircle className={`absolute -bottom-0.5 -right-0.5 text-[8px] border-2 ${darkMode ? 'border-[#1e293b]' : 'border-white'} ${onlineUsers[r.name] ? 'text-green-500' : 'text-gray-400'}`} />
+                                        </div>
+                                    ) : (
+                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${isActive ? 'bg-white/20' : (darkMode ? 'bg-white/5' : 'bg-slate-200')}`}>
+                                            {r.type === 'groups' ? <FaGlobe size={14}/> : <FaLock size={12}/>}
+                                        </div>
+                                    )}
+                                    <span className={`truncate text-sm font-medium italic ${r.isDM ? '' : 'uppercase tracking-tighter'}`}>{r.isDM ? `@${r.name}` : r.name}</span>
+                                    
+                                    <div className="absolute right-2 flex items-center gap-1">
+                                        {unread > 0 && <span className="w-4 h-4 bg-red-500 text-white text-[8px] flex items-center justify-center rounded-full font-black animate-bounce">{unread}</span>}
+                                        {isPinned && <FaThumbtack size={10} className="text-indigo-400 rotate-45"/>}
+                                        <button onClick={(e) => { e.stopPropagation(); handleTogglePin(r.id, isPinned); }} className="opacity-0 group-hover:opacity-100 p-1 hover:text-indigo-400 transition-opacity">
+                                            <FaThumbtack size={10} className={isPinned ? 'text-indigo-400' : 'text-gray-500'} />
+                                        </button>
+                                    </div>
+                                </div>
+                            );
+                        };
+
+                        return (
+                            <>
+                                {pinned.length > 0 && (
+                                    <div className="mb-4">
+                                        <p className={`text-[9px] font-black uppercase tracking-widest px-2 mb-2 italic ${darkMode ? 'text-indigo-400' : 'text-indigo-600'}`}>Đã ghim</p>
+                                        {pinned.map(renderRoom)}
+                                    </div>
+                                )}
+                                {unpinned.length > 0 && (
+                                    <div>
+                                        <p className={`text-[9px] font-black uppercase tracking-widest px-2 mb-2 italic ${darkMode ? 'text-gray-500' : 'text-slate-400'}`}>Hội thoại</p>
+                                        {unpinned.map(renderRoom)}
+                                    </div>
+                                )}
+                            </>
+                        );
+                    })()}
                 </div>
                 <div onClick={() => handleOpenProfile(user.username)} className={`h-16 flex items-center px-3 cursor-pointer border-t transition-colors shrink-0 ${darkMode ? 'bg-[#020617] border-white/5' : 'bg-white border-gray-200 hover:bg-slate-50 shadow-sm'}`}><div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-black shadow-lg overflow-hidden border border-white/20">{user.avatar ? <img src={user.avatar} className="w-full h-full object-cover" alt="" /> : user.displayName[0]}</div><div className="ml-3 truncate flex-1 leading-tight"><div className="text-sm font-black truncate uppercase italic tracking-tighter">{user.displayName}</div><div className="text-[9px] text-green-500 font-black uppercase tracking-widest flex items-center gap-1"><FaCircle size={6}/> Online</div></div><button onClick={(e) => { e.stopPropagation(); disconnectSocket(); localStorage.removeItem('user_session'); setUser(null); }} className="relative z-10 p-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-500/10 transition-all active:scale-90" title="Đăng xuất"><FaSignOutAlt size={16} /></button></div>
             </div>
@@ -763,15 +901,59 @@ const ChatPage = ({ user, setUser }) => {
                                 <button onClick={() => { setShowSearch(!showSearch); setShowGlobalSearch(false); }} className={`p-1.5 rounded-lg transition-all ${showSearch ? 'text-indigo-500 bg-indigo-500/10' : 'text-gray-500 hover:text-white bg-white/5'}`} title="Tìm trong phòng"><FaSearch size={18}/></button>
                                 <button onClick={() => setShowMediaGallery(true)} className="p-1.5 rounded-lg text-gray-500 hover:text-indigo-400 bg-white/5 transition-all" title="Kho Media"><FaTh size={18}/></button>
                                 
-                                {isMember && !activeRoom.isDM && activeRoom.id !== 'chung' && currentGroup?.owner !== user.username && (
+                                {/* Self-destruct timer toggle */}
+                                <div className="relative">
+                                    <button 
+                                        onClick={() => setShowSelfDestructMenu(!showSelfDestructMenu)}
+                                        className={`p-1.5 rounded-lg transition-all ${selfDestructTimer > 0 ? 'text-orange-500 bg-orange-500/10' : 'text-gray-500 hover:text-orange-400 bg-white/5'}`} 
+                                        title="Hẹn giờ tự xóa"
+                                    >
+                                        <FaStopCircle size={18}/>
+                                    </button>
+                                    {showSelfDestructMenu && (
+                                        <div className="absolute right-0 top-full mt-2 bg-[#1e1f22] border border-white/10 rounded-xl p-2 shadow-2xl z-[100] w-40 animate-in fade-in slide-in-from-top-2">
+                                            <p className="text-[10px] font-black uppercase text-gray-500 px-2 py-1 mb-1 italic">Hẹn giờ tự xóa</p>
+                                            {[
+                                                { label: 'Tắt', value: 0 },
+                                                { label: '1 phút', value: 60 },
+                                                { label: '1 giờ', value: 3600 },
+                                                { label: '1 ngày', value: 86400 }
+                                            ].map(opt => (
+                                                <div 
+                                                    key={opt.value} 
+                                                    onClick={() => {
+                                                        setSelfDestructTimer(opt.value);
+                                                        setShowSelfDestructMenu(false);
+                                                    }}
+                                                    className={`p-2 text-xs rounded-lg cursor-pointer transition-colors ${selfDestructTimer === opt.value ? 'bg-orange-500 text-white' : 'hover:bg-white/5 text-gray-400'}`}
+                                                >
+                                                    {opt.label}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Secret Chat Toggle (DMs only) */}
+                                {activeRoom.isDM && (
+                                    <button 
+                                        onClick={() => setIsSecretMode(!isSecretMode)}
+                                        className={`p-1.5 rounded-lg transition-all ${isSecretMode ? 'text-red-500 bg-red-500/10' : 'text-gray-500 hover:text-red-400 bg-white/5'}`} 
+                                        title={isSecretMode ? "Tắt Chat bí mật" : "Bật Chat bí mật (Không lưu Server)"}
+                                    >
+                                        <FaLock size={18}/>
+                                    </button>
+                                )}
+                                
+                                {isMember && !activeRoom.isDM && currentGroup?.owner !== user.username && (
                                     <button onClick={handleLeaveGroup} className="text-gray-500 hover:text-red-500 transition-all bg-white/5 hover:bg-red-500/10 p-1.5 rounded-lg" title="Rời nhóm">
                                         <FaSignOutAlt size={18}/>
                                     </button>
                                 )}
                                 
-                                {(isAdminOfGroup || isModOfGroup) && !activeRoom.isDM && activeRoom.id !== 'chung' && (<button onClick={() => setShowGroupSettings(true)} className="text-gray-500 hover:text-white transition-all bg-white/5 p-1.5 rounded-lg" title="Cài đặt"><FaCog size={18}/></button>)}
+                                {(isAdminOfGroup || isModOfGroup) && !activeRoom.isDM && (<button onClick={() => setShowGroupSettings(true)} className="text-gray-500 hover:text-white transition-all bg-white/5 p-1.5 rounded-lg" title="Cài đặt"><FaCog size={18}/></button>)}
                                 {/* P1: Invite to group button */}
-                                {(isAdminOfGroup || isModOfGroup) && !activeRoom.isDM && activeRoom.id !== 'chung' && (
+                                {(isAdminOfGroup || isModOfGroup) && !activeRoom.isDM && (
                                     <button onClick={() => setShowInviteModal(true)} className="text-gray-500 hover:text-emerald-400 transition-all bg-white/5 p-1.5 rounded-lg" title="Mời thành viên"><FaUserPlus size={18}/></button>
                                 )}
                                 {/* P1: Mute toggle */}
@@ -811,11 +993,11 @@ const ChatPage = ({ user, setUser }) => {
                                     }}
                                 >
                                     {/* Pinned Messages Area */}
-                                    {messages.filter(m => (activeRoom.id === 'chung' ? !m.roomId || m.roomId === 'chung' : m.roomId === activeRoom.id) && m.isPinned).length > 0 && (
+                                    {messages.filter(m => (m.roomId === activeRoom.id) && m.isPinned).length > 0 && (
                                         <div className={`p-4 rounded-xl shadow-lg border mb-6 ${darkMode ? 'bg-indigo-900/30 border-indigo-500/30 text-indigo-200' : 'bg-indigo-50 border-indigo-200 text-indigo-800'}`}>
                                             <div className="flex items-center gap-2 font-black text-xs uppercase tracking-widest mb-3 opacity-80"><FaThumbtack/> Tin nhắn đã ghim</div>
                                             <div className="space-y-3">
-                                                {messages.filter(m => (activeRoom.id === 'chung' ? !m.roomId || m.roomId === 'chung' : m.roomId === activeRoom.id) && m.isPinned).map(pm => (
+                                                {messages.filter(m => (m.roomId === activeRoom.id) && m.isPinned).map(pm => (
                                                     <div key={`pin-${pm.messageId}`} className="flex justify-between items-center bg-black/5 dark:bg-white/5 p-3 rounded-lg">
                                                         <div className="flex-1 truncate text-sm italic pr-4">
                                                             <span className="font-bold">@{pm.senderUsername}:</span> {pm.text || 'Đã gửi tệp đính kèm...'}
@@ -835,7 +1017,7 @@ const ChatPage = ({ user, setUser }) => {
                                     )}
 
                                     {/* Main Messages Area */}
-                                    {messages.filter(m => (activeRoom.id === 'chung' ? !m.roomId || m.roomId === 'chung' : m.roomId === activeRoom.id)).map((msg) => {
+                                    {messages.filter(m => m.roomId === activeRoom.id).map((msg) => {
                                         const isMe = msg.senderUsername === user.username; 
                                         const sOnline = onlineUsers[msg.senderUsername]; 
                                         return (
@@ -880,7 +1062,26 @@ const ChatPage = ({ user, setUser }) => {
                                                                 )}
                                                             </div>
                                                         )}
-                                                        <div className={`p-4 rounded-2xl text-[14px] font-medium leading-relaxed shadow-lg ${msg.msgType === 'sticker' ? 'bg-transparent shadow-none border-none' : (isMe ? 'bg-indigo-600 text-white rounded-tr-none' : (darkMode ? 'bg-white/5 text-gray-100 border border-white/5 rounded-tl-none' : 'bg-white text-slate-700 border border-gray-100 rounded-tl-none'))} ${msg.isRevoked ? 'italic opacity-30 border-2 border-dashed' : ''}`}>
+                                                        <div className={`p-4 rounded-2xl text-[14px] font-medium leading-relaxed shadow-lg ${msg.msgType === 'sticker' ? 'bg-transparent shadow-none border-none' : (isMe ? (msg.isSecret ? 'bg-red-600 text-white rounded-tr-none' : 'bg-indigo-600 text-white rounded-tr-none') : (darkMode ? 'bg-white/5 text-gray-100 border border-white/5 rounded-tl-none' : 'bg-white text-slate-700 border border-gray-100 rounded-tl-none'))} ${msg.isRevoked ? 'italic opacity-30 border-2 border-dashed' : ''}`}>
+                                                            {/* Secret Indicator */}
+                                                            {msg.isSecret && (
+                                                                <div className={`mb-2 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest ${isMe ? 'text-red-200/60' : 'text-red-400'}`}>
+                                                                    <FaLock size={10}/> Chat Bí Mật (Không lưu server)
+                                                                </div>
+                                                            )}
+                                                            {/* Self-destruct indicator */}
+                                                            {msg.expiresAt && !msg.isRevoked && (
+                                                                <div className={`mb-2 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest ${isMe ? 'text-indigo-200/60' : 'text-gray-400'}`}>
+                                                                    <div className="w-2 h-2 rounded-full bg-orange-500 animate-ping"></div>
+                                                                    <FaStopCircle size={10}/> 
+                                                                    Tự hủy sau: {(() => {
+                                                                        const remaining = Math.max(0, Math.ceil((msg.expiresAt - Date.now()) / 1000));
+                                                                        if (remaining < 60) return `${remaining} giây`;
+                                                                        if (remaining < 3600) return `${Math.ceil(remaining/60)} phút`;
+                                                                        return `${Math.ceil(remaining/3600)} giờ`;
+                                                                    })()}
+                                                                </div>
+                                                            )}
                                                             {!msg.isRevoked && msg.msgType === 'sticker' ? (
                                                                 <img src={msg.fileData} className="w-40 h-40 object-contain animate-in zoom-in-50" alt="sticker" />
                                                             ) : (
@@ -1106,13 +1307,9 @@ const ChatPage = ({ user, setUser }) => {
                             )}
 
                             {/* Danh sách nhóm */}
-                            {allGroups.filter(g => g.members?.includes(user.username) || g.owner === user.username || g.id === 'chung').length > 0 && (
+                            {allGroups.filter(g => g.members?.includes(user.username) || g.owner === user.username).length > 0 && (
                                 <div className="space-y-2 mt-4">
                                     <div className="text-[10px] uppercase font-black text-orange-400">Nhóm</div>
-                                    <button onClick={() => handleForwardMessage('chung')} className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${darkMode ? 'border-white/5 hover:bg-white/5 text-gray-300' : 'border-gray-200 hover:bg-gray-50 text-gray-700'}`}>
-                                        <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center text-white font-bold text-xs"><FaHashtag/></div>
-                                        <span className="font-medium text-sm">Cộng đồng chung</span>
-                                    </button>
                                     {allGroups.filter(g => g.members?.includes(user.username) || g.owner === user.username).map(g => (
                                         <button key={g.groupId} onClick={() => handleForwardMessage(g.groupId)} className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${darkMode ? 'border-white/5 hover:bg-white/5 text-gray-300' : 'border-gray-200 hover:bg-gray-50 text-gray-700'}`}>
                                             <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center text-white font-bold text-xs"><FaGlobe/></div>
