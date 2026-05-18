@@ -4,10 +4,10 @@ import EmojiPicker, { Theme } from 'emoji-picker-react';
 import { 
     FaHashtag, FaPlusCircle, FaPaperPlane, FaSignOutAlt, FaCircle, 
     FaChevronLeft, FaChevronRight, FaFileAlt, FaTrash, FaUndo, FaBroom, FaShieldAlt, 
-    FaChartBar, FaImage, FaSmile, FaMoon, FaSun, 
+    FaChartBar, FaImage, FaSmile, FaMoon, FaSun, FaPalette,
     FaGlobe, FaCog, FaUserMinus, FaPauseCircle, FaPlayCircle, 
     FaUserFriends, FaCommentDots, FaUserPlus, FaTimes, FaUserCheck, FaLock, FaUsers, FaSearch,
-    FaVideo, FaShare, FaThumbtack, FaPoll, FaCalendarAlt, FaReply, FaMicrophone, FaStopCircle, FaSmileBeam, FaEdit, FaExchangeAlt, FaTh, FaPlus
+    FaVideo, FaShare, FaThumbtack, FaPoll, FaCalendarAlt, FaReply, FaMicrophone, FaStopCircle, FaSmileBeam, FaEdit, FaExchangeAlt, FaTh, FaPlus, FaCamera
 } from 'react-icons/fa';
 import { Toaster, toast } from 'react-hot-toast';
 import StoryBar from './social/StoryBar';
@@ -143,6 +143,11 @@ const ChatPage = ({ user, setUser }) => {
     const [viewingStories, setViewingStories] = useState(null); // { username, stories, allGroupedStories }
     const [showStoryUpload, setShowStoryUpload] = useState(false);
     const [storyForm, setStoryForm] = useState({ mediaData: '', caption: '' });
+    
+    // Custom Chat Wallpapers (Hình nền phòng chat)
+    const [showWallpaperModal, setShowWallpaperModal] = useState(false);
+    const [currentWallpaper, setCurrentWallpaper] = useState('');
+    const [customWallpaperUrl, setCustomWallpaperUrl] = useState('');
 
     // P2: Periodically clean up expired messages from state
     useEffect(() => {
@@ -161,6 +166,40 @@ const ChatPage = ({ user, setUser }) => {
     const chatContainerRef = useRef(null); // P0: Ref for scroll container (pagination)
     const readObserverRef = useRef(null); // P0: IntersectionObserver for read receipts
     const mutedRoomsRef = useRef(mutedRooms); // P1: Ref to access current muted state in socket closure
+
+    const groupFileRef = useRef(null);
+
+    const handleGroupAvatarChange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target.result;
+            img.onload = async () => {
+                const canvas = document.createElement('canvas');
+                const MAX_WIDTH = 200;
+                const scaleSize = MAX_WIDTH / img.width;
+                canvas.width = MAX_WIDTH;
+                canvas.height = img.height * scaleSize;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                const base64Avatar = canvas.toDataURL('image/jpeg', 0.8);
+                
+                try {
+                    await api.post('/groups/update-avatar', { 
+                        groupId: activeRoom.id, 
+                        avatar: base64Avatar 
+                    });
+                    toast.success("Cập nhật ảnh nhóm thành công!");
+                    loadData(); // Tải lại toàn bộ nhóm để đồng bộ giao diện
+                } catch (err) {
+                    toast.error(err.response?.data?.error || "Lỗi cập nhật ảnh nhóm!");
+                }
+            };
+        };
+    };
 
     // Tích hợp hook cuộc gọi
     const { startCall, isCallBusy, callHistoryVersion } = useCall();
@@ -261,6 +300,18 @@ const ChatPage = ({ user, setUser }) => {
         };
 
         deriveKey();
+    }, [activeRoom, user?.username]);
+
+    // Load Wallpaper when switching rooms
+    useEffect(() => {
+        if (activeRoom && user?.username) {
+            const wp = localStorage.getItem(`chat_wallpaper_${user.username}_${activeRoom.id}`);
+            setCurrentWallpaper(wp || '');
+            setCustomWallpaperUrl(wp && (wp.startsWith('http') || wp.startsWith('data:image')) ? wp : '');
+        } else {
+            setCurrentWallpaper('');
+            setCustomWallpaperUrl('');
+        }
     }, [activeRoom, user?.username]);
 
     const playNotificationSound = () => {
@@ -1220,6 +1271,23 @@ const ChatPage = ({ user, setUser }) => {
                         <div className={`h-12 flex items-center justify-between px-6 shrink-0 shadow-sm font-black backdrop-blur-md uppercase italic tracking-tighter border-b ${darkMode ? 'border-white/5 bg-white/2' : 'border-gray-200 bg-white/80'}`}>
                             <div className="flex items-center gap-3">
                                 <button onClick={() => setIsSidebarVisible(!isSidebarVisible)} className="p-1 hover:bg-black/5 rounded text-indigo-500 transition-all active:scale-90"><FaChevronLeft size={16} className={!isSidebarVisible ? 'rotate-180' : ''}/></button> 
+                                {activeRoom.isDM ? (
+                                    <div className="w-7 h-7 rounded-full bg-indigo-600/20 flex items-center justify-center text-indigo-400 text-xs font-black overflow-hidden border border-indigo-500/10 shrink-0 shadow-inner">
+                                        {onlineUsers[activeRoom.name]?.avatar ? (
+                                            <img src={onlineUsers[activeRoom.name].avatar} className="w-full h-full object-cover" alt="" />
+                                        ) : (
+                                            activeRoom.name.substring(0, 2).toUpperCase()
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="w-7 h-7 rounded-lg bg-orange-600/20 flex items-center justify-center text-orange-400 text-xs font-black overflow-hidden border border-orange-500/10 shrink-0 shadow-inner">
+                                        {currentGroup?.avatar ? (
+                                            <img src={currentGroup.avatar} className="w-full h-full object-cover" alt="" />
+                                        ) : (
+                                            activeRoom.name.substring(0, 2).toUpperCase()
+                                        )}
+                                    </div>
+                                )}
                                 {activeRoom.isDM ? <span className="text-indigo-400 text-sm">@ {activeRoom.name}</span> : <span className="text-sm"># {activeRoom.name}</span>}
                             </div>
                             <div className="flex items-center gap-4">
@@ -1238,6 +1306,7 @@ const ChatPage = ({ user, setUser }) => {
                                 <button onClick={() => { setShowGlobalSearch(!showGlobalSearch); setShowSearch(false); }} className={`p-1.5 rounded-lg transition-all ${showGlobalSearch ? 'text-indigo-500 bg-indigo-500/10' : 'text-gray-500 hover:text-white bg-white/5'}`} title="Tìm kiếm toàn cầu"><FaGlobe size={18}/></button>
                                 <button onClick={() => { setShowSearch(!showSearch); setShowGlobalSearch(false); }} className={`p-1.5 rounded-lg transition-all ${showSearch ? 'text-indigo-500 bg-indigo-500/10' : 'text-gray-500 hover:text-white bg-white/5'}`} title="Tìm trong phòng"><FaSearch size={18}/></button>
                                 <button onClick={() => setShowMediaGallery(true)} className="p-1.5 rounded-lg text-gray-500 hover:text-indigo-400 bg-white/5 transition-all" title="Kho Media"><FaTh size={18}/></button>
+                                <button onClick={() => setShowWallpaperModal(true)} className={`p-1.5 rounded-lg transition-all ${currentWallpaper ? 'text-pink-400 bg-pink-500/10' : 'text-gray-500 hover:text-pink-400 bg-white/5'}`} title="Hình nền phòng chat"><FaPalette size={18}/></button>
                                 
                                 {/* Self-destruct timer toggle */}
                                 <div className="relative">
@@ -1420,6 +1489,11 @@ const ChatPage = ({ user, setUser }) => {
                                     </div>
                                 )}
                                 <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-hide" ref={chatContainerRef}
+                                    style={currentWallpaper ? (
+                                        currentWallpaper.startsWith('http') || currentWallpaper.startsWith('data:image') || currentWallpaper.startsWith('/assets') || currentWallpaper.startsWith('blob:')
+                                        ? { backgroundImage: `url(${currentWallpaper})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }
+                                        : { background: currentWallpaper }
+                                    ) : undefined}
                                     onScroll={(e) => {
                                         // P0: Lazy load older messages when scrolling to top
                                         if (e.target.scrollTop < 100 && hasMoreMessages[activeRoom.id] && !loadingMessages) {
@@ -1714,6 +1788,140 @@ const ChatPage = ({ user, setUser }) => {
             <CreateChat user={user} isOpen={showGroupCreator} onClose={() => setShowGroupCreator(false)} onCreateGroup={handleCreateGroup} darkMode={darkMode} />
             <UserProfileModal isOpen={profileModal.isOpen} onClose={()=>setProfileModal({isOpen:false, username:''})} targetUsername={profileModal.username} currentUser={user} onUpdateSuccess={handleUpdateSuccess} onStartDM={handleStartDM} />
             
+            {/* Modal Chọn Hình Nền Phòng Chat */}
+            {showWallpaperModal && activeRoom && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[500] backdrop-blur-sm animate-in fade-in duration-200 p-4">
+                    <div className={`w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border transition-all duration-300 ${darkMode ? 'bg-[#0f172a] border-white/10 text-white' : 'bg-white border-gray-200 text-slate-800'}`}>
+                        <div className="p-5 border-b border-white/5 flex justify-between items-center bg-gradient-to-r from-pink-500 to-indigo-600 text-white">
+                            <h3 className="font-black uppercase tracking-widest text-[10px] flex items-center gap-2"><FaPalette size={14}/> Hình nền phòng chat</h3>
+                            <button onClick={() => setShowWallpaperModal(false)} className="p-1 rounded-full hover:bg-white/10 text-white/80 hover:text-white transition-colors"><FaTimes size={14}/></button>
+                        </div>
+                        <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto scrollbar-hide">
+                            {/* Khung xem trước nhỏ (Mini Preview) */}
+                            <div>
+                                <p className="text-[9px] font-black uppercase tracking-widest opacity-40 mb-3 italic">Xem trước (Preview)</p>
+                                <div 
+                                    className="h-28 rounded-2xl border border-white/10 shadow-inner flex items-end p-4 relative overflow-hidden bg-black/10"
+                                    style={currentWallpaper ? (
+                                        currentWallpaper.startsWith('http') || currentWallpaper.startsWith('data:image') || currentWallpaper.startsWith('/assets') || currentWallpaper.startsWith('blob:')
+                                        ? { backgroundImage: `url(${currentWallpaper})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }
+                                        : { background: currentWallpaper }
+                                    ) : undefined}
+                                >
+                                    <div className="absolute inset-0 bg-black/10"></div>
+                                    <div className="bg-indigo-600 text-white text-[10px] px-3 py-1.5 rounded-xl font-bold max-w-[75%] shadow-lg relative z-10 leading-tight">
+                                        Hình nền phòng chat này sẽ được lưu riêng cho phòng này! ✨
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Màu sắc tối giản */}
+                            <div>
+                                <p className="text-[9px] font-black uppercase tracking-widest opacity-40 mb-3 italic">Màu sắc tinh tế (Solid Colors)</p>
+                                <div className="grid grid-cols-5 gap-2">
+                                    {[
+                                        { name: 'Slate Gray', value: '#1e293b' },
+                                        { name: 'Midnight Blue', value: '#0f172a' },
+                                        { name: 'Dark Teal', value: '#064e3b' },
+                                        { name: 'Deep Burgundy', value: '#4c0519' },
+                                        { name: 'Plum Purple', value: '#2e1065' },
+                                    ].map(color => (
+                                        <button 
+                                            key={color.value}
+                                            onClick={() => {
+                                                setCurrentWallpaper(color.value);
+                                                localStorage.setItem(`chat_wallpaper_${user.username}_${activeRoom.id}`, color.value);
+                                                toast.success("Đã áp dụng màu nền!");
+                                            }}
+                                            className="w-full aspect-square rounded-xl border border-white/10 hover:scale-105 active:scale-95 transition-all shadow-md"
+                                            style={{ backgroundColor: color.value }}
+                                            title={color.name}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Hiệu ứng Gradients */}
+                            <div>
+                                <p className="text-[9px] font-black uppercase tracking-widest opacity-40 mb-3 italic">Gradients Thời Thượng</p>
+                                <div className="grid grid-cols-3 gap-3">
+                                    {[
+                                        { name: 'Nordic Aurora', value: 'linear-gradient(135deg, #0f172a 0%, #115e59 100%)' },
+                                        { name: 'Sunset Velvet', value: 'linear-gradient(135deg, #31103f 0%, #742a2a 100%)' },
+                                        { name: 'Cyberpunk Dusk', value: 'linear-gradient(135deg, #1e1b4b 0%, #3b0764 100%)' },
+                                        { name: 'Deep Ocean', value: 'linear-gradient(135deg, #0f172a 0%, #0369a1 100%)' },
+                                        { name: 'Velvet Forest', value: 'linear-gradient(135deg, #022c22 0%, #047857 100%)' },
+                                        { name: 'Lavender Dusk', value: 'linear-gradient(135deg, #2d1b4e 0%, #581c87 100%)' },
+                                    ].map(grad => (
+                                        <button 
+                                            key={grad.name}
+                                            onClick={() => {
+                                                setCurrentWallpaper(grad.value);
+                                                localStorage.setItem(`chat_wallpaper_${user.username}_${activeRoom.id}`, grad.value);
+                                                toast.success("Đã áp dụng hình nền Gradient!");
+                                            }}
+                                            className="w-full h-12 rounded-xl border border-white/10 hover:scale-105 active:scale-95 transition-all shadow-md"
+                                            style={{ background: grad.value }}
+                                            title={grad.name}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Link ảnh tùy chỉnh */}
+                            <div>
+                                <p className="text-[9px] font-black uppercase tracking-widest opacity-40 mb-3 italic">Link ảnh tùy chọn (Custom Image URL)</p>
+                                <div className="flex gap-2">
+                                    <input 
+                                        type="text"
+                                        placeholder="Dán URL hình ảnh từ Unsplash/Google..."
+                                        value={customWallpaperUrl}
+                                        onChange={(e) => setCustomWallpaperUrl(e.target.value)}
+                                        className={`flex-1 p-2.5 rounded-xl border text-xs font-bold outline-none transition-all ${darkMode ? 'bg-white/5 border-white/10 focus:border-indigo-500 text-white' : 'bg-slate-50 border-gray-200 focus:border-indigo-500'}`}
+                                    />
+                                    <button 
+                                        onClick={() => {
+                                            if (customWallpaperUrl.trim()) {
+                                                setCurrentWallpaper(customWallpaperUrl);
+                                                localStorage.setItem(`chat_wallpaper_${user.username}_${activeRoom.id}`, customWallpaperUrl);
+                                                toast.success("Đã áp dụng ảnh nền tùy chỉnh!");
+                                            } else {
+                                                toast.error("Vui lòng nhập URL hợp lệ");
+                                            }
+                                        }}
+                                        className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black uppercase tracking-wider px-4 py-2.5 rounded-xl transition-all shadow-md active:scale-95 shrink-0"
+                                    >
+                                        Áp dụng
+                                    </button>
+                                </div>
+                                <span className="text-[8px] text-gray-500 block mt-1.5">Gợi ý: Tìm ảnh đẹp trên Unsplash và copy link ảnh dán vào đây!</span>
+                            </div>
+
+                            {/* Reset Wallpaper */}
+                            <div className="flex gap-3 border-t border-white/5 pt-4">
+                                <button 
+                                    onClick={() => {
+                                        setCurrentWallpaper('');
+                                        setCustomWallpaperUrl('');
+                                        localStorage.removeItem(`chat_wallpaper_${user.username}_${activeRoom.id}`);
+                                        toast.success("Đã gỡ bỏ hình nền phòng chat!");
+                                    }}
+                                    className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-500 text-xs font-black uppercase tracking-wider py-3 rounded-xl transition-all active:scale-95"
+                                >
+                                    Gỡ bỏ hình nền
+                                </button>
+                                <button 
+                                    onClick={() => setShowWallpaperModal(false)}
+                                    className={`flex-1 text-xs font-black uppercase tracking-wider py-3 rounded-xl transition-all active:scale-95 border ${darkMode ? 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10' : 'bg-slate-50 border-gray-200 text-slate-700 hover:bg-slate-100'}`}
+                                >
+                                    Đóng
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            
             {/* Modal Chuyển tiếp tin nhắn */}
             {forwardMessageData && (
                 <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[500] backdrop-blur-sm animate-in zoom-in-95 p-4">
@@ -1838,6 +2046,35 @@ const ChatPage = ({ user, setUser }) => {
                                             Lưu
                                         </button>
                                     </div>
+                                </div>
+                            )}
+
+                            {/* Group Avatar Uploader */}
+                            {(isAdminOfGroup || isModOfGroup) && (
+                                <div className="flex flex-col items-center justify-center space-y-4 pb-2">
+                                    <p className="text-[9px] font-black uppercase text-gray-500 tracking-[2px] italic border-l-2 border-indigo-500 pl-3 self-start">Ảnh đại diện nhóm</p>
+                                    <div className="relative group shrink-0">
+                                        <div className="absolute inset-0 bg-gradient-to-tr from-orange-500 to-indigo-500 rounded-[30px] blur-md opacity-40 group-hover:opacity-80 transition-opacity"></div>
+                                        <img 
+                                            src={currentGroup?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(activeRoom.name)}&background=f97316&color=fff`} 
+                                            className="w-24 h-24 rounded-[28px] border-4 border-slate-900 object-cover relative z-10 shadow-xl bg-slate-800 transition-all group-hover:scale-105 animate-in fade-in" 
+                                            alt="group-avt" 
+                                        />
+                                        <div 
+                                            onClick={() => groupFileRef.current?.click()} 
+                                            className="absolute inset-0 z-20 bg-black/60 rounded-[28px] flex flex-col items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100 transition-all border-2 border-white/20"
+                                        >
+                                            <FaCamera size={20} className="text-white animate-bounce" />
+                                            <span className="text-[8px] text-white/90 font-black uppercase tracking-wider mt-1">Thay ảnh</span>
+                                        </div>
+                                    </div>
+                                    <input 
+                                        type="file" 
+                                        ref={groupFileRef} 
+                                        className="hidden" 
+                                        onChange={handleGroupAvatarChange} 
+                                        accept="image/*" 
+                                    />
                                 </div>
                             )}
 
