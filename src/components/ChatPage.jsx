@@ -330,6 +330,18 @@ const ChatPage = ({ user, setUser }) => {
     const [lightboxFilter, setLightboxFilter] = useState('none');
     const [translatedMessages, setTranslatedMessages] = useState({});
     const [translatingMessageId, setTranslatingMessageId] = useState(null);
+    
+    // Canvas Paint Pad & Custom Sound State
+    const [showPaintPad, setShowPaintPad] = useState(false);
+    const [paintColor, setPaintColor] = useState('#6366f1');
+    const [paintBrushSize, setPaintBrushSize] = useState(5);
+    const [isDrawing, setIsDrawing] = useState(false);
+    const [showSoundSettings, setShowSoundSettings] = useState(false);
+    const [notificationSound, setNotificationSound] = useState(localStorage.getItem('alertSound') || 'telegram');
+
+    const paintCanvasRef = useRef(null);
+    const lastX = useRef(0);
+    const lastY = useRef(0);
     const [showMediaGallery, setShowMediaGallery] = useState(false);
     const [mutedRooms, setMutedRooms] = useState(() => {
         try { return JSON.parse(localStorage.getItem('mutedRooms') || '{}'); } catch { return {}; }
@@ -611,24 +623,186 @@ const ChatPage = ({ user, setUser }) => {
         }
     }, [activeRoom, user?.username]);
 
-    const playNotificationSound = () => {
+    const playNotificationSound = (soundType) => {
+        const activeSound = soundType || localStorage.getItem('alertSound') || 'telegram';
         try {
-            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            const oscillator = audioCtx.createOscillator();
-            const gainNode = audioCtx.createGain();
-            oscillator.connect(gainNode);
-            gainNode.connect(audioCtx.destination);
-            oscillator.type = 'sine';
-            oscillator.frequency.setValueAtTime(587.33, audioCtx.currentTime); 
-            gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
-            gainNode.gain.linearRampToValueAtTime(0.1, audioCtx.currentTime + 0.05);
-            gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.2);
-            oscillator.start(audioCtx.currentTime);
-            oscillator.stop(audioCtx.currentTime + 0.2);
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) return;
+            const ctx = new AudioContext();
+            
+            if (activeSound === 'telegram') {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(880, ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(1320, ctx.currentTime + 0.15);
+                
+                gain.gain.setValueAtTime(0.25, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+                
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start();
+                osc.stop(ctx.currentTime + 0.4);
+            } 
+            else if (activeSound === 'zalo') {
+                const playChirp = (delay, freq) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, ctx.currentTime + delay);
+                    osc.frequency.exponentialRampToValueAtTime(freq * 1.4, ctx.currentTime + delay + 0.08);
+                    
+                    gain.gain.setValueAtTime(0, ctx.currentTime + delay);
+                    gain.gain.linearRampToValueAtTime(0.15, ctx.currentTime + delay + 0.02);
+                    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + delay + 0.08);
+                    
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(ctx.currentTime + delay);
+                    osc.stop(ctx.currentTime + delay + 0.08);
+                };
+                playChirp(0, 523);
+                playChirp(0.1, 659);
+            }
+            else if (activeSound === 'discord') {
+                const osc1 = ctx.createOscillator();
+                const gain1 = ctx.createGain();
+                osc1.type = 'sine';
+                osc1.frequency.setValueAtTime(660, ctx.currentTime);
+                gain1.gain.setValueAtTime(0.1, ctx.currentTime);
+                gain1.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.08);
+                osc1.connect(gain1);
+                gain1.connect(ctx.destination);
+                osc1.start();
+                osc1.stop(ctx.currentTime + 0.08);
+                
+                const osc2 = ctx.createOscillator();
+                const gain2 = ctx.createGain();
+                osc2.type = 'sine';
+                osc2.frequency.setValueAtTime(660, ctx.currentTime + 0.12);
+                gain2.gain.setValueAtTime(0.1, ctx.currentTime + 0.12);
+                gain2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+                osc2.connect(gain2);
+                gain2.connect(ctx.destination);
+                osc2.start(ctx.currentTime + 0.12);
+                osc2.stop(ctx.currentTime + 0.2);
+            }
+            else if (activeSound === 'retro') {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(150, ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(800, ctx.currentTime + 0.25);
+                
+                gain.gain.setValueAtTime(0.05, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
+                
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start();
+                osc.stop(ctx.currentTime + 0.25);
+            }
+            else if (activeSound === 'nokia') {
+                const playNote = (delay, freq, duration) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(freq, ctx.currentTime + delay);
+                    
+                    gain.gain.setValueAtTime(0, ctx.currentTime + delay);
+                    gain.gain.linearRampToValueAtTime(0.15, ctx.currentTime + delay + 0.01);
+                    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + delay + duration);
+                    
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(ctx.currentTime + delay);
+                    osc.stop(ctx.currentTime + delay + duration);
+                };
+                playNote(0, 1318.51, 0.1); // E6
+                playNote(0.12, 1174.66, 0.1); // D6
+                playNote(0.24, 783.99, 0.15); // G5
+                playNote(0.4, 880, 0.15); // A5
+            }
         } catch (e) {
             console.error("Lỗi phát âm thanh:", e);
         }
     };
+
+    // Canvas drawing methods
+    const startDrawing = (e) => {
+        const canvas = paintCanvasRef.current;
+        if (!canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        lastX.current = e.clientX - rect.left;
+        lastY.current = e.clientY - rect.top;
+        setIsDrawing(true);
+    };
+
+    const draw = (e) => {
+        if (!isDrawing) return;
+        const canvas = paintCanvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        
+        ctx.beginPath();
+        ctx.strokeStyle = paintColor;
+        ctx.lineWidth = paintBrushSize;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.moveTo(lastX.current, lastY.current);
+        ctx.lineTo(x, y);
+        ctx.stroke();
+        
+        lastX.current = x;
+        lastY.current = y;
+    };
+
+    const stopDrawing = () => {
+        setIsDrawing(false);
+    };
+
+    const clearPaintCanvas = () => {
+        const canvas = paintCanvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = darkMode ? '#1e293b' : '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    };
+
+    const handleSendPaint = () => {
+        const canvas = paintCanvasRef.current;
+        if (!canvas) return;
+        const dataUrl = canvas.toDataURL('image/png');
+        
+        socket.emit('send_message', { 
+            sender: user.displayName, 
+            senderUsername: user.username, 
+            text: '[Bản vẽ phác thảo]', 
+            fileData: dataUrl, 
+            fileType: 'image', 
+            fileName: 'sketch.png', 
+            roomId: activeRoom.id, 
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+        });
+        
+        setShowPaintPad(false);
+        toast.success("Đã gửi bức vẽ phác thảo nghệ thuật!");
+    };
+
+    useEffect(() => {
+        if (showPaintPad) {
+            setTimeout(() => {
+                clearPaintCanvas();
+            }, 100);
+        }
+    }, [showPaintPad]);
 
     // P0: Send browser notification when tab is not focused
     const sendBrowserNotification = useCallback((title, body, icon) => {
@@ -1673,6 +1847,7 @@ const ChatPage = ({ user, setUser }) => {
                 <div onClick={() => {setShowSocialFeed(true); setShowFriendsTab(false); setShowDiscoveryTab(false); setIsAdminMode(false); setActiveRoom(null);}} className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all relative ${showSocialFeed ? 'bg-purple-500 text-white shadow-lg' : 'bg-white/5 text-purple-500 hover:bg-purple-500 hover:text-white'}`} title="Bảng tin"><FaSmileBeam size={22}/></div>
                 <div className="w-8 h-[2px] bg-gray-600 rounded-full opacity-20"></div>
                 <div onClick={() => { localStorage.setItem('theme', !darkMode ? 'dark' : 'light'); setDarkMode(!darkMode); }} className="w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer bg-white/10 hover:bg-white/20 transition-all">{darkMode ? <FaSun className="text-yellow-400"/> : <FaMoon/>}</div>
+                <div onClick={() => setShowSoundSettings(true)} className="w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer bg-white/10 hover:bg-white/20 transition-all text-indigo-400 hover:text-white" title="Cài đặt nhạc chuông"><FaCog size={20}/></div>
                 {user.role === 'admin' && (<div onClick={() => { setIsAdminMode(!isAdminMode); setShowFriendsTab(false); setShowDiscoveryTab(false); setActiveRoom(null); if(!isAdminMode) api.get('/admin/stats').then(res => setStats(res.data)); }} className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all ${isAdminMode ? 'bg-red-500 text-white animate-pulse' : 'bg-white text-red-500 shadow-lg'}`}><FaShieldAlt size={22} /></div>)}
                 <div onClick={() => setShowGroupCreator(true)} className="w-12 h-12 bg-[#23a559] text-white rounded-2xl flex items-center justify-center cursor-pointer hover:rounded-xl transition-all shadow-md group relative"><FaPlusCircle size={22}/></div>
             </div>
@@ -2547,6 +2722,7 @@ const ChatPage = ({ user, setUser }) => {
                                                         <FaImage onClick={()=>fileInputRef.current.click()} className="cursor-pointer hover:text-blue-500 transition-all hover:scale-110" size={18}/>
                                                         <FaPoll onClick={()=>setShowPollModal(true)} className="cursor-pointer hover:text-emerald-500 transition-all hover:scale-110" size={18} title="Tạo bình chọn"/>
                                                         <FaCalendarAlt onClick={()=>setShowEventModal(true)} className="cursor-pointer hover:text-purple-500 transition-all hover:scale-110" size={18} title="Tạo lịch nhóm"/>
+                                                         <FaPalette onClick={()=>setShowPaintPad(true)} className="cursor-pointer hover:text-pink-500 transition-all hover:scale-110" size={18} title="Vẽ phác thảo"/>
                                                     </div>
                                                 )}
                                                 
@@ -3437,6 +3613,141 @@ const ChatPage = ({ user, setUser }) => {
                             }).length === 0 && (
                                 <p className="text-center text-gray-500 py-8 text-sm italic">Tất cả bạn bè đã là thành viên</p>
                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Cài Đặt Nhạc Chuông Thông Báo */}
+            {showSoundSettings && (
+                <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[999] backdrop-blur-md p-4 animate-in zoom-in-95" onClick={() => setShowSoundSettings(false)}>
+                    <div 
+                        className={`w-[360px] rounded-3xl p-6 shadow-2xl border transition-all duration-300 ${darkMode ? 'bg-slate-900 border-white/10 text-white shadow-[0_0_50px_rgba(99,102,241,0.15)]' : 'bg-white border-gray-100 text-slate-800'}`}
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="flex justify-between items-center mb-6">
+                            <div className="flex flex-col text-left">
+                                <span className="text-xs font-black uppercase text-indigo-500 tracking-wider">Tùy chọn hệ thống</span>
+                                <h2 className="text-lg font-black uppercase tracking-tighter italic flex items-center gap-2">Nhạc chuông báo ♪</h2>
+                            </div>
+                            <button onClick={() => setShowSoundSettings(false)} className="text-gray-500 hover:text-red-500 transition-colors p-1.5 bg-white/5 rounded-xl"><FaTimes size={16}/></button>
+                        </div>
+                        <p className={`text-[10px] font-medium mb-4 ${darkMode ? 'text-gray-400' : 'text-slate-500'}`}>Chọn nhạc chuông yêu thích được tổng hợp trực tiếp từ Web Audio API:</p>
+                        
+                        <div className="space-y-2">
+                            {[
+                                { id: 'telegram', label: 'Telegram Bell', desc: 'Âm chuông cao vút, thanh lịch' },
+                                { id: 'zalo', label: 'Zalo Chirp', desc: 'Tiếng kêu kép nhịp điệu sinh động' },
+                                { id: 'discord', label: 'Discord Beep', desc: 'Âm báo đúp đôi đặc trưng' },
+                                { id: 'retro', label: 'Retro Laser', desc: 'Phong cách máy game thùng 8-bit' },
+                                { id: 'nokia', label: 'Nokia Tune', desc: 'Giai điệu monophonic cổ điển' }
+                            ].map(sound => (
+                                <button
+                                    key={sound.id}
+                                    onClick={() => {
+                                        setNotificationSound(sound.id);
+                                        localStorage.setItem('alertSound', sound.id);
+                                        playNotificationSound(sound.id);
+                                    }}
+                                    className={`w-full p-3 rounded-2xl border text-left transition-all duration-200 flex flex-col gap-0.5 ${
+                                        notificationSound === sound.id
+                                            ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 font-bold scale-[1.02] shadow-lg shadow-indigo-500/5'
+                                            : 'bg-white/5 border-white/5 hover:border-white/10 text-gray-400 hover:text-white'
+                                    }`}
+                                >
+                                    <div className="flex justify-between items-center w-full">
+                                        <span className="text-xs font-black uppercase tracking-wider">{sound.label}</span>
+                                        {notificationSound === sound.id && <span className="text-[10px] font-black uppercase bg-indigo-500 text-white px-2 py-0.5 rounded-lg shadow-md animate-pulse">Đang chọn</span>}
+                                    </div>
+                                    <span className="text-[9px] opacity-75 font-serif italic">{sound.desc}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Canvas Paint Pad (Bảng vẽ phác thảo trực tuyến) */}
+            {showPaintPad && (
+                <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[999] backdrop-blur-md p-4 animate-in zoom-in-95" onClick={() => setShowPaintPad(false)}>
+                    <div 
+                        className={`w-[450px] rounded-3xl p-6 shadow-2xl border transition-all duration-300 flex flex-col gap-4 ${darkMode ? 'bg-slate-900 border-white/10 text-white' : 'bg-white border-gray-100 text-slate-800'}`}
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="flex justify-between items-center">
+                            <div className="flex flex-col text-left">
+                                <span className="text-xs font-black uppercase text-indigo-500 tracking-wider">Studio vẽ phác thảo</span>
+                                <h2 className="text-lg font-black uppercase tracking-tighter italic">Vẽ phác thảo trực tuyến 🎨</h2>
+                            </div>
+                            <button onClick={() => setShowPaintPad(false)} className="text-gray-500 hover:text-red-500 transition-colors p-1.5 bg-white/5 rounded-xl"><FaTimes size={16}/></button>
+                        </div>
+
+                        {/* Drawing canvas viewport */}
+                        <div className="border border-white/10 rounded-2xl overflow-hidden shadow-2xl relative bg-white">
+                            <canvas
+                                ref={paintCanvasRef}
+                                width={400}
+                                height={300}
+                                className="w-full h-[300px] cursor-crosshair block"
+                                onMouseDown={startDrawing}
+                                onMouseMove={draw}
+                                onMouseUp={stopDrawing}
+                                onMouseLeave={stopDrawing}
+                            />
+                        </div>
+
+                        {/* Controls Panel */}
+                        <div className="flex flex-col gap-3">
+                            <div className="flex items-center justify-between gap-3 bg-white/5 p-3 rounded-2xl border border-white/5">
+                                {/* Color choices */}
+                                <div className="flex items-center gap-1.5">
+                                    {[
+                                        '#6366f1', // Indigo
+                                        '#10b981', // Emerald
+                                        '#ef4444', // Red
+                                        '#f59e0b', // Amber
+                                        '#ec4899', // Pink
+                                        '#000000', // Black
+                                    ].map(color => (
+                                        <button
+                                            key={color}
+                                            onClick={() => setPaintColor(color)}
+                                            className={`w-6 h-6 rounded-full border-2 transition-all hover:scale-110 ${paintColor === color ? 'border-white scale-105 shadow-lg' : 'border-transparent opacity-80'}`}
+                                            style={{ backgroundColor: color }}
+                                        />
+                                    ))}
+                                </div>
+
+                                {/* Brush Size Slider */}
+                                <div className="flex items-center gap-2 flex-1 max-w-[120px]">
+                                    <span className="text-[10px] font-black uppercase tracking-wider opacity-75">Nét:</span>
+                                    <input
+                                        type="range"
+                                        min={1}
+                                        max={20}
+                                        value={paintBrushSize}
+                                        onChange={e => setPaintBrushSize(parseInt(e.target.value))}
+                                        className="w-full accent-indigo-500 h-1 bg-white/10 rounded-lg outline-none cursor-pointer"
+                                    />
+                                    <span className="text-[10px] font-black text-indigo-400 w-4 text-center">{paintBrushSize}</span>
+                                </div>
+                            </div>
+
+                            {/* Main action buttons */}
+                            <div className="flex gap-2 text-xs">
+                                <button
+                                    onClick={clearPaintCanvas}
+                                    className="flex-1 py-3 bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white rounded-2xl font-black uppercase tracking-wider border border-red-500/10 transition-all"
+                                >
+                                    Xóa hết
+                                </button>
+                                <button
+                                    onClick={handleSendPaint}
+                                    className="flex-[2] py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black uppercase tracking-wider shadow-lg shadow-indigo-500/20 transition-all flex items-center justify-center gap-2"
+                                >
+                                    <FaPaperPlane size={12}/> Gửi phác thảo
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
