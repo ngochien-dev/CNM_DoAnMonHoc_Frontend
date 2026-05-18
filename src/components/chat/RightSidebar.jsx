@@ -63,7 +63,18 @@ const RightSidebar = ({
   isCallBusy,
   setShowSearch,
   showSearch,
-  messages = []
+  messages = [],
+
+  // New Search Props
+  searchContent,
+  setSearchContent,
+  filterUser,
+  setFilterUser,
+  filterDate,
+  setFilterDate,
+  filterType,
+  setFilterType,
+  scrollToMessage
 }) => {
   const [expandedSections, setExpandedSections] = useState({
     chatInfo: true,
@@ -73,10 +84,6 @@ const RightSidebar = ({
     privacy: true
   });
 
-  const [searchContent, setSearchContent] = useState('');
-  const [filterUser, setFilterUser] = useState('');
-  const [filterDate, setFilterDate] = useState('');
-  const [filterType, setFilterType] = useState('all'); // all, file, link
   const [searchResults, setSearchResults] = useState([]);
 
   const handleSearch = () => {
@@ -233,6 +240,7 @@ const RightSidebar = ({
                 {searchResults.map((result, idx) => (
                   <div
                     key={idx}
+                    onClick={() => scrollToMessage(result.messageId)}
                     className={`p-3 rounded-2xl border transition-all duration-200 cursor-pointer ${
                       darkMode 
                         ? 'bg-white/5 border-white/5 hover:border-indigo-500/40 hover:bg-white/10' 
