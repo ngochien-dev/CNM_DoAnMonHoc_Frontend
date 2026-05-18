@@ -3,11 +3,11 @@ import api from '../services/api';
 import EmojiPicker, { Theme } from 'emoji-picker-react';
 import { 
     FaHashtag, FaPlusCircle, FaPaperPlane, FaSignOutAlt, FaCircle, 
-    FaChevronLeft, FaChevronRight, FaFileAlt, FaTrash, FaUndo, FaBroom, FaShieldAlt, 
+    FaChevronLeft, FaChevronRight, FaChevronDown, FaFileAlt, FaTrash, FaUndo, FaBroom, FaShieldAlt, 
     FaChartBar, FaImage, FaSmile, FaMoon, FaSun, FaPalette,
     FaGlobe, FaCog, FaUserMinus, FaPauseCircle, FaPlayCircle, 
     FaUserFriends, FaCommentDots, FaUserPlus, FaTimes, FaUserCheck, FaLock, FaUsers, FaSearch,
-    FaVideo, FaShare, FaThumbtack, FaPoll, FaCalendarAlt, FaReply, FaMicrophone, FaStopCircle, FaSmileBeam, FaEdit, FaExchangeAlt, FaTh, FaPlus, FaCamera
+    FaVideo, FaShare, FaThumbtack, FaPoll, FaCalendarAlt, FaReply, FaMicrophone, FaStopCircle, FaSmileBeam, FaEdit, FaExchangeAlt, FaTh, FaPlus, FaCamera, FaFolderPlus
 } from 'react-icons/fa';
 import { Toaster, toast } from 'react-hot-toast';
 import StoryBar from './social/StoryBar';
@@ -218,6 +218,90 @@ const ChatPage = ({ user, setUser }) => {
     const [editingMessage, setEditingMessage] = useState(null);
     const [editText, setEditText] = useState('');
     const [renameGroupValue, setRenameGroupValue] = useState('');
+    
+    // Telegram-style Custom Folders State & Handlers
+    const [customFolders, setCustomFolders] = useState(() => {
+        try {
+            const saved = localStorage.getItem(`ott_folders_${user?.username}`);
+            return saved ? JSON.parse(saved) : [];
+        } catch (e) {
+            return [];
+        }
+    });
+
+    useEffect(() => {
+        if (user?.username) {
+            localStorage.setItem(`ott_folders_${user.username}`, JSON.stringify(customFolders));
+        }
+    }, [customFolders, user?.username]);
+
+    const [showFolderModal, setShowFolderModal] = useState(false);
+    const [editingFolder, setEditingFolder] = useState(null);
+    const [folderName, setFolderName] = useState('');
+    const [folderRooms, setFolderRooms] = useState([]);
+    const [modalSearch, setModalSearch] = useState('');
+    const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+
+    // Persisted Draft Messages State
+    const [drafts, setDrafts] = useState(() => {
+        try {
+            const saved = localStorage.getItem(`ott_drafts_${user?.username}`);
+            return saved ? JSON.parse(saved) : {};
+        } catch (e) {
+            return {};
+        }
+    });
+
+    useEffect(() => {
+        if (user?.username) {
+            localStorage.setItem(`ott_drafts_${user.username}`, JSON.stringify(drafts));
+        }
+    }, [drafts, user?.username]);
+
+    const toggleRoomInFolder = (roomId) => {
+        setFolderRooms(prev => 
+            prev.includes(roomId) ? prev.filter(id => id !== roomId) : [...prev, roomId]
+        );
+    };
+
+    const handleDeleteFolder = (folderId) => {
+        if (window.confirm("Bạn có chắc chắn muốn xóa thư mục này không? Các cuộc hội thoại bên trong sẽ không bị ảnh hưởng.")) {
+            setCustomFolders(prev => prev.filter(f => f.id !== folderId));
+            setActiveSidebarTab('all');
+            setShowFolderModal(false);
+            setEditingFolder(null);
+        }
+    };
+
+    const handleSaveFolder = () => {
+        if (!folderName.trim()) {
+            toast.error("Vui lòng nhập tên thư mục!");
+            return;
+        }
+        if (folderRooms.length === 0) {
+            toast.error("Vui lòng chọn ít nhất 1 cuộc trò chuyện!");
+            return;
+        }
+
+        if (editingFolder) {
+            setCustomFolders(prev => prev.map(f => f.id === editingFolder.id ? { ...f, name: folderName, roomIds: folderRooms } : f));
+            toast.success("Đã cập nhật thư mục!");
+        } else {
+            const newFolder = {
+                id: `folder_${Date.now()}`,
+                name: folderName,
+                roomIds: folderRooms
+            };
+            setCustomFolders(prev => [...prev, newFolder]);
+            toast.success("Đã tạo thư mục mới!");
+        }
+
+        setFolderName('');
+        setFolderRooms([]);
+        setEditingFolder(null);
+        setShowFolderModal(false);
+    };
+
     const mediaRecorderRef = useRef(null);
     const audioChunksRef = useRef([]);
     const recordingTimerRef = useRef(null);
@@ -483,6 +567,20 @@ const ChatPage = ({ user, setUser }) => {
             socket.emit('typing_end', { roomId: activeRoom.id, senderUsername: user.username });
             clearTimeout(typingTimeoutRef.current);
         }
+
+        // SAVE DRAFT FOR THE PREVIOUS ROOM
+        if (activeRoom?.id) {
+            setDrafts(prev => {
+                const nextDrafts = { ...prev };
+                if (msgInput.trim()) {
+                    nextDrafts[activeRoom.id] = msgInput;
+                } else {
+                    delete nextDrafts[activeRoom.id];
+                }
+                return nextDrafts;
+            });
+        }
+
         if (activeRoom && (isSecretMode || secretChatStatus !== 'idle')) {
             socket.emit('close_secret_chat', { roomId: activeRoom.id });
             setMessages(prev => prev.filter(m => !(m.roomId === activeRoom.id && m.isSecret)));
@@ -505,6 +603,10 @@ const ChatPage = ({ user, setUser }) => {
             setUnreadCounts(prev => ({ ...prev, [room.id]: 0 }));
             // P0: Load messages for the new room (pagination)
             loadRoomMessages(room.id);
+            // RESTORE DRAFT FOR THE NEW ROOM
+            setMsgInput(drafts[room.id] || '');
+        } else {
+            setMsgInput('');
         }
     };
 
@@ -639,6 +741,15 @@ const ChatPage = ({ user, setUser }) => {
         
         setMsgInput(''); setShowEmojiPicker(false);
         setReplyingToMessage(null);
+
+        // CLEAR DRAFT ON MESSAGE SEND
+        if (activeRoom?.id) {
+            setDrafts(prev => {
+                const nextDrafts = { ...prev };
+                delete nextDrafts[activeRoom.id];
+                return nextDrafts;
+            });
+        }
     };
 
     const handleFileUpload = (e) => {
@@ -791,7 +902,22 @@ const ChatPage = ({ user, setUser }) => {
     };
 
     const handleInputChange = (e) => {
-        setMsgInput(e.target.value);
+        const val = e.target.value;
+        setMsgInput(val);
+
+        // SAVE DRAFT IN REAL TIME
+        if (activeRoom?.id) {
+            setDrafts(prev => {
+                const nextDrafts = { ...prev };
+                if (val.trim()) {
+                    nextDrafts[activeRoom.id] = val;
+                } else {
+                    delete nextDrafts[activeRoom.id];
+                }
+                return nextDrafts;
+            });
+        }
+
         if (!activeRoom) return;
 
         // Phát tín hiệu đang gõ
@@ -802,6 +928,20 @@ const ChatPage = ({ user, setUser }) => {
         typingTimeoutRef.current = setTimeout(() => {
             socket.emit('typing_end', { roomId: activeRoom.id, senderUsername: user.username });
         }, 3000);
+    };
+
+    const handleEmojiClick = (emojiData) => {
+        const newVal = msgInput + emojiData.emoji;
+        setMsgInput(newVal);
+
+        // SAVE DRAFT IN REAL TIME ON EMOJI SELECT
+        if (activeRoom?.id) {
+            setDrafts(prev => {
+                const nextDrafts = { ...prev };
+                nextDrafts[activeRoom.id] = newVal;
+                return nextDrafts;
+            });
+        }
     };
 
     const unsendEverywhere = (id) => { if (window.confirm("Thu hồi?")) socket.emit('revoke_message', id); };
@@ -1140,22 +1280,125 @@ const ChatPage = ({ user, setUser }) => {
             <div className={`flex flex-col border-r transition-all duration-300 ${isSidebarVisible ? 'w-60 md:w-72' : 'w-0 overflow-hidden'} ${darkMode ? 'bg-[#1e293b]/50 backdrop-blur-xl border-white/5' : 'bg-slate-50 border-gray-200'}`}>
                 <div className={`h-12 px-4 flex items-center border-b font-black uppercase text-[11px] tracking-widest opacity-60 italic ${darkMode ? 'border-white/5 text-indigo-400' : 'border-gray-200 text-indigo-600'}`}>OTT Community</div>
                 
-                {/* Folders/Tabs Bar */}
-                <div className={`flex px-2 py-1 gap-1 border-b ${darkMode ? 'border-white/5 bg-white/2' : 'border-gray-200 bg-gray-50'}`}>
-                    {[
-                        { id: 'all', label: 'Tất cả' },
-                        { id: 'personal', label: 'Cá nhân' },
-                        { id: 'groups', label: 'Nhóm' },
-                        { id: 'unread', label: 'Chưa đọc' }
-                    ].map(tab => (
+                {/* Active Folder/Filter Selector Dropdown */}
+                <div className={`relative px-4 py-2.5 border-b shrink-0 flex items-center justify-between z-30 ${darkMode ? 'border-white/5 bg-white/2' : 'border-gray-200 bg-gray-50'}`}>
+                    <div className="relative flex-1">
                         <button
-                            key={tab.id}
-                            onClick={() => setActiveSidebarTab(tab.id)}
-                            className={`flex-1 py-1 text-[9px] font-black uppercase rounded-md transition-all ${activeSidebarTab === tab.id ? (darkMode ? 'bg-indigo-500/20 text-indigo-400' : 'bg-indigo-600 text-white shadow-sm') : (darkMode ? 'text-gray-500 hover:text-gray-400' : 'text-slate-400 hover:text-slate-600')}`}
+                            onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                            className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all duration-300 border ${
+                                darkMode 
+                                    ? 'bg-black/30 border-white/10 hover:border-indigo-500/50 text-indigo-400' 
+                                    : 'bg-white border-gray-200 hover:border-indigo-600/50 text-indigo-600 shadow-sm'
+                            }`}
                         >
-                            {tab.label}
+                            <span className="flex items-center gap-2">
+                                {activeSidebarTab === 'all' && "💬 Tất cả trò chuyện"}
+                                {activeSidebarTab === 'personal' && "👤 Chat cá nhân"}
+                                {activeSidebarTab === 'groups' && "👥 Nhóm trò chuyện"}
+                                {activeSidebarTab === 'unread' && "🔴 Tin nhắn chưa đọc"}
+                                {activeSidebarTab.startsWith('folder_') && `📁 Thư mục: ${customFolders.find(f => f.id === activeSidebarTab)?.name || ''}`}
+                            </span>
+                            <FaChevronDown size={8} className={`transition-transform duration-300 ${showFilterDropdown ? 'rotate-180' : ''}`} />
                         </button>
-                    ))}
+
+                        {/* Floating Glassmorphic Dropdown List */}
+                        {showFilterDropdown && (
+                            <>
+                                {/* Overlay backdrop to close dropdown */}
+                                <div className="fixed inset-0 z-40" onClick={() => setShowFilterDropdown(false)}></div>
+                                
+                                <div className={`absolute top-full left-0 right-0 mt-1.5 rounded-2xl shadow-2xl border p-1.5 z-50 animate-in fade-in slide-in-from-top-2 duration-200 ${
+                                    darkMode ? 'bg-[#0f172a]/95 backdrop-blur-xl border-white/10 text-white' : 'bg-white border-gray-200 text-slate-800'
+                                }`}>
+                                    <div className="space-y-0.5">
+                                        {[
+                                            { id: 'all', label: 'Tất cả trò chuyện', icon: "💬" },
+                                            { id: 'personal', label: 'Chat cá nhân', icon: "👤" },
+                                            { id: 'groups', label: 'Nhóm trò chuyện', icon: "👥" },
+                                            { id: 'unread', label: 'Tin nhắn chưa đọc', icon: "🔴" }
+                                        ].map(item => (
+                                            <button
+                                                key={item.id}
+                                                onClick={() => {
+                                                    setActiveSidebarTab(item.id);
+                                                    setShowFilterDropdown(false);
+                                                }}
+                                                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-left text-[11px] font-bold transition-all ${
+                                                    activeSidebarTab === item.id 
+                                                        ? (darkMode ? 'bg-indigo-500/20 text-indigo-400 font-extrabold' : 'bg-indigo-50 text-indigo-600 font-extrabold')
+                                                        : (darkMode ? 'hover:bg-white/5 text-gray-300' : 'hover:bg-slate-100 text-slate-700')
+                                                }`}
+                                            >
+                                                <span>{item.icon} &nbsp;{item.label}</span>
+                                            </button>
+                                        ))}
+
+                                        {/* Divider */}
+                                        <div className={`my-1.5 border-t ${darkMode ? 'border-white/5' : 'border-gray-100'}`}></div>
+
+                                        {/* Custom Folders Section */}
+                                        {customFolders.length > 0 && (
+                                            <div className="max-h-40 overflow-y-auto space-y-0.5 pr-1 scrollbar-hide">
+                                                {customFolders.map(folder => (
+                                                    <div 
+                                                        key={folder.id}
+                                                        className="group flex items-center justify-between gap-1"
+                                                    >
+                                                        <button
+                                                            onClick={() => {
+                                                                setActiveSidebarTab(folder.id);
+                                                                setShowFilterDropdown(false);
+                                                            }}
+                                                            className={`flex-1 flex items-center px-3 py-2 rounded-xl text-left text-[11px] font-bold transition-all ${
+                                                                activeSidebarTab === folder.id
+                                                                    ? (darkMode ? 'bg-indigo-500/20 text-indigo-400 font-extrabold' : 'bg-indigo-50 text-indigo-600 font-extrabold')
+                                                                    : (darkMode ? 'hover:bg-white/5 text-gray-300' : 'hover:bg-slate-100 text-slate-700')
+                                                            }`}
+                                                        >
+                                                            📁 &nbsp;{folder.name}
+                                                        </button>
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setEditingFolder(folder);
+                                                                setFolderName(folder.name);
+                                                                setFolderRooms(folder.roomIds);
+                                                                setShowFolderModal(true);
+                                                                setShowFilterDropdown(false);
+                                                            }}
+                                                            className={`p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:scale-110 ${
+                                                                darkMode ? 'text-gray-400 hover:text-white hover:bg-white/5' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
+                                                            }`}
+                                                            title="Sửa thư mục"
+                                                        >
+                                                            <FaCog size={10} />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        {/* Create Folder Option */}
+                                        <button
+                                            onClick={() => {
+                                                setEditingFolder(null);
+                                                setFolderName('');
+                                                setFolderRooms([]);
+                                                setShowFolderModal(true);
+                                                setShowFilterDropdown(false);
+                                            }}
+                                            className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left text-[10px] font-black uppercase tracking-wider transition-all ${
+                                                darkMode ? 'text-indigo-400 hover:bg-indigo-500/10' : 'text-indigo-600 hover:bg-indigo-50'
+                                            }`}
+                                        >
+                                            <FaFolderPlus size={11} />
+                                            Tạo thư mục mới
+                                        </button>
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                    </div>
                 </div>
 
                 {/* Story Bar */}
@@ -1186,8 +1429,16 @@ const ChatPage = ({ user, setUser }) => {
                         // Filter by Tab
                         let filtered = allRoomItems;
                         if (activeSidebarTab === 'personal') filtered = allRoomItems.filter(r => r.isDM);
-                        if (activeSidebarTab === 'groups') filtered = allRoomItems.filter(r => !r.isDM);
-                        if (activeSidebarTab === 'unread') filtered = allRoomItems.filter(r => unreadCounts[r.id] > 0);
+                        else if (activeSidebarTab === 'groups') filtered = allRoomItems.filter(r => !r.isDM);
+                        else if (activeSidebarTab === 'unread') filtered = allRoomItems.filter(r => unreadCounts[r.id] > 0);
+                        else if (activeSidebarTab.startsWith('folder_')) {
+                            const currentFolder = customFolders.find(f => f.id === activeSidebarTab);
+                            if (currentFolder) {
+                                filtered = allRoomItems.filter(r => currentFolder.roomIds.includes(r.id));
+                            } else {
+                                filtered = [];
+                            }
+                        }
 
                         // Separate Pinned and Unpinned
                         const pinned = filtered.filter(r => pinnedRooms.includes(r.id));
@@ -1718,7 +1969,7 @@ const ChatPage = ({ user, setUser }) => {
                                         </div>
                                     ) : (
                                         <>
-                                            {showEmojiPicker && <div ref={emojiPickerRef} className="absolute bottom-24 left-6 z-50 shadow-2xl rounded-[30px] overflow-hidden border border-white/10 animate-in zoom-in-75"><EmojiPicker onEmojiClick={(e)=>setMsgInput(p=>p+e.emoji)} theme={darkMode ? Theme.DARK : Theme.LIGHT} /></div>}
+                                            {showEmojiPicker && <div ref={emojiPickerRef} className="absolute bottom-24 left-6 z-50 shadow-2xl rounded-[30px] overflow-hidden border border-white/10 animate-in zoom-in-75"><EmojiPicker onEmojiClick={handleEmojiClick} theme={darkMode ? Theme.DARK : Theme.LIGHT} /></div>}
                                             
                                             {replyingToMessage && (
                                                 <div className={`mb-2 p-3 rounded-xl flex justify-between items-center border ${darkMode ? 'bg-indigo-900/30 border-indigo-500/30 text-indigo-200' : 'bg-indigo-50 border-indigo-200 text-indigo-800'}`}>
@@ -1814,6 +2065,162 @@ const ChatPage = ({ user, setUser }) => {
             <CreateChat user={user} isOpen={showGroupCreator} onClose={() => setShowGroupCreator(false)} onCreateGroup={handleCreateGroup} darkMode={darkMode} />
             <UserProfileModal isOpen={profileModal.isOpen} onClose={()=>setProfileModal({isOpen:false, username:''})} targetUsername={profileModal.username} currentUser={user} onUpdateSuccess={handleUpdateSuccess} onStartDM={handleStartDM} />
             
+            {/* Modal Tạo/Sửa Thư Mục Chat (Telegram Style) */}
+            {showFolderModal && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[500] backdrop-blur-sm animate-in fade-in duration-200 p-4">
+                    <div className={`w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border transition-all duration-300 ${
+                        darkMode ? 'bg-[#0f172a] border-white/10 text-white' : 'bg-white border-gray-200 text-slate-800'
+                    }`}>
+                        <div className="p-5 border-b border-white/5 flex justify-between items-center bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
+                            <h3 className="font-black uppercase tracking-widest text-[10px] flex items-center gap-2">
+                                <FaFolderPlus size={14}/> {editingFolder ? "Chỉnh sửa thư mục chat" : "Tạo thư mục chat mới"}
+                            </h3>
+                            <button 
+                                onClick={() => {
+                                    setShowFolderModal(false);
+                                    setEditingFolder(null);
+                                    setFolderName('');
+                                    setFolderRooms([]);
+                                    setModalSearch('');
+                                }} 
+                                className="p-1 rounded-full hover:bg-white/10 text-white/80 hover:text-white transition-colors"
+                            >
+                                <FaTimes size={14}/>
+                            </button>
+                        </div>
+
+                        <div className="p-6 space-y-5">
+                            {/* Input Tên Thư Mục */}
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black uppercase tracking-wider opacity-50 pl-1">Tên thư mục</label>
+                                <input 
+                                    type="text" 
+                                    placeholder="Nhập tên thư mục (VD: Công việc, Gia đình...)" 
+                                    value={folderName} 
+                                    onChange={(e) => setFolderName(e.target.value)} 
+                                    className={`w-full px-4 py-3 rounded-2xl border outline-none text-xs font-bold transition-all ${
+                                        darkMode 
+                                            ? 'bg-black/30 border-white/10 text-white focus:border-indigo-500' 
+                                            : 'bg-slate-50 border-gray-200 text-slate-800 focus:border-indigo-600 focus:bg-white'
+                                    }`} 
+                                />
+                            </div>
+
+                            {/* Danh sách chọn cuộc trò chuyện */}
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase tracking-wider opacity-50 pl-1">Chọn cuộc trò chuyện</label>
+                                
+                                {/* Thanh tìm kiếm nhanh */}
+                                <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${
+                                    darkMode ? 'bg-white/5 border-white/10 text-white' : 'bg-slate-50 border-gray-200 text-slate-800'
+                                }`}>
+                                    <FaSearch size={11} className="text-slate-400 shrink-0" />
+                                    <input
+                                        type="text"
+                                        placeholder="Tìm nhanh cuộc trò chuyện..."
+                                        value={modalSearch}
+                                        onChange={(e) => setModalSearch(e.target.value)}
+                                        className="flex-1 bg-transparent outline-none text-[11px] placeholder:text-slate-500"
+                                    />
+                                    {modalSearch && (
+                                        <FaTimes 
+                                            size={10} 
+                                            onClick={() => setModalSearch('')} 
+                                            className="cursor-pointer text-slate-400 hover:text-white" 
+                                        />
+                                    )}
+                                </div>
+
+                                {/* List rooms checkboxes */}
+                                <div className={`max-h-60 overflow-y-auto pr-1 space-y-1.5 scrollbar-hide rounded-2xl p-2 border ${
+                                    darkMode ? 'bg-black/20 border-white/5' : 'bg-slate-50/50 border-gray-100'
+                                }`}>
+                                    {(() => {
+                                        const dms = getRecentChatUsers();
+                                        const publicGroups = allGroups.filter(g => g.isPublic && (g.members?.includes(user.username) || g.owner === user.username));
+                                        const privateGroups = allGroups.filter(g => !g.isPublic && (g.members?.includes(user.username) || g.owner === user.username));
+                                        
+                                        const allRoomItems = [
+                                            ...dms.map(name => ({ id: `dm_${[user.username, name].sort().join("_")}`, name, isDM: true, type: 'personal' })),
+                                            ...publicGroups.map(g => ({ id: g.groupId, name: g.groupName, type: 'groups' })),
+                                            ...privateGroups.map(g => ({ id: g.groupId, name: g.groupName, type: 'groups' }))
+                                        ];
+
+                                        const filteredRooms = allRoomItems.filter(r => r.name.toLowerCase().includes(modalSearch.toLowerCase()));
+
+                                        if (filteredRooms.length === 0) {
+                                            return <p className="text-[10px] text-center text-slate-500 py-6">Không tìm thấy cuộc trò chuyện nào</p>;
+                                        }
+
+                                        return filteredRooms.map(r => {
+                                            const isChecked = folderRooms.includes(r.id);
+                                            return (
+                                                <div 
+                                                    key={r.id}
+                                                    onClick={() => toggleRoomInFolder(r.id)}
+                                                    className={`flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-colors ${
+                                                        darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-100'
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center gap-2.5 min-w-0">
+                                                        <div className={`w-7 h-7 rounded-full bg-slate-700 flex items-center justify-center text-white text-xs font-bold uppercase overflow-hidden shrink-0 border border-white/10`}>
+                                                            {r.isDM && onlineUsers[r.name]?.avatar ? (
+                                                                <img src={onlineUsers[r.name].avatar} className="w-full h-full object-cover" alt="" />
+                                                            ) : r.name[0]}
+                                                        </div>
+                                                        <span className="text-[11.5px] font-bold truncate">
+                                                            {r.isDM ? (onlineUsers[r.name]?.displayName || r.name) : r.name}
+                                                        </span>
+                                                    </div>
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={isChecked}
+                                                        readOnly
+                                                        className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer pointer-events-none accent-indigo-600"
+                                                    />
+                                                </div>
+                                            );
+                                        });
+                                    })()}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Footer buttons */}
+                        <div className={`p-5 border-t flex justify-end gap-3 ${darkMode ? 'border-white/5 bg-slate-950/20' : 'bg-slate-50 border-gray-100'}`}>
+                            {editingFolder && (
+                                <button 
+                                    onClick={() => handleDeleteFolder(editingFolder.id)}
+                                    className="px-4 py-2.5 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white rounded-2xl text-[10px] font-black uppercase tracking-wider transition-colors mr-auto"
+                                >
+                                    Xóa thư mục
+                                </button>
+                            )}
+                            <button 
+                                onClick={() => {
+                                    setShowFolderModal(false);
+                                    setEditingFolder(null);
+                                    setFolderName('');
+                                    setFolderRooms([]);
+                                    setModalSearch('');
+                                }}
+                                className={`px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-colors border ${
+                                    darkMode ? 'hover:bg-white/5 border-white/5 text-gray-300' : 'hover:bg-slate-200 border-slate-200 text-slate-600'
+                                }`}
+                            >
+                                Hủy
+                            </button>
+                            <button 
+                                onClick={handleSaveFolder}
+                                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-wider transition-colors shadow-lg shadow-indigo-600/10 active:scale-95"
+                            >
+                                Lưu lại
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Modal Chọn Hình Nền Phòng Chat */}
             {showWallpaperModal && activeRoom && (
                 <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[500] backdrop-blur-sm animate-in fade-in duration-200 p-4">
