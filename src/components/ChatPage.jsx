@@ -29,6 +29,71 @@ import MediaGallery from './chat/MediaGallery';
 
 import useCall from '../context/useCall'; 
 import { getSocket, connectSocket, disconnectSocket } from '../services/socket';
+import { 
+    generateE2EEKeyPair, 
+    deriveSharedKey, 
+    encryptText, 
+    decryptText 
+} from '../utils/crypto';
+
+const E2EEDecryptor = ({ msg, sharedKey, isMe }) => {
+    const [decryptedText, setDecryptedText] = useState(msg.isEncrypted ? "[Đang giải mã E2EE...]" : (msg.text || ''));
+
+    useEffect(() => {
+        if (!msg.isEncrypted) {
+            setDecryptedText(msg.text || '');
+            return;
+        }
+
+        if (!sharedKey) {
+            setDecryptedText("[Tin nhắn mã hóa E2EE - Đối phương chưa online để đồng bộ khóa]");
+            return;
+        }
+
+        let isMounted = true;
+        const decrypt = async () => {
+            try {
+                const plain = await decryptText(msg.text, msg.iv, sharedKey);
+                if (isMounted) setDecryptedText(plain);
+            } catch (err) {
+                if (isMounted) setDecryptedText("[Lỗi giải mã E2EE - Khóa không hợp lệ]");
+            }
+        };
+
+        decrypt();
+        return () => { isMounted = false; };
+    }, [msg.text, msg.iv, msg.isEncrypted, sharedKey]);
+
+    const emojiMap = { ':)': '😊', ':D': '😃', ':(': '😢', ';)': '😉', ':P': '😛', '<3': '❤️', ':o': '😮', 'B)': '😎', ':*': '😘', 'xD': '🤣', 'XD': '🤣', ':3': '😺', 'o_O': '😳', '-_-': '😑' };
+    const urlRegex = /((?:https?:\/\/|www\.)[^\s]+|[a-zA-Z0-9.-]+\.(?:com|net|org|vn|edu|gov|io)[^\s]*)/g;
+    const parts = decryptedText.split(urlRegex);
+
+    return (
+        <>
+            {parts.map((part, i) => {
+                if (urlRegex.test(part)) {
+                    urlRegex.lastIndex = 0;
+                    return (
+                        <a 
+                            key={i} 
+                            href={part} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className={`underline font-bold break-all ${isMe ? 'text-blue-200 hover:text-white' : 'text-indigo-400 hover:text-indigo-300'}`}
+                        >
+                            {part.length > 60 ? part.substring(0, 57) + '...' : part}
+                        </a>
+                    );
+                }
+                let converted = part;
+                Object.entries(emojiMap).forEach(([code, emoji]) => {
+                    converted = converted.split(code).join(emoji);
+                });
+                return <span key={i}>{converted}</span>;
+            })}
+        </>
+    );
+};
 
 const ChatPage = ({ user, setUser }) => {
     const socket = getSocket();
@@ -72,6 +137,8 @@ const ChatPage = ({ user, setUser }) => {
     const [activeSidebarTab, setActiveSidebarTab] = useState('all'); // Folders: all, personal, groups, unread
     const [selfDestructTimer, setSelfDestructTimer] = useState(0); // 0 = disabled, else seconds
     const [isSecretMode, setIsSecretMode] = useState(false); // P2: Secret Chat (no server logs)
+    const [secretChatStatus, setSecretChatStatus] = useState('idle'); // 'idle' | 'waiting' | 'requested' | 'established'
+    const [secretChatRequester, setSecretChatRequester] = useState(null);
     const [showSelfDestructMenu, setShowSelfDestructMenu] = useState(false); 
     const [viewingStories, setViewingStories] = useState(null); // { username, stories, allGroupedStories }
     const [showStoryUpload, setShowStoryUpload] = useState(false);
@@ -115,6 +182,86 @@ const ChatPage = ({ user, setUser }) => {
     const mediaRecorderRef = useRef(null);
     const audioChunksRef = useRef([]);
     const recordingTimerRef = useRef(null);
+
+    const [sharedE2EEKey, setSharedE2EEKey] = useState(null);
+
+    // Initialize E2EE Keys for the logged-in user
+    useEffect(() => {
+        if (!user?.username) return;
+
+        const initUserE2EE = async () => {
+            const storageKey = `e2ee_private_key_${user.username}`;
+            let ownPrivateKeyJwk = localStorage.getItem(storageKey);
+
+            if (!ownPrivateKeyJwk) {
+                console.log("Generating E2EE key pair for", user.username);
+                try {
+                    const { publicKeyJwk, privateKeyJwk } = await generateE2EEKeyPair();
+                    localStorage.setItem(storageKey, JSON.stringify(privateKeyJwk));
+                    // Upload public key to DynamoDB
+                    await api.post('/users/update-e2ee-key', {
+                        username: user.username,
+                        e2eePublicKey: publicKeyJwk
+                    });
+                    toast.success("Đã kích hoạt Mã hóa Đầu cuối (E2EE) thành công!");
+                } catch (err) {
+                    console.error("Failed to initialize E2EE keys:", err);
+                }
+            } else {
+                // If server is missing the public key, re-upload it derived from our local private key
+                if (!user.e2eePublicKey) {
+                    try {
+                        const ownPrivKeyParsed = JSON.parse(ownPrivateKeyJwk);
+                        const { d, ...publicKeyJwk } = ownPrivKeyParsed;
+                        publicKeyJwk.key_ops = []; // Public key has no private ops
+                        await api.post('/users/update-e2ee-key', {
+                            username: user.username,
+                            e2eePublicKey: publicKeyJwk
+                        });
+                        console.log("Re-uploaded E2EE public key to server");
+                    } catch (err) {
+                        console.error("Failed to re-upload E2EE public key:", err);
+                    }
+                }
+            }
+        };
+
+        initUserE2EE();
+    }, [user?.username, user?.e2eePublicKey]);
+
+    // Derive Shared E2EE Key when switching rooms
+    useEffect(() => {
+        if (!user?.username || !activeRoom || !activeRoom.id?.startsWith('dm_')) {
+            setSharedE2EEKey(null);
+            return;
+        }
+
+        const deriveKey = async () => {
+            try {
+                const peerUsername = activeRoom.name;
+                const res = await api.get(`/users/${peerUsername}`);
+                const peerPubKey = res.data.e2eePublicKey;
+
+                if (peerPubKey) {
+                    const storageKey = `e2ee_private_key_${user.username}`;
+                    const ownPrivateKeyJwk = localStorage.getItem(storageKey);
+                    if (ownPrivateKeyJwk) {
+                        const sharedKey = await deriveSharedKey(JSON.parse(ownPrivateKeyJwk), peerPubKey);
+                        setSharedE2EEKey(sharedKey);
+                        console.log("Derived E2EE shared key with", peerUsername);
+                    }
+                } else {
+                    setSharedE2EEKey(null);
+                    console.log("Peer has no E2EE public key");
+                }
+            } catch (err) {
+                console.error("Failed to derive shared E2EE key:", err);
+                setSharedE2EEKey(null);
+            }
+        };
+
+        deriveKey();
+    }, [activeRoom, user?.username]);
 
     const playNotificationSound = () => {
         try {
@@ -272,7 +419,7 @@ const ChatPage = ({ user, setUser }) => {
     const getRecentChatUsers = () => {
         const chatUsers = new Set();
         messages.forEach(m => { 
-            if (m.roomId?.startsWith('dm_')) { 
+            if (m.roomId?.startsWith('dm_') && m.roomId.includes(user.username)) { 
                 const other = m.roomId.replace('dm_', '').split('_').find(p => p !== user.username); 
                 if (other) chatUsers.add(other); 
             } 
@@ -285,6 +432,10 @@ const ChatPage = ({ user, setUser }) => {
             socket.emit('typing_end', { roomId: activeRoom.id, senderUsername: user.username });
             clearTimeout(typingTimeoutRef.current);
         }
+        if (activeRoom && (isSecretMode || secretChatStatus !== 'idle')) {
+            socket.emit('close_secret_chat', { roomId: activeRoom.id });
+            setMessages(prev => prev.filter(m => !(m.roomId === activeRoom.id && m.isSecret)));
+        }
         setTypingUsers([]); // Xóa trạng thái typing khi chuyển phòng
         setActiveRoom(room); 
         setShowFriendsTab(false); 
@@ -296,6 +447,8 @@ const ChatPage = ({ user, setUser }) => {
         setReplyingToMessage(null);
         setShowReactionMenu(null);
         setIsSecretMode(false); // Reset secret mode on room switch
+        setSecretChatStatus('idle');
+        setSecretChatRequester(null);
         setShowSelfDestructMenu(false);
         if (room) {
             setUnreadCounts(prev => ({ ...prev, [room.id]: 0 }));
@@ -375,29 +528,61 @@ const ChatPage = ({ user, setUser }) => {
         if (window.confirm(`Xóa lịch sử tại đây?`)) {
             await api.post('/v1/messages/clear-history', { username: user.username, roomId: activeRoom.id });
             setMessages(prev => prev.filter(m => m.roomId !== activeRoom.id));
+            await loadData(); // Sync deleted messages state immediately!
         }
     };
 
-    const handleSendText = () => {
+    const handleSendText = async () => {
         const currentG = allGroups.find(g => g.groupId === activeRoom.id);
         if (currentG?.isDisabled) return alert("Kênh đã phong tỏa!");
         if (!msgInput.trim()) return;
         
+        let textToSend = msgInput;
+        let isEncrypted = false;
+        let iv = null;
+
+        if (isSecretMode) {
+            if (!sharedE2EEKey) {
+                alert("Đối phương chưa kích hoạt E2EE. Vui lòng chờ họ trực tuyến để thiết lập kết nối an toàn!");
+                return;
+            }
+            try {
+                const encrypted = await encryptText(msgInput, sharedE2EEKey);
+                textToSend = encrypted.ciphertext;
+                iv = encrypted.iv;
+                isEncrypted = true;
+            } catch (err) {
+                console.error("Encryption failed:", err);
+                alert("Lỗi mã hóa tin nhắn!");
+                return;
+            }
+        }
+        
         const payload = { 
             sender: user.displayName, 
             senderUsername: user.username, 
-            text: msgInput, 
+            text: textToSend, 
             roomId: activeRoom.id, 
             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             createdAt: new Date().toISOString()
         };
         if (isSecretMode) payload.isSecret = true;
+        if (isEncrypted) {
+            payload.isEncrypted = true;
+            payload.iv = iv;
+        }
         if (selfDestructTimer > 0) {
             payload.expiresAt = Date.now() + (selfDestructTimer * 1000);
             payload.ttl = Math.floor(payload.expiresAt / 1000); // DynamoDB TTL
         }
         if (replyingToMessage) {
-            payload.replyTo = { messageId: replyingToMessage.messageId, senderUsername: replyingToMessage.senderUsername, text: replyingToMessage.text };
+            payload.replyTo = { 
+                messageId: replyingToMessage.messageId, 
+                senderUsername: replyingToMessage.senderUsername, 
+                text: replyingToMessage.text,
+                isEncrypted: replyingToMessage.isEncrypted || false,
+                iv: replyingToMessage.iv || null
+            };
         }
         socket.emit('send_message', payload);
         
@@ -426,7 +611,13 @@ const ChatPage = ({ user, setUser }) => {
                 payload.ttl = Math.floor(payload.expiresAt / 1000);
             }
             if (replyingToMessage) {
-                payload.replyTo = { messageId: replyingToMessage.messageId, senderUsername: replyingToMessage.senderUsername, text: replyingToMessage.text };
+                payload.replyTo = { 
+                    messageId: replyingToMessage.messageId, 
+                    senderUsername: replyingToMessage.senderUsername, 
+                    text: replyingToMessage.text,
+                    isEncrypted: replyingToMessage.isEncrypted || false,
+                    iv: replyingToMessage.iv || null
+                };
             }
             socket.emit('send_message', payload);
             setReplyingToMessage(null);
@@ -564,14 +755,47 @@ const ChatPage = ({ user, setUser }) => {
 
     const unsendEverywhere = (id) => { if (window.confirm("Thu hồi?")) socket.emit('revoke_message', id); };
 
-    const handleEditMessage = (msg) => {
+    const handleEditMessage = async (msg) => {
         setEditingMessage(msg);
-        setEditText(msg.text || '');
+        if (msg.isEncrypted && sharedE2EEKey) {
+            try {
+                const plainText = await decryptText(msg.text, msg.iv, sharedE2EEKey);
+                setEditText(plainText);
+            } catch (err) {
+                setEditText(msg.text || '');
+            }
+        } else {
+            setEditText(msg.text || '');
+        }
     };
 
-    const handleSaveEdit = () => {
+    const handleSaveEdit = async () => {
         if (!editingMessage || !editText.trim()) return;
-        socket.emit('edit_message', { messageId: editingMessage.messageId, newText: editText.trim() });
+        
+        let newTextToSend = editText.trim();
+        let newIv = null;
+
+        if (editingMessage.isEncrypted) {
+            if (!sharedE2EEKey) {
+                alert("Không thể thiết lập E2EE: Khóa chung chưa đồng bộ!");
+                return;
+            }
+            try {
+                const encrypted = await encryptText(newTextToSend, sharedE2EEKey);
+                newTextToSend = encrypted.ciphertext;
+                newIv = encrypted.iv;
+            } catch (err) {
+                console.error("Encryption failed for edit:", err);
+                alert("Lỗi mã hóa tin nhắn chỉnh sửa!");
+                return;
+            }
+        }
+
+        socket.emit('edit_message', { 
+            messageId: editingMessage.messageId, 
+            newText: newTextToSend,
+            ...(editingMessage.isEncrypted && { iv: newIv })
+        });
         setEditingMessage(null);
         setEditText('');
     };
@@ -710,8 +934,8 @@ const ChatPage = ({ user, setUser }) => {
                 return m;
             }));
         });
-        socket.on('message_edited', ({ messageId, newText, isEdited, editedAt }) => {
-            setMessages(prev => prev.map(m => m.messageId === messageId ? { ...m, text: newText, isEdited, editedAt } : m));
+        socket.on('message_edited', ({ messageId, newText, iv, isEdited, editedAt }) => {
+            setMessages(prev => prev.map(m => m.messageId === messageId ? { ...m, text: newText, iv: iv || m.iv, isEdited, editedAt } : m));
         });
 
         // P0: Read receipts — update readBy when others read messages
@@ -748,6 +972,49 @@ const ChatPage = ({ user, setUser }) => {
             }
         });
 
+        socket.on('secret_chat_request', ({ roomId, requester }) => {
+            const currentActiveRoom = activeRoomRef.current;
+            if (currentActiveRoom && roomId === currentActiveRoom.id) {
+                setSecretChatStatus('requested');
+                setSecretChatRequester(requester);
+            }
+            toast(`@${requester} mời bạn tham gia chat bí mật!`, {
+                icon: '🔒',
+                style: { borderRadius: '10px', background: '#e11d48', color: '#fff' }
+            });
+        });
+
+        socket.on('secret_chat_established', ({ roomId }) => {
+            const currentActiveRoom = activeRoomRef.current;
+            if (currentActiveRoom && roomId === currentActiveRoom.id) {
+                setIsSecretMode(true);
+                setSecretChatStatus('established');
+                toast.success("Cuộc trò chuyện bảo mật E2EE đã được thiết lập!");
+            }
+        });
+
+        socket.on('secret_chat_declined', ({ roomId, decliner }) => {
+            const currentActiveRoom = activeRoomRef.current;
+            if (currentActiveRoom && roomId === currentActiveRoom.id) {
+                setSecretChatStatus('idle');
+                toast.error(`@${decliner} đã từ chối lời mời chat bí mật.`);
+            }
+        });
+
+        socket.on('secret_chat_closed', ({ roomId, sender }) => {
+            const currentActiveRoom = activeRoomRef.current;
+            if (currentActiveRoom && roomId === currentActiveRoom.id) {
+                setIsSecretMode(false);
+                setSecretChatStatus('idle');
+                setSecretChatRequester(null);
+                setMessages(prev => prev.filter(m => !(m.roomId === roomId && m.isSecret)));
+                toast(`Cuộc trò chuyện bí mật đã bị đóng bởi @${sender}.`, {
+                    icon: '🔒',
+                    style: { borderRadius: '10px', background: '#333', color: '#fff' }
+                });
+            }
+        });
+
         socket.on('force_logout', ({ username, reason }) => {
             if (username === user.username) {
                 disconnectSocket();
@@ -773,6 +1040,10 @@ const ChatPage = ({ user, setUser }) => {
             socket.off('user_typing_start');
             socket.off('user_typing_end');
             socket.off('new_friend_request');
+            socket.off('secret_chat_request');
+            socket.off('secret_chat_established');
+            socket.off('secret_chat_declined');
+            socket.off('secret_chat_closed');
             socket.off('force_logout');
         };
     }, [user?.username]);
@@ -1004,9 +1275,36 @@ const ChatPage = ({ user, setUser }) => {
                                 {/* Secret Chat Toggle (DMs only) */}
                                 {activeRoom.isDM && (
                                     <button 
-                                        onClick={() => setIsSecretMode(!isSecretMode)}
-                                        className={`p-1.5 rounded-lg transition-all ${isSecretMode ? 'text-red-500 bg-red-500/10' : 'text-gray-500 hover:text-red-400 bg-white/5'}`} 
-                                        title={isSecretMode ? "Tắt Chat bí mật" : "Bật Chat bí mật (Không lưu Server)"}
+                                        onClick={() => {
+                                            if (isSecretMode || secretChatStatus !== 'idle') {
+                                                socket.emit('close_secret_chat', { roomId: activeRoom.id });
+                                                setIsSecretMode(false);
+                                                setSecretChatStatus('idle');
+                                                setSecretChatRequester(null);
+                                                setMessages(prev => prev.filter(m => !(m.roomId === activeRoom.id && m.isSecret)));
+                                                toast("Đã đóng cuộc trò chuyện bí mật.");
+                                            } else {
+                                                if (!sharedE2EEKey) {
+                                                    alert("Đối phương chưa kích hoạt E2EE. Vui lòng chờ họ trực tuyến để thiết lập kết nối an toàn!");
+                                                    return;
+                                                }
+                                                socket.emit('request_secret_chat', { roomId: activeRoom.id, senderUsername: user.username });
+                                                setSecretChatStatus('waiting');
+                                                toast("Đã gửi lời mời Chat Bí Mật tới đối phương...");
+                                            }
+                                        }}
+                                        className={`p-1.5 rounded-lg transition-all ${
+                                            secretChatStatus === 'established' ? 'text-red-500 bg-red-500/10 hover:bg-red-500/20' :
+                                            secretChatStatus === 'waiting' ? 'text-yellow-500 bg-yellow-500/10 animate-pulse' :
+                                            secretChatStatus === 'requested' ? 'text-blue-500 bg-blue-500/10 animate-bounce' :
+                                            'text-gray-500 hover:text-red-400 bg-white/5'
+                                        }`} 
+                                        title={
+                                            secretChatStatus === 'established' ? "Thoát Chat bí mật" :
+                                            secretChatStatus === 'waiting' ? "Đang đợi phản hồi..." :
+                                            secretChatStatus === 'requested' ? "Lời mời chat bí mật mới!" :
+                                            "Bật Chat bí mật (Không lưu Server)"
+                                        }
                                     >
                                         <FaLock size={18}/>
                                     </button>
@@ -1050,6 +1348,77 @@ const ChatPage = ({ user, setUser }) => {
                             <div className="flex-1 flex flex-col items-center justify-center p-10 text-center animate-in zoom-in-95"><div className="w-24 h-24 bg-orange-500/10 text-orange-500 rounded-[40px] flex items-center justify-center mb-6 shadow-2xl border border-orange-500/20 rotate-12 animate-pulse"><FaLock size={40}/></div><h2 className="text-2xl font-black uppercase mb-2 text-white italic">Khu vực hạn chế</h2><p className="text-gray-500 max-w-sm mb-10 font-bold text-sm italic">Bạn chưa gia nhập vùng đất này. Hãy gửi tín hiệu thâm nhập!</p><button onClick={() => handleRequestJoin(activeRoom.id)} className="bg-indigo-600 text-white px-12 py-5 rounded-2xl font-black uppercase shadow-2xl hover:bg-indigo-500 tracking-[3px] text-xs">Gửi yêu cầu thâm nhập</button></div>
                         ) : (
                             <>
+                                {secretChatStatus === 'waiting' && (
+                                    <div className={`px-6 py-4 flex items-center justify-between shadow-xl z-10 border-b transition-all duration-300 ${darkMode ? 'bg-yellow-600/20 border-yellow-500/20 text-yellow-200' : 'bg-yellow-50 border-yellow-200 text-yellow-800'}`}>
+                                        <div className="flex items-center gap-3 font-black uppercase text-[10px] tracking-wider animate-pulse">
+                                            <div className="w-2.5 h-2.5 rounded-full bg-yellow-500 animate-ping"></div>
+                                            <FaLock /> Đang đợi đối phương chấp nhận chat bí mật...
+                                        </div>
+                                        <button 
+                                            onClick={() => {
+                                                socket.emit('close_secret_chat', { roomId: activeRoom.id });
+                                                setSecretChatStatus('idle');
+                                                toast("Đã hủy lời mời Chat Bí Mật.");
+                                            }}
+                                            className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all shadow-md active:scale-95"
+                                        >
+                                            Hủy yêu cầu
+                                        </button>
+                                    </div>
+                                )}
+
+                                {secretChatStatus === 'requested' && (
+                                    <div className={`px-6 py-4 flex flex-col sm:flex-row items-center justify-between shadow-xl z-10 border-b gap-3 transition-all duration-300 ${darkMode ? 'bg-rose-950/40 border-rose-500/20 text-rose-200' : 'bg-rose-50 border-rose-200 text-rose-800'}`}>
+                                        <div className="flex items-center gap-3 font-black uppercase text-[10px] tracking-wider">
+                                            <FaLock className="animate-bounce text-rose-500" size={14} />
+                                            @{secretChatRequester} mời bạn tham gia chat bí mật (E2EE)
+                                        </div>
+                                        <div className="flex gap-2 shrink-0">
+                                            <button 
+                                                onClick={() => {
+                                                    socket.emit('accept_secret_chat', { roomId: activeRoom.id, requester: secretChatRequester });
+                                                    setSecretChatStatus('established');
+                                                    setIsSecretMode(true);
+                                                }}
+                                                className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all shadow-md hover:scale-105 active:scale-95"
+                                            >
+                                                Chấp nhận
+                                            </button>
+                                            <button 
+                                                onClick={() => {
+                                                    socket.emit('decline_secret_chat', { roomId: activeRoom.id, requester: secretChatRequester });
+                                                    setSecretChatStatus('idle');
+                                                    setSecretChatRequester(null);
+                                                }}
+                                                className="bg-black/20 hover:bg-black/30 text-rose-400 dark:text-rose-300 px-5 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all active:scale-95"
+                                            >
+                                                Từ chối
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {secretChatStatus === 'established' && (
+                                    <div className={`px-6 py-3.5 flex items-center justify-between shadow-xl z-10 border-b transition-all duration-300 ${darkMode ? 'bg-emerald-950/30 border-emerald-500/20 text-emerald-300' : 'bg-emerald-50 border-emerald-200 text-emerald-800'}`}>
+                                        <div className="flex items-center gap-3 font-black uppercase text-[10px] tracking-wider">
+                                            <FaShieldAlt className="text-emerald-500 animate-pulse" />
+                                            Đã thiết lập kết nối mã hóa đầu cuối (E2EE) thành công!
+                                        </div>
+                                        <button 
+                                            onClick={() => {
+                                                socket.emit('close_secret_chat', { roomId: activeRoom.id });
+                                                setIsSecretMode(false);
+                                                setSecretChatStatus('idle');
+                                                setSecretChatRequester(null);
+                                                setMessages(prev => prev.filter(m => !(m.roomId === activeRoom.id && m.isSecret)));
+                                                toast("Đã đóng cuộc trò chuyện bí mật.");
+                                            }}
+                                            className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all shadow-md active:scale-95"
+                                        >
+                                            Thoát chat bí mật
+                                        </button>
+                                    </div>
+                                )}
                                 <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-hide" ref={chatContainerRef}
                                     onScroll={(e) => {
                                         // P0: Lazy load older messages when scrolling to top
@@ -1156,7 +1525,9 @@ const ChatPage = ({ user, setUser }) => {
                                                                     {!msg.isRevoked && msg.replyTo && (
                                                                         <div className={`mb-3 pl-3 py-1 border-l-2 text-xs opacity-80 ${isMe ? 'border-white/50 bg-black/10' : 'border-indigo-500 bg-black/5 dark:bg-white/5'} rounded-r-lg`}>
                                                                             <div className="font-bold">@{msg.replyTo.senderUsername}</div>
-                                                                            <div className="truncate opacity-75">{msg.replyTo.text || 'Đã gửi tệp đính kèm...'}</div>
+                                                                            <div className="truncate opacity-75">
+                                                                                <E2EEDecryptor msg={msg.replyTo} sharedKey={sharedE2EEKey} isMe={msg.replyTo.senderUsername === user.username} />
+                                                                            </div>
                                                                         </div>
                                                                     )}
                                                             {msg.msgType === 'poll' ? (
@@ -1208,23 +1579,7 @@ const ChatPage = ({ user, setUser }) => {
                                                                         </div>
                                                                     ) : (
                                                                         <>
-                                                                            {(() => {
-                                                                                const emojiMap = { ':)': '😊', ':D': '😃', ':(': '😢', ';)': '😉', ':P': '😛', '<3': '❤️', ':o': '😮', 'B)': '😎', ':*': '😘', 'xD': '🤣', 'XD': '🤣', ':3': '😺', 'o_O': '😳', '-_-': '😑' };
-                                                                                const text = msg.text || '';
-                                                                                const urlRegex = /((?:https?:\/\/|www\.)[^\s]+|[a-zA-Z0-9.-]+\.(?:com|net|org|vn|edu|gov|io)[^\s]*)/g;
-                                                                                const parts = text.split(urlRegex);
-                                                                                return parts.map((part, i) => {
-                                                                                    if (urlRegex.test(part)) {
-                                                                                        urlRegex.lastIndex = 0;
-                                                                                        return <a key={i} href={part} target="_blank" rel="noopener noreferrer" className={`underline font-bold break-all ${isMe ? 'text-blue-200 hover:text-white' : 'text-indigo-400 hover:text-indigo-300'}`}>{part.length > 60 ? part.substring(0, 57) + '...' : part}</a>;
-                                                                                    }
-                                                                                    let converted = part;
-                                                                                    Object.entries(emojiMap).forEach(([code, emoji]) => {
-                                                                                        converted = converted.split(code).join(emoji);
-                                                                                    });
-                                                                                    return <span key={i}>{converted}</span>;
-                                                                                });
-                                                                            })()}
+                                                                            <E2EEDecryptor msg={msg} sharedKey={sharedE2EEKey} isMe={isMe} />
                                                                             {msg.isEdited && <span className={`text-[9px] italic ml-2 ${isMe ? 'opacity-60' : 'text-gray-500'}`}>(đã chỉnh sửa)</span>}
                                                                         </>
                                                                     )}
@@ -1295,7 +1650,9 @@ const ChatPage = ({ user, setUser }) => {
                                                 <div className={`mb-2 p-3 rounded-xl flex justify-between items-center border ${darkMode ? 'bg-indigo-900/30 border-indigo-500/30 text-indigo-200' : 'bg-indigo-50 border-indigo-200 text-indigo-800'}`}>
                                                     <div className="flex-1 truncate text-xs">
                                                         <span className="font-black uppercase tracking-widest mr-2"><FaReply className="inline mr-1"/> Trả lời @{replyingToMessage.senderUsername}:</span>
-                                                        <span className="italic">{replyingToMessage.text || 'Đã đính kèm tệp...'}</span>
+                                                        <span className="italic">
+                                                            <E2EEDecryptor msg={replyingToMessage} sharedKey={sharedE2EEKey} isMe={replyingToMessage.senderUsername === user.username} />
+                                                        </span>
                                                     </div>
                                                     <button onClick={() => setReplyingToMessage(null)} className="ml-4 hover:text-red-500 transition-colors"><FaTimes size={14}/></button>
                                                 </div>
