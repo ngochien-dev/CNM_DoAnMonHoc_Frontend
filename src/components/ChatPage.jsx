@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import api from '../services/api';
 import EmojiPicker, { Theme } from 'emoji-picker-react';
 import { 
@@ -89,9 +89,183 @@ const E2EEDecryptor = ({ msg, sharedKey, isMe }) => {
                 Object.entries(emojiMap).forEach(([code, emoji]) => {
                     converted = converted.split(code).join(emoji);
                 });
-                return <span key={i}>{converted}</span>;
+                
+                // Tag Mention formatting
+                const mentionRegex = /(@[a-zA-Z0-9_]+)/g;
+                const textParts = converted.split(mentionRegex);
+                return (
+                    <span key={i}>
+                        {textParts.map((tPart, j) => {
+                            if (mentionRegex.test(tPart)) {
+                                mentionRegex.lastIndex = 0; // reset
+                                return (
+                                    <span 
+                                        key={j} 
+                                        className="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-400 font-extrabold cursor-pointer hover:bg-indigo-500 hover:text-white transition-all shadow-sm mx-0.5"
+                                        title={`Thành viên: ${tPart}`}
+                                    >
+                                        {tPart}
+                                    </span>
+                                );
+                            }
+                            return tPart;
+                        })}
+                    </span>
+                );
             })}
         </>
+    );
+};
+
+const WaveformVoicePlayer = ({ src, darkMode }) => {
+    const audioRef = useRef(null);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [currentTime, setCurrentTime] = useState(0);
+    const [duration, setDuration] = useState(0);
+    const [playbackRate, setPlaybackRate] = useState(1);
+
+    // Generate consistent visual peaks based on the audio source string
+    const peaks = useMemo(() => {
+        let hash = 0;
+        for (let i = 0; i < src.length; i++) {
+            hash = src.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        const generatedPeaks = [];
+        for (let i = 0; i < 28; i++) {
+            const peakHeight = Math.abs(Math.sin(hash + i) * 20) + 6; // Height between 6px and 26px
+            generatedPeaks.push(peakHeight);
+        }
+        return generatedPeaks;
+    }, [src]);
+
+    useEffect(() => {
+        const audio = new Audio(src);
+        audioRef.current = audio;
+
+        const handlePlay = () => setIsPlaying(true);
+        const handlePause = () => setIsPlaying(false);
+        const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
+        const handleLoadedMetadata = () => setDuration(audio.duration || 0);
+        const handleEnded = () => {
+            setIsPlaying(false);
+            setCurrentTime(0);
+            audio.currentTime = 0;
+        };
+
+        audio.addEventListener('play', handlePlay);
+        audio.addEventListener('pause', handlePause);
+        audio.addEventListener('timeupdate', handleTimeUpdate);
+        audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+        audio.addEventListener('ended', handleEnded);
+
+        // Preload metadata
+        audio.load();
+
+        return () => {
+            audio.pause();
+            audio.removeEventListener('play', handlePlay);
+            audio.removeEventListener('pause', handlePause);
+            audio.removeEventListener('timeupdate', handleTimeUpdate);
+            audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+            audio.removeEventListener('ended', handleEnded);
+        };
+    }, [src]);
+
+    const togglePlaybackRate = () => {
+        let nextRate = 1;
+        if (playbackRate === 1) nextRate = 1.5;
+        else if (playbackRate === 1.5) nextRate = 2;
+        
+        setPlaybackRate(nextRate);
+        if (audioRef.current) {
+            audioRef.current.playbackRate = nextRate;
+        }
+    };
+
+    const togglePlay = () => {
+        if (!audioRef.current) return;
+        if (isPlaying) {
+            audioRef.current.pause();
+        } else {
+            audioRef.current.playbackRate = playbackRate;
+            audioRef.current.play().catch(err => console.log("Audio play error", err));
+        }
+    };
+
+    const handleWaveformClick = (e) => {
+        if (!audioRef.current || duration === 0) return;
+        const rect = e.currentTarget.getBoundingClientRect();
+        const clickX = e.clientX - rect.left;
+        const clickPercent = Math.max(0, Math.min(1, clickX / rect.width));
+        audioRef.current.currentTime = clickPercent * duration;
+        setCurrentTime(clickPercent * duration);
+    };
+
+    const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+    const formatTime = (time) => {
+        if (isNaN(time)) return '0:00';
+        const m = Math.floor(time / 60);
+        const s = Math.floor(time % 60).toString().padStart(2, '0');
+        return `${m}:${s}`;
+    };
+
+    return (
+        <div className={`p-3 rounded-2xl flex items-center gap-3 border transition-all ${
+            darkMode 
+                ? 'bg-slate-900/50 border-white/5 text-slate-100' 
+                : 'bg-slate-50 border-slate-200 text-slate-700'
+        } max-w-[280px]`}>
+            {/* Play/Pause Button */}
+            <button 
+                onClick={togglePlay}
+                className="w-9 h-9 rounded-full bg-indigo-500 hover:bg-indigo-600 flex items-center justify-center text-white transition-all shadow-md active:scale-95 shrink-0"
+            >
+                {isPlaying ? <FaPauseCircle size={18}/> : <FaPlayCircle size={18} className="translate-x-[1px]"/>}
+            </button>
+
+            {/* Waveform visual bars */}
+            <div className="flex flex-col flex-1 min-w-0">
+                <div 
+                    className="flex items-end gap-[3px] h-7 cursor-pointer relative"
+                    onClick={handleWaveformClick}
+                >
+                    {peaks.map((height, idx) => {
+                        const barPercent = (idx / peaks.length) * 100;
+                        const isActive = progressPercent >= barPercent;
+                        return (
+                            <div 
+                                key={idx}
+                                style={{ height: `${height}px` }}
+                                className={`w-[3px] rounded-full transition-all duration-150 ${
+                                    isActive 
+                                        ? 'bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]' 
+                                        : (darkMode ? 'bg-white/10' : 'bg-slate-300')
+                                }`}
+                            />
+                        );
+                    })}
+                </div>
+                {/* Time Indicator */}
+                <div className="flex justify-between items-center text-[10px] text-gray-500 mt-1 font-bold">
+                    <span>{formatTime(currentTime)}</span>
+                    <span>{formatTime(duration)}</span>
+                </div>
+            </div>
+
+            {/* Playback speed trigger */}
+            <button 
+                onClick={togglePlaybackRate}
+                className={`px-2 py-1 rounded-lg text-[10px] font-black tracking-wider transition-all active:scale-95 uppercase shrink-0 ${
+                    playbackRate > 1 
+                        ? 'bg-pink-500/10 text-pink-400 border border-pink-500/20' 
+                        : (darkMode ? 'bg-white/5 border border-white/5 text-gray-400' : 'bg-slate-200 border border-slate-200 text-slate-500')
+                }`}
+                title="Tốc độ phát âm thanh"
+            >
+                {playbackRate}x
+            </button>
+        </div>
     );
 };
 
@@ -153,6 +327,12 @@ const ChatPage = ({ user, setUser }) => {
     const [showReportModal, setShowReportModal] = useState(false);
     const [reportingMessage, setReportingMessage] = useState(null);
     const [reportReason, setReportReason] = useState('Abuse');
+
+    // Rich Chat, Mention, and Audio states
+    const [activePinIndex, setActivePinIndex] = useState(0);
+    const [isPinListExpanded, setIsPinListExpanded] = useState(false);
+    const [showMentionPopup, setShowMentionPopup] = useState(false);
+    const [mentionSearchQuery, setMentionSearchQuery] = useState('');
 
     // P2: Periodically clean up expired messages from state
     useEffect(() => {
@@ -580,6 +760,18 @@ const ChatPage = ({ user, setUser }) => {
         }
     };
 
+    const scrollToMessage = (messageId) => {
+        const el = document.getElementById(`msg-${messageId}`);
+        if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            // Highlight temporarily
+            el.classList.add('bg-indigo-500/20');
+            setTimeout(() => {
+                el.classList.remove('bg-indigo-500/20');
+            }, 2000);
+        }
+    };
+
     const getRecentChatUsers = () => {
         const chatUsers = new Set();
         messages.forEach(m => { 
@@ -615,6 +807,8 @@ const ChatPage = ({ user, setUser }) => {
             setMessages(prev => prev.filter(m => !(m.roomId === activeRoom.id && m.isSecret)));
         }
         setTypingUsers([]); // Xóa trạng thái typing khi chuyển phòng
+        setActivePinIndex(0);
+        setShowMentionPopup(false);
         setActiveRoom(room); 
         setShowFriendsTab(false); 
         setShowDiscoveryTab(false); 
@@ -683,8 +877,17 @@ const ChatPage = ({ user, setUser }) => {
     };
 
     const handlePinMessage = async (messageId, isPinned) => {
-        await api.post('/v1/messages/pin', { messageId, isPinned });
-        loadData(); // Re-fetch messages
+        // Optimistic update for instant UI feedback
+        setMessages(prev => prev.map(m => m.messageId === messageId ? { ...m, isPinned } : m));
+        
+        try {
+            await api.post('/v1/messages/pin', { messageId, isPinned });
+        } catch (err) {
+            console.error('Failed to pin/unpin message:', err);
+            toast.error('Không thể cập nhật trạng thái ghim');
+            // Revert optimistic update on failure
+            setMessages(prev => prev.map(m => m.messageId === messageId ? { ...m, isPinned: !isPinned } : m));
+        }
     };
 
     const handleKick = async (target) => {
@@ -934,6 +1137,25 @@ const ChatPage = ({ user, setUser }) => {
         const val = e.target.value;
         setMsgInput(val);
 
+        // Mentions logic
+        const currentG = allGroups.find(g => g.groupId === activeRoom?.id);
+        if (currentG && !currentG.isDM) {
+            const lastAtIndex = val.lastIndexOf('@');
+            if (lastAtIndex !== -1) {
+                const afterAt = val.slice(lastAtIndex + 1);
+                if (!afterAt.includes(' ')) {
+                    setShowMentionPopup(true);
+                    setMentionSearchQuery(afterAt.toLowerCase());
+                } else {
+                    setShowMentionPopup(false);
+                }
+            } else {
+                setShowMentionPopup(false);
+            }
+        } else {
+            setShowMentionPopup(false);
+        }
+
         // SAVE DRAFT IN REAL TIME
         if (activeRoom?.id) {
             setDrafts(prev => {
@@ -957,6 +1179,23 @@ const ChatPage = ({ user, setUser }) => {
         typingTimeoutRef.current = setTimeout(() => {
             socket.emit('typing_end', { roomId: activeRoom.id, senderUsername: user.username });
         }, 3000);
+    };
+
+    const handleSelectMention = (username) => {
+        const lastAtIndex = msgInput.lastIndexOf('@');
+        if (lastAtIndex !== -1) {
+            const base = msgInput.slice(0, lastAtIndex);
+            const nextVal = base + `@${username} `;
+            setMsgInput(nextVal);
+            setShowMentionPopup(false);
+            if (activeRoom?.id) {
+                setDrafts(prev => {
+                    const nextDrafts = { ...prev };
+                    nextDrafts[activeRoom.id] = nextVal;
+                    return nextDrafts;
+                });
+            }
+        }
     };
 
     const handleEmojiClick = (emojiData) => {
@@ -1114,12 +1353,48 @@ const ChatPage = ({ user, setUser }) => {
         loadData();
         socket.on('groups_updated', loadData);
         socket.on('receive_message', (d) => {
+            const container = chatContainerRef.current;
+            let isCloseToBottom = false;
+            if (container) {
+                const threshold = 180; // px
+                isCloseToBottom = container.scrollHeight - container.clientHeight - container.scrollTop < threshold;
+            }
+
             setMessages(p => {
                 if (p.some(msg => msg.messageId === d.messageId)) return p;
                 return [...p, d];
             });
+
             const currentActiveRoom = activeRoomRef.current;
+            
+            // Tự động cuộn xuống chỉ khi ta tự gửi tin HOẶC đang đứng ở dưới đáy chat đọc tin mới
+            const shouldScroll = d.senderUsername === user.username || isCloseToBottom;
+            if (shouldScroll) {
+                setTimeout(() => {
+                    if (chatContainerRef.current) {
+                        chatContainerRef.current.scrollTo({
+                            top: chatContainerRef.current.scrollHeight,
+                            behavior: 'smooth'
+                        });
+                    }
+                }, 60);
+            }
             if (d.senderUsername !== user.username) {
+                // Mention check
+                const isMentioned = d.text && d.text.includes(`@${user.username}`);
+                if (isMentioned) {
+                    toast(`Bạn đã được nhắc đến bởi @${d.senderUsername} trong nhóm!`, {
+                        icon: '🔔',
+                        style: { borderRadius: '12px', background: '#ec4899', color: '#fff', fontWeight: 'bold' },
+                        duration: 5000
+                    });
+                    if (window.Notification && Notification.permission === 'granted') {
+                        new Notification('Bạn đã được nhắc đến!', {
+                            body: `@${d.senderUsername}: ${d.text}`
+                        });
+                    }
+                }
+
                 if (currentActiveRoom && d.roomId === currentActiveRoom.id) {
                     // P0: Auto-mark as read if user is viewing this room
                     socket.emit('message_read', { messageIds: [d.messageId], roomId: d.roomId });
@@ -1153,6 +1428,9 @@ const ChatPage = ({ user, setUser }) => {
                 }
                 return m;
             }));
+        });
+        socket.on('message_pinned', ({ messageId, isPinned }) => {
+            setMessages(prev => prev.map(m => m.messageId === messageId ? { ...m, isPinned } : m));
         });
         socket.on('message_edited', ({ messageId, newText, iv, isEdited, editedAt }) => {
             setMessages(prev => prev.map(m => m.messageId === messageId ? { ...m, text: newText, iv: iv || m.iv, isEdited, editedAt } : m));
@@ -1272,6 +1550,7 @@ const ChatPage = ({ user, setUser }) => {
             socket.off('secret_chat_declined');
             socket.off('secret_chat_closed');
             socket.off('force_logout');
+            socket.off('message_pinned');
         };
     }, [user?.username]);
 
@@ -1280,7 +1559,16 @@ const ChatPage = ({ user, setUser }) => {
         if (user?.username) loadData();
     }, [callHistoryVersion]);
 
-    useEffect(() => { scrollRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, activeRoom]);
+    // Tự động cuộn xuống đáy chỉ khi chuyển phòng chat (nhìn thấy tin nhắn mới nhất ban đầu)
+    useEffect(() => {
+        if (activeRoom) {
+            setTimeout(() => {
+                if (chatContainerRef.current) {
+                    chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+                }
+            }, 60);
+        }
+    }, [activeRoom?.id]);
 
     // P0: Mark visible messages as read when switching rooms or receiving new messages
     useEffect(() => {
@@ -1775,6 +2063,106 @@ const ChatPage = ({ user, setUser }) => {
                                         </button>
                                     </div>
                                 )}
+
+                                {/* Multiple Pinned Messages Sticky Header Banner */}
+                                {(() => {
+                                    const pinnedMsgs = messages.filter(m => (m.roomId === activeRoom.id) && m.isPinned);
+                                    if (pinnedMsgs.length === 0) return null;
+                                    
+                                    // Zalo/Telegram style: always show the most recent pin at the top collapsed banner
+                                    const latestPin = pinnedMsgs[pinnedMsgs.length - 1];
+                                    
+                                    return (
+                                        <div className="relative z-[150] shrink-0">
+                                            {/* Collapsed Main Pinned Banner */}
+                                            <div className={`px-6 py-2.5 flex items-center justify-between gap-4 border-b transition-all duration-300 ${
+                                                darkMode ? 'bg-[#0f172a]/95 border-white/5 text-indigo-200 backdrop-blur-md' : 'bg-indigo-50 border-indigo-100 text-indigo-900 shadow-sm'
+                                            }`}>
+                                                <div className="flex items-center gap-3 flex-1 min-w-0">
+                                                    <FaThumbtack className="text-indigo-500 animate-bounce shrink-0" size={13}/>
+                                                    <div 
+                                                        className="flex-1 min-w-0 cursor-pointer hover:underline"
+                                                        onClick={() => scrollToMessage(latestPin.messageId)}
+                                                    >
+                                                        <div className="text-[9px] uppercase font-black tracking-wider opacity-60">
+                                                            Tin ghim mới nhất • @{latestPin.senderUsername}
+                                                        </div>
+                                                        <p className="text-xs font-bold truncate italic mt-0.5">
+                                                            {latestPin.text || '[Tệp đính kèm]'}
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex items-center gap-3 shrink-0">
+                                                    {pinnedMsgs.length > 1 && (
+                                                        <button 
+                                                            onClick={() => setIsPinListExpanded(prev => !prev)}
+                                                            className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider transition-all duration-300 flex items-center gap-1.5 ${
+                                                                isPinListExpanded
+                                                                ? 'bg-indigo-600 text-white shadow-md'
+                                                                : 'bg-black/10 dark:bg-white/5 hover:bg-black/15 dark:hover:bg-white/10 text-indigo-500 dark:text-indigo-300 border border-black/5 dark:border-white/5'
+                                                            }`}
+                                                            title="Xem tất cả tin ghim"
+                                                        >
+                                                            +{pinnedMsgs.length - 1} ghim {isPinListExpanded ? '▲' : '▼'}
+                                                        </button>
+                                                    )}
+                                                    <button 
+                                                        onClick={() => handlePinMessage(latestPin.messageId, false)} 
+                                                        className="p-1.5 rounded-full hover:bg-red-500/10 text-gray-400 hover:text-red-500 transition-colors" 
+                                                        title="Bỏ ghim tin này"
+                                                    >
+                                                        <FaTimes size={13}/>
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* Expanded Vertical Dropdown List */}
+                                            {isPinListExpanded && pinnedMsgs.length > 1 && (
+                                                <div className={`absolute top-full left-0 right-0 max-h-60 overflow-y-auto border-b shadow-2xl transition-all duration-300 animate-in slide-in-from-top-2 pr-1 scrollbar-hide ${
+                                                    darkMode ? 'bg-[#0f172a]/98 border-white/5 backdrop-blur-xl text-white' : 'bg-white/98 border-gray-150 backdrop-blur-xl text-slate-800'
+                                                }`}>
+                                                    <div className="p-2 space-y-1.5">
+                                                        <div className="px-3 py-1 text-[9px] uppercase font-black tracking-wider opacity-40">
+                                                            Danh sách tất cả tin ghim ({pinnedMsgs.length})
+                                                        </div>
+                                                        {pinnedMsgs.slice().reverse().map((pin, i) => (
+                                                            <div 
+                                                                key={pin.messageId}
+                                                                className={`p-2.5 rounded-xl flex items-center justify-between gap-4 transition-all duration-200 ${
+                                                                    darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-50'
+                                                                }`}
+                                                            >
+                                                                <div 
+                                                                    className="flex-1 min-w-0 cursor-pointer"
+                                                                    onClick={() => {
+                                                                        scrollToMessage(pin.messageId);
+                                                                        setIsPinListExpanded(false);
+                                                                    }}
+                                                                >
+                                                                    <div className="text-[9px] font-black tracking-tighter opacity-65 flex items-center gap-1.5">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+                                                                        @{pin.senderUsername}
+                                                                    </div>
+                                                                    <p className="text-xs font-semibold mt-0.5 truncate italic">
+                                                                        {pin.text || '[Tệp đính kèm]'}
+                                                                    </p>
+                                                                </div>
+                                                                <button 
+                                                                    onClick={() => handlePinMessage(pin.messageId, false)}
+                                                                    className="p-1 rounded-full hover:bg-red-500/10 text-gray-400 hover:text-red-500 transition-colors shrink-0"
+                                                                    title="Bỏ ghim"
+                                                                >
+                                                                    <FaTimes size={12}/>
+                                                                </button>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
                                 <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-hide" ref={chatContainerRef}
                                     style={currentWallpaper ? (
                                         currentWallpaper.startsWith('http') || currentWallpaper.startsWith('data:image') || currentWallpaper.startsWith('/assets') || currentWallpaper.startsWith('blob:')
@@ -1789,22 +2177,6 @@ const ChatPage = ({ user, setUser }) => {
                                         }
                                     }}
                                 >
-                                    {/* Pinned Messages Area */}
-                                    {messages.filter(m => (m.roomId === activeRoom.id) && m.isPinned).length > 0 && (
-                                        <div className={`p-4 rounded-xl shadow-lg border mb-6 ${darkMode ? 'bg-indigo-900/30 border-indigo-500/30 text-indigo-200' : 'bg-indigo-50 border-indigo-200 text-indigo-800'}`}>
-                                            <div className="flex items-center gap-2 font-black text-xs uppercase tracking-widest mb-3 opacity-80"><FaThumbtack/> Tin nhắn đã ghim</div>
-                                            <div className="space-y-3">
-                                                {messages.filter(m => (m.roomId === activeRoom.id) && m.isPinned).map(pm => (
-                                                    <div key={`pin-${pm.messageId}`} className="flex justify-between items-center bg-black/5 dark:bg-white/5 p-3 rounded-lg">
-                                                        <div className="flex-1 truncate text-sm italic pr-4">
-                                                            <span className="font-bold">@{pm.senderUsername}:</span> {pm.text || 'Đã gửi tệp đính kèm...'}
-                                                        </div>
-                                                        <button onClick={() => handlePinMessage(pm.messageId, false)} className="text-gray-500 hover:text-red-500 shrink-0" title="Bỏ ghim"><FaTimes size={12}/></button>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
 
                                     {/* P0: Loading indicator for pagination */}
                                     {loadingMessages && (
@@ -1818,7 +2190,7 @@ const ChatPage = ({ user, setUser }) => {
                                         const isMe = msg.senderUsername === user.username; 
                                         const sOnline = onlineUsers[msg.senderUsername]; 
                                         return (
-                                            <div key={msg.messageId} className={`flex gap-4 ${isMe ? 'flex-row-reverse text-right' : ''} group animate-in slide-in-from-bottom-2`}>
+                                            <div key={msg.messageId} id={`msg-${msg.messageId}`} className={`flex gap-4 ${isMe ? 'flex-row-reverse text-right' : ''} group animate-in slide-in-from-bottom-2 transition-all duration-500 rounded-2xl`}>
                                                 <div onClick={() => handleOpenProfile(msg.senderUsername)} className="w-10 h-10 rounded-xl shadow-lg cursor-pointer overflow-hidden shrink-0 border border-white/5 bg-slate-800 transition-all group-hover:scale-105">{sOnline?.avatar ? <img src={sOnline.avatar} className="w-full h-full object-cover" alt="" /> : <div className="w-full h-full flex items-center justify-center text-white font-black uppercase bg-indigo-500">{msg.sender[0]}</div>}</div>
                                                 <div className={`max-w-[75%] flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
                                                     <div className={`text-[10px] mb-1.5 font-black uppercase tracking-tighter italic flex items-center gap-1 ${darkMode ? 'text-gray-500' : 'text-slate-400'}`}>
@@ -1960,7 +2332,7 @@ const ChatPage = ({ user, setUser }) => {
                                                                     {!msg.isRevoked && msg.fileData && (
                                                                         <div className="mt-3">
                                                                             {msg.fileType === 'audio' ? (
-                                                                                <audio controls src={msg.fileData} className="max-w-[200px] h-10" />
+                                                                                <WaveformVoicePlayer src={msg.fileData} darkMode={darkMode} />
                                                                             ) : msg.fileType === 'image' ? (
                                                                                 <img src={msg.fileData} onClick={() => setPreviewImage(msg.fileData)} className="max-w-xs rounded-xl shadow-2xl border border-white/10 cursor-pointer hover:opacity-80 transition-all hover:scale-105" alt="attachment" />
                                                                             ) : msg.fileType === 'video' ? (
@@ -2025,6 +2397,45 @@ const ChatPage = ({ user, setUser }) => {
                                                 </div>
                                             )}
 
+                                            {showMentionPopup && (() => {
+                                                const currentG = allGroups.find(g => g.groupId === activeRoom?.id);
+                                                const mentionOptions = (currentG?.members || []).filter(uname => uname !== user.username && uname.toLowerCase().includes(mentionSearchQuery));
+                                                if (mentionOptions.length === 0) return null;
+                                                return (
+                                                    <div className={`absolute bottom-20 left-6 z-[200] w-64 max-h-56 overflow-y-auto rounded-2xl shadow-2xl border transition-all duration-200 animate-in slide-in-from-bottom-2 ${
+                                                        darkMode ? 'bg-[#0f172a]/95 border-white/10 text-white backdrop-blur-md' : 'bg-white border-gray-200 text-slate-800'
+                                                    }`}>
+                                                        <div className="p-3 border-b border-white/5 bg-indigo-500/10 text-[9px] uppercase font-black tracking-widest text-indigo-400">
+                                                            Nhắc tên thành viên (@)
+                                                        </div>
+                                                        <div className="p-1">
+                                                            {mentionOptions.map(uname => {
+                                                                const memberOnline = onlineUsers[uname];
+                                                                return (
+                                                                    <div 
+                                                                        key={uname} 
+                                                                        onClick={() => handleSelectMention(uname)}
+                                                                        className={`flex items-center gap-3 px-3 py-2 rounded-xl cursor-pointer transition-all ${
+                                                                            darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-50'
+                                                                        }`}
+                                                                    >
+                                                                        <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-black text-xs overflow-hidden shrink-0">
+                                                                            {memberOnline?.avatar ? <img src={memberOnline.avatar} className="w-full h-full object-cover" alt="" /> : uname[0].toUpperCase()}
+                                                                        </div>
+                                                                        <div className="truncate flex-1 min-w-0">
+                                                                            <p className="text-xs font-bold truncate">@{uname}</p>
+                                                                            <p className="text-[9px] text-gray-500 truncate">
+                                                                                {memberOnline ? 'Đang hoạt động' : 'Ngoại tuyến'}
+                                                                            </p>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })()}
+
                                             <div className={`rounded-2xl flex items-center px-4 py-3 border transition-all ${darkMode ? 'bg-white/5 border-white/10 focus-within:border-indigo-500' : 'bg-white border-gray-200 focus-within:border-indigo-500 shadow-sm'} ${isRecording ? 'border-red-500 animate-pulse bg-red-500/5' : ''}`}>
                                                 {!isRecording && (
                                                     <div className={`flex gap-4 mr-4 border-r pr-4 ${darkMode ? 'text-gray-500 border-white/5' : 'text-slate-400 border-gray-200'}`}>
@@ -2039,7 +2450,31 @@ const ChatPage = ({ user, setUser }) => {
                                                 
                                                 {isRecording ? (
                                                     <div className="flex-1 flex items-center justify-between text-red-500 font-bold uppercase tracking-widest text-xs">
-                                                        <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-500 animate-ping"></div> Đang thu âm... {formatTime(recordingTime)}</div>
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-2 h-2 rounded-full bg-red-500 animate-ping"></div> 
+                                                            Đang thu âm... {formatTime(recordingTime)}
+                                                            <div className="flex items-center gap-[3px] h-6 px-2 shrink-0">
+                                                                {[...Array(12)].map((_, i) => (
+                                                                    <div 
+                                                                        key={i} 
+                                                                        style={{ 
+                                                                            animationDelay: `${i * 0.05}s`,
+                                                                            height: '6px'
+                                                                        }} 
+                                                                        className="w-[2.5px] bg-red-500 rounded-full recording-wave-bar" 
+                                                                    />
+                                                                ))}
+                                                            </div>
+                                                            <style>{`
+                                                                @keyframes soundWave {
+                                                                    0%, 100% { height: 6px; }
+                                                                    50% { height: 18px; }
+                                                                }
+                                                                .recording-wave-bar {
+                                                                    animation: soundWave 0.6s ease-in-out infinite;
+                                                                }
+                                                            `}</style>
+                                                        </div>
                                                     </div>
                                                 ) : (
                                                     <input value={msgInput} onChange={handleInputChange} onKeyDown={(e)=>e.key==='Enter'&&handleSendText()} placeholder={`Nhập tín hiệu...`} className={`bg-transparent w-full outline-none text-sm font-bold ${darkMode ? 'text-white placeholder:text-gray-700' : 'text-slate-800 placeholder:text-gray-400'}`} />
