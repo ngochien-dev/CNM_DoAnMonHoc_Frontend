@@ -7,7 +7,7 @@ import {
     FaChartBar, FaImage, FaSmile, FaMoon, FaSun, FaPalette,
     FaGlobe, FaCog, FaUserMinus, FaPauseCircle, FaPlayCircle, 
     FaUserFriends, FaCommentDots, FaUserPlus, FaTimes, FaUserCheck, FaLock, FaUsers, FaSearch,
-    FaVideo, FaShare, FaThumbtack, FaPoll, FaCalendarAlt, FaReply, FaMicrophone, FaStopCircle, FaSmileBeam, FaEdit, FaExchangeAlt, FaTh, FaPlus, FaCamera, FaFolderPlus, FaLanguage
+    FaVideo, FaShare, FaThumbtack, FaPoll, FaCalendarAlt, FaReply, FaMicrophone, FaStopCircle, FaSmileBeam, FaEdit, FaExchangeAlt, FaTh, FaPlus, FaCamera, FaFolderPlus, FaLanguage, FaCloud
 } from 'react-icons/fa';
 import { Toaster, toast } from 'react-hot-toast';
 import StoryBar from './social/StoryBar';
@@ -293,6 +293,7 @@ const ChatPage = ({ user, setUser }) => {
     const [onlineUsers, setOnlineUsers] = useState({});
     const [allGroups, setAllGroups] = useState([]);
     const [activeRoom, setActiveRoom] = useState(null); 
+    const isCloudActive = activeRoom?.id === `dm_${user?.username}_${user?.username}`;
     const [unreadCounts, setUnreadCounts] = useState({}); 
     const [callHistory, setCallHistory] = useState([]); // State cho lịch sử cuộc gọi
     const [typingUsers, setTypingUsers] = useState([]); // Danh sách người đang gõ trong phòng hiện tại
@@ -1995,8 +1996,18 @@ const ChatPage = ({ user, setUser }) => {
                         const publicGroups = allGroups.filter(g => g.isPublic && (g.members?.includes(user.username) || g.owner === user.username));
                         const privateGroups = allGroups.filter(g => !g.isPublic && (g.members?.includes(user.username) || g.owner === user.username));
                         
+                        const cloudRoomItem = {
+                            id: `dm_${user.username}_${user.username}`,
+                            name: user.username,
+                            isDM: true,
+                            isCloud: true,
+                            type: 'personal'
+                        };
+                        const filteredDms = dms.filter(name => name !== user.username);
+                        
                         const allRoomItems = [
-                            ...dms.map(name => ({ id: `dm_${[user.username, name].sort().join("_")}`, name, isDM: true, type: 'personal' })),
+                            cloudRoomItem,
+                            ...filteredDms.map(name => ({ id: `dm_${[user.username, name].sort().join("_")}`, name, isDM: true, type: 'personal' })),
                             ...publicGroups.map(g => ({ id: g.groupId, name: g.groupName, type: 'groups' })),
                             ...privateGroups.map(g => ({ id: g.groupId, name: g.groupName, type: 'groups' }))
                         ];
@@ -2021,22 +2032,35 @@ const ChatPage = ({ user, setUser }) => {
 
                         const renderRoom = (r) => {
                             const isPinned = pinnedRooms.includes(r.id);
+                            const isCloudRoom = r.id === `dm_${user.username}_${user.username}`;
                             const isActive = activeRoom?.id === r.id || (r.isDM && activeRoom?.name === r.name && activeRoom?.isDM);
                             const unread = unreadCounts[r.id] || 0;
 
                             return (
-                                <div key={r.id} onClick={() => r.isDM ? handleStartDM(r.name) : handleSwitchRoom({id: r.id, name: r.name})} className={`group p-2.5 rounded-lg flex items-center gap-3 cursor-pointer mb-1 relative transition-all ${isActive ? 'bg-[#5865f2] text-white shadow-lg' : (darkMode ? 'hover:bg-white/5 text-gray-400' : 'hover:bg-slate-100 text-slate-600')}`}>
+                                <div key={r.id} onClick={() => isCloudRoom ? handleSwitchRoom({id: r.id, name: r.name, isDM: true, isCloud: true}) : (r.isDM ? handleStartDM(r.name) : handleSwitchRoom({id: r.id, name: r.name}))} className={`group p-2.5 rounded-lg flex items-center gap-3 cursor-pointer mb-1 relative transition-all ${isActive ? 'bg-[#5865f2] text-white shadow-lg' : (darkMode ? 'hover:bg-white/5 text-gray-400' : 'hover:bg-slate-100 text-slate-600')}`}>
                                     {r.isDM ? (
-                                        <div className="relative shrink-0" onClick={(e) => { e.stopPropagation(); handleOpenProfile(r.name); }}>
-                                            <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-white text-xs font-bold uppercase overflow-hidden border border-white/10">{onlineUsers[r.name]?.avatar ? <img src={onlineUsers[r.name].avatar} className="w-full h-full object-cover" alt="" /> : r.name[0]}</div>
-                                            <FaCircle className={`absolute -bottom-0.5 -right-0.5 text-[8px] border-2 ${darkMode ? 'border-[#1e293b]' : 'border-white'} ${onlineUsers[r.name] ? 'text-green-500' : 'text-gray-400'}`} />
-                                        </div>
+                                        isCloudRoom ? (
+                                            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-cyan-400 to-indigo-500 flex items-center justify-center text-white border border-white/10 shrink-0 shadow-md">
+                                                <FaCloud size={14} className="animate-pulse text-cyan-100"/>
+                                            </div>
+                                        ) : (
+                                            <div className="relative shrink-0" onClick={(e) => { e.stopPropagation(); handleOpenProfile(r.name); }}>
+                                                <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-white text-xs font-bold uppercase overflow-hidden border border-white/10">{onlineUsers[r.name]?.avatar ? <img src={onlineUsers[r.name].avatar} className="w-full h-full object-cover" alt="" /> : r.name[0]}</div>
+                                                <FaCircle className={`absolute -bottom-0.5 -right-0.5 text-[8px] border-2 ${darkMode ? 'border-[#1e293b]' : 'border-white'} ${onlineUsers[r.name] ? 'text-green-500' : 'text-gray-400'}`} />
+                                            </div>
+                                        )
                                     ) : (
                                         <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${isActive ? 'bg-white/20' : (darkMode ? 'bg-white/5' : 'bg-slate-200')}`}>
                                             {r.type === 'groups' ? <FaGlobe size={14}/> : <FaLock size={12}/>}
                                         </div>
                                     )}
-                                    <span className={`truncate text-sm font-medium italic ${r.isDM ? '' : 'uppercase tracking-tighter'}`}>{r.isDM ? `@${r.name}` : r.name}</span>
+                                    <span className={`truncate text-sm font-medium italic ${r.isDM ? '' : 'uppercase tracking-tighter'}`}>
+                                        {isCloudRoom ? (
+                                            <span className="font-bold text-cyan-400 not-italic tracking-wide">☁ Cloud của tôi</span>
+                                        ) : (
+                                            r.isDM ? `@${r.name}` : r.name
+                                        )}
+                                    </span>
                                     
                                     <div className="absolute right-2 flex items-center gap-1">
                                         {unread > 0 && <span className="w-4 h-4 bg-red-500 text-white text-[8px] flex items-center justify-center rounded-full font-black animate-bounce">{unread}</span>}
@@ -2098,13 +2122,19 @@ const ChatPage = ({ user, setUser }) => {
                             <div className="flex items-center gap-3">
                                 <button onClick={() => setIsSidebarVisible(!isSidebarVisible)} className="p-1 hover:bg-black/5 rounded text-indigo-500 transition-all active:scale-90"><FaChevronLeft size={16} className={!isSidebarVisible ? 'rotate-180' : ''}/></button> 
                                 {activeRoom.isDM ? (
-                                    <div className="w-7 h-7 rounded-full bg-indigo-600/20 flex items-center justify-center text-indigo-400 text-xs font-black overflow-hidden border border-indigo-500/10 shrink-0 shadow-inner">
-                                        {onlineUsers[activeRoom.name]?.avatar ? (
-                                            <img src={onlineUsers[activeRoom.name].avatar} className="w-full h-full object-cover" alt="" />
-                                        ) : (
-                                            activeRoom.name.substring(0, 2).toUpperCase()
-                                        )}
-                                    </div>
+                                    isCloudActive ? (
+                                        <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-cyan-400 to-indigo-500 flex items-center justify-center text-white text-xs font-black overflow-hidden border border-cyan-400/20 shrink-0 shadow-inner">
+                                            <FaCloud size={14} className="animate-pulse text-cyan-100"/>
+                                        </div>
+                                    ) : (
+                                        <div className="w-7 h-7 rounded-full bg-indigo-600/20 flex items-center justify-center text-indigo-400 text-xs font-black overflow-hidden border border-indigo-500/10 shrink-0 shadow-inner">
+                                            {onlineUsers[activeRoom.name]?.avatar ? (
+                                                <img src={onlineUsers[activeRoom.name].avatar} className="w-full h-full object-cover" alt="" />
+                                            ) : (
+                                                activeRoom.name.substring(0, 2).toUpperCase()
+                                            )}
+                                        </div>
+                                    )
                                 ) : (
                                     <div className="w-7 h-7 rounded-lg bg-orange-600/20 flex items-center justify-center text-orange-400 text-xs font-black overflow-hidden border border-orange-500/10 shrink-0 shadow-inner">
                                         {currentGroup?.avatar ? (
@@ -2114,11 +2144,13 @@ const ChatPage = ({ user, setUser }) => {
                                         )}
                                     </div>
                                 )}
-                                {activeRoom.isDM ? <span className="text-indigo-400 text-sm">@ {activeRoom.name}</span> : <span className="text-sm"># {activeRoom.name}</span>}
+                                {activeRoom.isDM ? (
+                                    isCloudActive ? <span className="text-cyan-400 text-sm tracking-wide font-extrabold normal-case">☁ Cloud của tôi</span> : <span className="text-indigo-400 text-sm">@ {activeRoom.name}</span>
+                                ) : <span className="text-sm"># {activeRoom.name}</span>}
                             </div>
                             <div className="flex items-center gap-4">
-                                {/* NÚT GỌI VIDEO - Chỉ hiện ở DM */}
-                                {activeRoom.isDM && (
+                                {/* NÚT GỌI VIDEO - Chỉ hiện ở DM và không phải Cloud */}
+                                {activeRoom.isDM && !isCloudActive && (
                                     <button 
                                         onClick={() => handleVideoCall()} 
                                         disabled={isCallBusy}
@@ -3208,6 +3240,20 @@ const ChatPage = ({ user, setUser }) => {
                             </div>
 
                             <p className="text-xs text-gray-500 font-bold uppercase mb-2">Chọn nơi chuyển đến</p>
+                            
+                            {/* Lưu trữ cá nhân (Cloud) */}
+                            {("cloud của tôi".includes(forwardSearchQuery.toLowerCase()) || "luu tru".includes(forwardSearchQuery.toLowerCase()) || "cloud".includes(forwardSearchQuery.toLowerCase())) && (
+                                <div className="space-y-2 mb-4">
+                                    <div className="text-[10px] uppercase font-black text-cyan-400">Không gian cá nhân</div>
+                                    <button onClick={() => handleForwardMessage(`dm_${user.username}_${user.username}`)} className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all text-left ${darkMode ? 'border-white/5 hover:bg-white/5 text-gray-300 hover:border-indigo-500/40' : 'border-gray-200 hover:bg-gray-50 text-gray-700 hover:border-indigo-500'}`}>
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-8 h-8 bg-gradient-to-tr from-cyan-400 to-indigo-500 rounded-full flex items-center justify-center text-white font-bold text-xs"><FaCloud/></div>
+                                            <span className="font-semibold text-sm">Cloud của tôi</span>
+                                        </div>
+                                        <span className="text-[10px] font-black uppercase text-cyan-400 tracking-wider">Chọn ➔</span>
+                                    </button>
+                                </div>
+                            )}
                             
                             {/* Danh sách bạn bè */}
                             {user.friends?.filter(f => f.toLowerCase().includes(forwardSearchQuery.toLowerCase())).length > 0 && (
