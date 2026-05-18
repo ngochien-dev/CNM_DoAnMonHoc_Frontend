@@ -1206,8 +1206,13 @@ const ChatPage = ({ user, setUser }) => {
             }
         });
 
-        socket.on('force_logout', ({ username, reason }) => {
+        socket.on('force_logout', ({ username, reason, sessionId }) => {
             if (username === user.username) {
+                const currentSess = JSON.parse(localStorage.getItem('user_session') || '{}');
+                if (reason === 'remote_logout' && sessionId && currentSess?.sessionId !== sessionId) {
+                    return; // Ignore, it was another device's session
+                }
+
                 disconnectSocket();
                 localStorage.removeItem('user_session');
                 setUser(null);
@@ -1217,6 +1222,8 @@ const ChatPage = ({ user, setUser }) => {
                     alert('Mật khẩu của bạn đã được đặt lại bởi Admin. Vui lòng đăng nhập lại!');
                 } else if (reason === 'password_changed') {
                     alert('Mật khẩu của bạn đã được thay đổi. Vui lòng đăng nhập lại!');
+                } else if (reason === 'remote_logout') {
+                    alert('Thiết bị này đã bị đăng xuất khỏi tài khoản của bạn từ xa!');
                 }
             }
         });

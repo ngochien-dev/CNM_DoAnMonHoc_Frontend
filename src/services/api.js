@@ -23,6 +23,10 @@ api.interceptors.request.use((config) => {
     if (token) {
         config.headers.Authorization = `Bearer ${token}`;
     }
+    const session = getStoredSession();
+    if (session && session.sessionId) {
+        config.headers['X-Session-Id'] = session.sessionId;
+    }
     return config;
 });
 

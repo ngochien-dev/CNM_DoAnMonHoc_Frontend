@@ -296,7 +296,7 @@
 
 
 import React, { useState, useEffect, useRef } from 'react';
-import { FaTimes, FaUserEdit, FaCamera, FaShieldAlt, FaCommentDots, FaUserPlus, FaUserMinus, FaLock, FaVideo } from 'react-icons/fa';
+import { FaTimes, FaUserEdit, FaCamera, FaShieldAlt, FaCommentDots, FaUserPlus, FaUserMinus, FaLock, FaVideo, FaMobileAlt, FaDesktop, FaArrowLeft, FaTrash } from 'react-icons/fa';
 import ProfileView from './ProfileView';
 import ProfileEdit from './ProfileEdit';
 import ChangePassword from './ChangePassword';
@@ -307,6 +307,9 @@ const UserProfileModal = ({ isOpen, onClose, targetUsername, currentUser, onStar
     const [viewingUser, setViewingUser] = useState(null);
     const [isEditing, setIsEditing] = useState(false);
     const [isChangingPass, setIsChangingPass] = useState(false);
+    const [isViewingSessions, setIsViewingSessions] = useState(false);
+    const [sessions, setSessions] = useState([]);
+    const [loadingSessions, setLoadingSessions] = useState(false);
     const [editForm, setEditForm] = useState({});
     const [passForm, setPassForm] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' });
     const [myInfo, setMyInfo] = useState(null);
@@ -354,6 +357,44 @@ const UserProfileModal = ({ isOpen, onClose, targetUsername, currentUser, onStar
         }
     };
 
+    const fetchActiveSessions = async () => {
+        setLoadingSessions(true);
+        try {
+            const res = await api.get('/users/active-sessions');
+            setSessions(res.data || []);
+        } catch (err) {
+            console.error("Lỗi lấy danh sách phiên hoạt động:", err);
+        } finally {
+            setLoadingSessions(false);
+        }
+    };
+
+    const handleTerminateSession = async (sessId) => {
+        if (!window.confirm("Bạn có chắc chắn muốn đăng xuất thiết bị này từ xa?")) return;
+        try {
+            await api.post('/users/terminate-session', { sessionId: sessId });
+            setSessions(prev => prev.filter(s => s.sessionId !== sessId));
+        } catch (err) {
+            alert(err.response?.data?.message || "Lỗi khi đăng xuất thiết bị!");
+        }
+    };
+
+    const handleTerminateOtherSessions = async () => {
+        if (!window.confirm("Đăng xuất khỏi tất cả các thiết bị khác?")) return;
+        try {
+            const currentSess = JSON.parse(localStorage.getItem('user_session') || '{}');
+            const currentSessId = currentSess?.sessionId;
+            const otherSessions = sessions.filter(s => s.sessionId !== currentSessId);
+            for (const s of otherSessions) {
+                await api.post('/users/terminate-session', { sessionId: s.sessionId });
+            }
+            alert("Đã đăng xuất thành công tất cả các thiết bị khác!");
+            fetchActiveSessions();
+        } catch (err) {
+            alert("Lỗi khi đăng xuất các thiết bị!");
+        }
+    };
+
     const handleToggle2FA = async (enabled) => {
         try {
             await api.post('/users/toggle-2fa', { username: currentUser.username, enabled });
@@ -366,6 +407,8 @@ const UserProfileModal = ({ isOpen, onClose, targetUsername, currentUser, onStar
 
     useEffect(() => {
         if (isOpen && targetUsername) {
+            setIsViewingSessions(false);
+            setSessions([]);
             const fetchData = async () => {
                 try {
                     const [targetRes, meRes] = await Promise.all([
@@ -377,7 +420,8 @@ const UserProfileModal = ({ isOpen, onClose, targetUsername, currentUser, onStar
             };
             fetchData();
         }
-    }, [currentUser.username, isOpen, onClose, targetUsername]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen, targetUsername]);
 
     const handleAvatarChange = (e) => {
         const file = e.target.files[0];
@@ -522,6 +566,97 @@ const UserProfileModal = ({ isOpen, onClose, targetUsername, currentUser, onStar
                                 <ProfileEdit editForm={editForm} setEditForm={setEditForm} setIsEditing={setIsEditing} handleUpdate={handleUpdate} />
                             ) : isChangingPass ? (
                                 <ChangePassword setPassForm={setPassForm} passForm={passForm} setIsChangingPass={setIsChangingPass} handleChangePass={handleChangePass} />
+                            ) : isViewingSessions ? (
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <button 
+                                            onClick={() => setIsViewingSessions(false)} 
+                                            className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1.5 uppercase font-black tracking-wider transition-all"
+                                        >
+                                            <FaArrowLeft size={10}/> Quay lại
+                                        </button>
+                                        {sessions.filter(s => {
+                                            const currentSess = JSON.parse(localStorage.getItem('user_session') || '{}');
+                                            return s.sessionId !== currentSess?.sessionId;
+                                        }).length > 0 && (
+                                            <button 
+                                                onClick={handleTerminateOtherSessions}
+                                                className="text-[9px] bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white px-3 py-1.5 rounded-xl font-black uppercase tracking-wider transition-all"
+                                            >
+                                                Đăng xuất thiết bị khác
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    <div className="text-[10px] font-black uppercase tracking-widest text-indigo-400 border-l-2 border-indigo-500 pl-2.5 mb-2 text-left">
+                                        Thiết bị đang hoạt động ({sessions.length})
+                                    </div>
+
+                                    {loadingSessions ? (
+                                        <div className="flex justify-center py-8">
+                                            <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-2.5 max-h-[250px] overflow-y-auto pr-1 scrollbar-hide">
+                                            {sessions.map(sess => {
+                                                const currentSess = JSON.parse(localStorage.getItem('user_session') || '{}');
+                                                const isCurrent = sess.sessionId === currentSess?.sessionId;
+                                                
+                                                return (
+                                                    <div 
+                                                        key={sess.sessionId} 
+                                                        className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${
+                                                            isCurrent 
+                                                                ? 'bg-indigo-500/10 border-indigo-500/30' 
+                                                                : 'bg-white/5 border-white/5 hover:border-white/10'
+                                                        }`}
+                                                    >
+                                                        <div className="flex items-start gap-3 min-w-0">
+                                                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                                                                isCurrent ? 'bg-indigo-600 text-white' : 'bg-white/10 text-gray-400'
+                                                            }`}>
+                                                                {sess.device.includes("Windows") || sess.device.includes("Mac") || sess.device.includes("Linux") ? (
+                                                                    <FaDesktop size={12} />
+                                                                ) : (
+                                                                    <FaMobileAlt size={12} />
+                                                                )}
+                                                            </div>
+                                                            <div className="min-w-0 text-left">
+                                                                <p className="text-[11px] font-black truncate uppercase tracking-tighter flex items-center gap-1.5">
+                                                                    {sess.device}
+                                                                    {isCurrent && (
+                                                                        <span className="text-[8px] bg-emerald-500 text-white px-1.5 py-0.5 rounded-full font-black uppercase">
+                                                                            Hiện tại
+                                                                        </span>
+                                                                    )}
+                                                                </p>
+                                                                <p className="text-[9px] text-gray-500 truncate mt-0.5">
+                                                                    IP: {sess.ip} • {new Date(sess.loginAt).toLocaleString()}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        {!isCurrent && (
+                                                            <button 
+                                                                onClick={() => handleTerminateSession(sess.sessionId)}
+                                                                className="p-2 rounded-xl text-gray-500 hover:text-red-500 hover:bg-red-500/10 transition-all active:scale-90"
+                                                                title="Đăng xuất thiết bị"
+                                                            >
+                                                                <FaTrash size={12}/>
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+
+                                            {sessions.length === 0 && (
+                                                <p className="text-center text-gray-500 py-8 text-xs italic">
+                                                    Không tìm thấy phiên hoạt động nào
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
                             ) : (
                                 <>
                                     <ProfileView viewingUser={viewingUser} />
@@ -544,6 +679,12 @@ const UserProfileModal = ({ isOpen, onClose, targetUsername, currentUser, onStar
                                             </div>
 
                                             <button onClick={() => setIsEditing(true)} className="w-full bg-white text-black py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-purple-400 hover:text-white transition-all transform active:scale-95 shadow-xl"><FaUserEdit className="inline mr-2" size={14}/> Cập nhật hồ sơ</button>
+                                            <button 
+                                                onClick={() => { setIsViewingSessions(true); fetchActiveSessions(); }}
+                                                className="w-full py-3.5 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:text-white hover:bg-indigo-600 transition-all flex items-center justify-center gap-2"
+                                            >
+                                                <FaShieldAlt /> Quản lý phiên hoạt động
+                                            </button>
                                             <button onClick={() => setIsChangingPass(true)} className="w-full py-3.5 bg-white/5 border border-white/10 text-gray-400 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:text-white hover:bg-white/10 transition-all"><FaLock className="inline mr-2"/> Đổi mật khẩu</button>
                                         </div>
                                     )}
