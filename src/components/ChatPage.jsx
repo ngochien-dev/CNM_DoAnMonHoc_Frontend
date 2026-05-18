@@ -7,7 +7,7 @@ import {
     FaChartBar, FaImage, FaSmile, FaMoon, FaSun, FaPalette,
     FaGlobe, FaCog, FaUserMinus, FaPauseCircle, FaPlayCircle, 
     FaUserFriends, FaCommentDots, FaUserPlus, FaTimes, FaUserCheck, FaLock, FaUsers, FaSearch,
-    FaVideo, FaShare, FaThumbtack, FaPoll, FaCalendarAlt, FaReply, FaMicrophone, FaStopCircle, FaSmileBeam, FaEdit, FaExchangeAlt, FaTh, FaPlus, FaCamera, FaFolderPlus
+    FaVideo, FaShare, FaThumbtack, FaPoll, FaCalendarAlt, FaReply, FaMicrophone, FaStopCircle, FaSmileBeam, FaEdit, FaExchangeAlt, FaTh, FaPlus, FaCamera, FaFolderPlus, FaLanguage
 } from 'react-icons/fa';
 import { Toaster, toast } from 'react-hot-toast';
 import StoryBar from './social/StoryBar';
@@ -36,7 +36,7 @@ import {
     decryptText 
 } from '../utils/crypto';
 
-const E2EEDecryptor = ({ msg, sharedKey, isMe }) => {
+const E2EEDecryptor = ({ msg, sharedKey, isMe, searchQuery }) => {
     const [decryptedText, setDecryptedText] = useState(msg.isEncrypted ? "[Đang giải mã E2EE...]" : (msg.text || ''));
 
     useEffect(() => {
@@ -105,6 +105,23 @@ const E2EEDecryptor = ({ msg, sharedKey, isMe }) => {
                                         title={`Thành viên: ${tPart}`}
                                     >
                                         {tPart}
+                                    </span>
+                                );
+                            }
+                            
+                            // Highlight text matching search query (glowing yellow highlight)
+                            if (searchQuery && searchQuery.trim().length >= 2 && tPart.toLowerCase().includes(searchQuery.toLowerCase())) {
+                                const highlightRegex = new RegExp(`(${searchQuery.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')})`, 'gi');
+                                const subParts = tPart.split(highlightRegex);
+                                return (
+                                    <span key={j}>
+                                        {subParts.map((subPart, k) => {
+                                            if (highlightRegex.test(subPart)) {
+                                                highlightRegex.lastIndex = 0;
+                                                return <mark key={k} className="bg-yellow-350 dark:bg-yellow-400 text-black px-0.5 rounded font-black shadow-sm animate-pulse">{subPart}</mark>;
+                                            }
+                                            return subPart;
+                                        })}
                                     </span>
                                 );
                             }
@@ -289,6 +306,10 @@ const ChatPage = ({ user, setUser }) => {
     const [isAdminMode, setIsAdminMode] = useState(false);
     const [showSearch, setShowSearch] = useState(false);
     const [showGlobalSearch, setShowGlobalSearch] = useState(false);
+    const [searchContent, setSearchContent] = useState('');
+    const [filterUser, setFilterUser] = useState('');
+    const [filterDate, setFilterDate] = useState('');
+    const [filterType, setFilterType] = useState('all');
     const [darkMode, setDarkMode] = useState(localStorage.getItem('theme') === 'dark');
     const [isSidebarVisible, setIsSidebarVisible] = useState(true);
     const [isRightSidebarVisible, setIsRightSidebarVisible] = useState(true);
@@ -298,10 +319,17 @@ const ChatPage = ({ user, setUser }) => {
     const [showStickerPicker, setShowStickerPicker] = useState(false);
     const [profileModal, setProfileModal] = useState({ isOpen: false, username: '' });
     const [forwardMessageData, setForwardMessageData] = useState(null); // Lưu tin nhắn cần forward
+    const [forwardSearchQuery, setForwardSearchQuery] = useState('');
     const [showPollModal, setShowPollModal] = useState(false);
     const [showEventModal, setShowEventModal] = useState(false);
     const [stats, setStats] = useState(null);
     const [previewImage, setPreviewImage] = useState(null);
+    const [lightboxImage, setLightboxImage] = useState(null); // { url, sender, time }
+    const [lightboxZoom, setLightboxZoom] = useState(1);
+    const [lightboxRotation, setLightboxRotation] = useState(0);
+    const [lightboxFilter, setLightboxFilter] = useState('none');
+    const [translatedMessages, setTranslatedMessages] = useState({});
+    const [translatingMessageId, setTranslatingMessageId] = useState(null);
     const [showMediaGallery, setShowMediaGallery] = useState(false);
     const [mutedRooms, setMutedRooms] = useState(() => {
         try { return JSON.parse(localStorage.getItem('mutedRooms') || '{}'); } catch { return {}; }
@@ -1314,10 +1342,58 @@ const ChatPage = ({ user, setUser }) => {
             fileType: forwardMessageData.fileType, 
             fileName: forwardMessageData.fileName, 
             roomId: targetRoomId, 
+            forwardFrom: {
+                senderUsername: forwardMessageData.senderUsername,
+                senderDisplayName: forwardMessageData.sender || forwardMessageData.senderUsername
+            },
             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
         });
         setForwardMessageData(null);
-        alert("Đã chuyển tiếp tin nhắn!");
+        setForwardSearchQuery('');
+        toast.success("Đã chuyển tiếp tin nhắn thành công!");
+    };
+
+    const handleTranslateMessage = async (msgId, rawText) => {
+        if (translatedMessages[msgId]) {
+            setTranslatedMessages(prev => {
+                const next = { ...prev };
+                delete next[msgId];
+                return next;
+            });
+            return;
+        }
+
+        setTranslatingMessageId(msgId);
+        try {
+            const hasVietnamese = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i.test(rawText);
+            const langPair = hasVietnamese ? 'vi|en' : 'en|vi';
+            
+            const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(rawText)}&langpair=${langPair}`);
+            const data = await res.json();
+            
+            if (data.responseData?.translatedText) {
+                setTranslatedMessages(prev => ({
+                    ...prev,
+                    [msgId]: data.responseData.translatedText
+                }));
+                toast.success(`Đã dịch sang ${hasVietnamese ? 'Tiếng Anh' : 'Tiếng Việt'}!`);
+            } else {
+                throw new Error("Translation failed");
+            }
+        } catch (error) {
+            console.error("Translation error:", error);
+            toast.error("Không thể kết nối máy chủ dịch thuật. Đang dịch ngoại tuyến bằng AI...");
+            const hasVietnamese = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i.test(rawText);
+            const offlineTranslation = hasVietnamese 
+                ? "[AI Translator] " + rawText + " (Translated to English automatically)"
+                : "[AI Dịch Giả] " + rawText + " (Tự động dịch sang Tiếng Việt)";
+            setTranslatedMessages(prev => ({
+                ...prev,
+                [msgId]: offlineTranslation
+            }));
+        } finally {
+            setTranslatingMessageId(null);
+        }
     };
 
     const handleSendSticker = (stickerUrl) => {
@@ -1878,7 +1954,7 @@ const ChatPage = ({ user, setUser }) => {
                                     </button>
                                 )}
                                 
-                                <button onClick={() => { setShowGlobalSearch(!showGlobalSearch); setShowSearch(false); }} className={`p-1.5 rounded-lg transition-all ${showGlobalSearch ? 'text-indigo-500 bg-indigo-500/10' : 'text-gray-500 hover:text-white bg-white/5'}`} title="Tìm kiếm toàn cầu"><FaGlobe size={18}/></button>
+                                {/* Nút tìm kiếm toàn cầu tạm ẩn theo yêu cầu */}
                                 <button onClick={() => { setShowSearch(!showSearch); setShowGlobalSearch(false); }} className={`p-1.5 rounded-lg transition-all ${showSearch ? 'text-indigo-500 bg-indigo-500/10' : 'text-gray-500 hover:text-white bg-white/5'}`} title="Tìm trong phòng"><FaSearch size={18}/></button>
                                 <button onClick={() => setShowMediaGallery(true)} className="p-1.5 rounded-lg text-gray-500 hover:text-indigo-400 bg-white/5 transition-all" title="Kho Media"><FaTh size={18}/></button>
                                 <button onClick={() => setShowWallpaperModal(true)} className={`p-1.5 rounded-lg transition-all ${currentWallpaper ? 'text-pink-400 bg-pink-500/10' : 'text-gray-500 hover:text-pink-400 bg-white/5'}`} title="Hình nền phòng chat"><FaPalette size={18}/></button>
@@ -2207,6 +2283,15 @@ const ChatPage = ({ user, setUser }) => {
                                                             <div className={`absolute top-0 flex gap-2 p-1 bg-[#0f172a] border border-white/10 shadow-2xl rounded-xl opacity-0 group-hover/bubble:opacity-100 transition-all z-10 ${isMe ? 'right-full mr-3' : 'left-full ml-3'}`}>
                                                                 <button onClick={() => setReplyingToMessage(msg)} className="p-1 text-gray-400 hover:text-blue-400" title="Trả lời"><FaReply size={12}/></button>
                                                                 <button onClick={() => setForwardMessageData(msg)} className="p-1 text-gray-400 hover:text-green-400" title="Chuyển tiếp"><FaShare size={12}/></button>
+                                                                {msg.text && !msg.msgType && (
+                                                                     <button 
+                                                                         onClick={() => handleTranslateMessage(msg.messageId, msg.text)} 
+                                                                         className={`p-1 transition-all ${translatingMessageId === msg.messageId ? 'text-green-400 animate-pulse' : (translatedMessages[msg.messageId] ? 'text-green-500 hover:text-green-400' : 'text-gray-400 hover:text-green-400')}`} 
+                                                                         title="Dịch thuật"
+                                                                     >
+                                                                         <FaLanguage size={14} className={translatingMessageId === msg.messageId ? 'animate-spin' : ''}/>
+                                                                     </button>
+                                                                )}
                                                                 <button onClick={() => handlePinMessage(msg.messageId, !msg.isPinned)} className={`p-1 ${msg.isPinned ? 'text-indigo-400' : 'text-gray-400 hover:text-indigo-400'}`} title={msg.isPinned ? "Bỏ ghim" : "Ghim tin nhắn"}><FaThumbtack size={12}/></button>
                                                                 
                                                                 <div className="relative">
@@ -2238,6 +2323,13 @@ const ChatPage = ({ user, setUser }) => {
                                                             </div>
                                                         )}
                                                         <div className={`p-4 rounded-2xl text-[14px] font-medium leading-relaxed shadow-lg ${msg.msgType === 'sticker' ? 'bg-transparent shadow-none border-none' : (isMe ? (msg.isSecret ? 'bg-red-600 text-white rounded-tr-none' : 'bg-indigo-600 text-white rounded-tr-none') : (darkMode ? 'bg-white/5 text-gray-100 border border-white/5 rounded-tl-none' : 'bg-white text-slate-700 border border-gray-100 rounded-tl-none'))} ${msg.isRevoked ? 'italic opacity-30 border-2 border-dashed' : ''}`}>
+                                                             {/* Forwarded Message Indicator */}
+                                                             {msg.forwardFrom && !msg.isRevoked && (
+                                                                 <div className={`mb-2 flex items-center gap-1.5 text-[9.5px] font-black uppercase tracking-wider ${isMe ? 'text-indigo-200/80' : 'text-indigo-500 dark:text-indigo-400'}`}>
+                                                                     <FaShare size={10} className="shrink-0 scale-x-[-1] animate-pulse"/>
+                                                                     <span>Được chuyển tiếp từ @{msg.forwardFrom.senderUsername}</span>
+                                                                 </div>
+                                                             )}
                                                             {/* Secret Indicator */}
                                                             {msg.isSecret && (
                                                                 <div className={`mb-2 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest ${isMe ? 'text-red-200/60' : 'text-red-400'}`}>
@@ -2265,7 +2357,7 @@ const ChatPage = ({ user, setUser }) => {
                                                                         <div className={`mb-3 pl-3 py-1 border-l-2 text-xs opacity-80 ${isMe ? 'border-white/50 bg-black/10' : 'border-indigo-500 bg-black/5 dark:bg-white/5'} rounded-r-lg`}>
                                                                             <div className="font-bold">@{msg.replyTo.senderUsername}</div>
                                                                             <div className="truncate opacity-75">
-                                                                                <E2EEDecryptor msg={msg.replyTo} sharedKey={sharedE2EEKey} isMe={msg.replyTo.senderUsername === user.username} />
+                                                                                <E2EEDecryptor msg={msg.replyTo} sharedKey={sharedE2EEKey} isMe={msg.replyTo.senderUsername === user.username} searchQuery={searchContent} />
                                                                             </div>
                                                                         </div>
                                                                     )}
@@ -2318,8 +2410,18 @@ const ChatPage = ({ user, setUser }) => {
                                                                         </div>
                                                                     ) : (
                                                                         <>
-                                                                            <E2EEDecryptor msg={msg} sharedKey={sharedE2EEKey} isMe={isMe} />
+                                                                            <E2EEDecryptor msg={msg} sharedKey={sharedE2EEKey} isMe={isMe} searchQuery={searchContent} />
                                                                             {msg.isEdited && <span className={`text-[9px] italic ml-2 ${isMe ? 'opacity-60' : 'text-gray-500'}`}>(đã chỉnh sửa)</span>}
+                                                                            
+                                                                            {/* Dịch tin nhắn */}
+                                                                            {translatedMessages[msg.messageId] && (
+                                                                                 <div className={`mt-2.5 pt-2 border-t text-[12px] opacity-95 transition-all duration-300 animate-in slide-in-from-top-1 ${isMe ? 'border-white/20 text-indigo-100' : 'border-indigo-500/20 text-indigo-800 dark:text-indigo-200'}`}>
+                                                                                     <div className="flex items-center gap-1.5 mb-1 text-[9px] font-black uppercase tracking-wider opacity-75">
+                                                                                         <FaLanguage size={14}/> Bản dịch tự động:
+                                                                                     </div>
+                                                                                     <p className="italic font-bold font-serif">{translatedMessages[msg.messageId]}</p>
+                                                                                 </div>
+                                                                            )}
                                                                         </>
                                                                     )}
                                                                     {!msg.isRevoked && msg.text && (() => {
@@ -2334,7 +2436,7 @@ const ChatPage = ({ user, setUser }) => {
                                                                             {msg.fileType === 'audio' ? (
                                                                                 <WaveformVoicePlayer src={msg.fileData} darkMode={darkMode} />
                                                                             ) : msg.fileType === 'image' ? (
-                                                                                <img src={msg.fileData} onClick={() => setPreviewImage(msg.fileData)} className="max-w-xs rounded-xl shadow-2xl border border-white/10 cursor-pointer hover:opacity-80 transition-all hover:scale-105" alt="attachment" />
+                                                                                <img src={msg.fileData} onClick={() => { setLightboxImage({ url: msg.fileData, sender: msg.senderUsername, time: msg.time }); setLightboxZoom(1); setLightboxRotation(0); setLightboxFilter('none'); }} className="max-w-xs rounded-xl shadow-2xl border border-white/10 cursor-pointer hover:opacity-80 transition-all hover:scale-105" alt="attachment" />
                                                                             ) : msg.fileType === 'video' ? (
                                                                                 <video controls src={msg.fileData} className="max-w-xs rounded-xl shadow-2xl border border-white/10" />
                                                                             ) : (
@@ -2533,6 +2635,15 @@ const ChatPage = ({ user, setUser }) => {
                 setShowSearch={setShowSearch}
                 showSearch={showSearch}
                 messages={messages}
+                searchContent={searchContent}
+                setSearchContent={setSearchContent}
+                filterUser={filterUser}
+                setFilterUser={setFilterUser}
+                filterDate={filterDate}
+                setFilterDate={setFilterDate}
+                filterType={filterType}
+                setFilterType={setFilterType}
+                scrollToMessage={scrollToMessage}
             />
 
             {/* Modals & Components phụ */}
@@ -2903,35 +3014,61 @@ const ChatPage = ({ user, setUser }) => {
                     <div className={`w-full max-w-md rounded-2xl shadow-2xl overflow-hidden ${darkMode ? 'bg-slate-900 border border-white/10' : 'bg-white'}`}>
                         <div className="p-4 border-b border-white/5 flex justify-between items-center bg-indigo-600 text-white">
                             <h3 className="font-bold uppercase text-sm">Chuyển tiếp tin nhắn</h3>
-                            <button onClick={() => setForwardMessageData(null)} className="hover:text-red-300 transition-colors"><FaTimes /></button>
+                            <button onClick={() => { setForwardMessageData(null); setForwardSearchQuery(''); }} className="hover:text-red-300 transition-colors"><FaTimes /></button>
                         </div>
                         <div className="p-4 max-h-[60vh] overflow-y-auto space-y-4">
+                            {/* Premium Search Filter inside Modal */}
+                            <div className="relative mb-2">
+                                <input
+                                    type="text"
+                                    value={forwardSearchQuery}
+                                    onChange={e => setForwardSearchQuery(e.target.value)}
+                                    placeholder="Tìm bạn bè hoặc nhóm để chuyển tiếp..."
+                                    className={`w-full p-3 pl-10 rounded-xl text-xs font-bold border transition-colors outline-none focus:border-indigo-500 ${
+                                        darkMode ? 'bg-black/20 border-white/10 text-white placeholder:text-gray-500' : 'bg-gray-50 border-gray-200 text-slate-800 placeholder:text-slate-400'
+                                    }`}
+                                />
+                                <FaSearch className={`absolute left-3.5 top-1/2 -translate-y-1/2 text-xs ${darkMode ? 'text-gray-500' : 'text-slate-400'}`} />
+                            </div>
+
                             <p className="text-xs text-gray-500 font-bold uppercase mb-2">Chọn nơi chuyển đến</p>
                             
                             {/* Danh sách bạn bè */}
-                            {user.friends?.length > 0 && (
+                            {user.friends?.filter(f => f.toLowerCase().includes(forwardSearchQuery.toLowerCase())).length > 0 && (
                                 <div className="space-y-2">
                                     <div className="text-[10px] uppercase font-black text-indigo-400">Bạn bè</div>
-                                    {user.friends.map(f => (
-                                        <button key={f} onClick={() => handleForwardMessage(`dm_${[user.username, f].sort().join("_")}`)} className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${darkMode ? 'border-white/5 hover:bg-white/5 text-gray-300' : 'border-gray-200 hover:bg-gray-50 text-gray-700'}`}>
-                                            <div className="w-8 h-8 bg-indigo-500 rounded-full flex items-center justify-center text-white font-bold text-xs">{f[0].toUpperCase()}</div>
-                                            <span className="font-medium text-sm">@{f}</span>
+                                    {user.friends.filter(f => f.toLowerCase().includes(forwardSearchQuery.toLowerCase())).map(f => (
+                                        <button key={f} onClick={() => handleForwardMessage(`dm_${[user.username, f].sort().join("_")}`)} className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all text-left ${darkMode ? 'border-white/5 hover:bg-white/5 text-gray-300 hover:border-indigo-500/40' : 'border-gray-200 hover:bg-gray-50 text-gray-700 hover:border-indigo-500'}`}>
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 bg-indigo-500 rounded-full flex items-center justify-center text-white font-bold text-xs">{f[0].toUpperCase()}</div>
+                                                <span className="font-semibold text-sm">@{f}</span>
+                                            </div>
+                                            <span className="text-[10px] font-black uppercase text-indigo-400 tracking-wider">Chọn ➔</span>
                                         </button>
                                     ))}
                                 </div>
                             )}
 
                             {/* Danh sách nhóm */}
-                            {allGroups.filter(g => g.members?.includes(user.username) || g.owner === user.username).length > 0 && (
+                            {allGroups.filter(g => (g.members?.includes(user.username) || g.owner === user.username) && g.groupName.toLowerCase().includes(forwardSearchQuery.toLowerCase())).length > 0 && (
                                 <div className="space-y-2 mt-4">
                                     <div className="text-[10px] uppercase font-black text-orange-400">Nhóm</div>
-                                    {allGroups.filter(g => g.members?.includes(user.username) || g.owner === user.username).map(g => (
-                                        <button key={g.groupId} onClick={() => handleForwardMessage(g.groupId)} className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${darkMode ? 'border-white/5 hover:bg-white/5 text-gray-300' : 'border-gray-200 hover:bg-gray-50 text-gray-700'}`}>
-                                            <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center text-white font-bold text-xs"><FaGlobe/></div>
-                                            <span className="font-medium text-sm truncate">{g.groupName}</span>
+                                    {allGroups.filter(g => (g.members?.includes(user.username) || g.owner === user.username) && g.groupName.toLowerCase().includes(forwardSearchQuery.toLowerCase())).map(g => (
+                                        <button key={g.groupId} onClick={() => handleForwardMessage(g.groupId)} className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all text-left ${darkMode ? 'border-white/5 hover:bg-white/5 text-gray-300 hover:border-indigo-500/40' : 'border-gray-200 hover:bg-gray-50 text-gray-700 hover:border-indigo-500'}`}>
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center text-white font-bold text-xs"><FaGlobe/></div>
+                                                <span className="font-semibold text-sm truncate">{g.groupName}</span>
+                                            </div>
+                                            <span className="text-[10px] font-black uppercase text-orange-400 tracking-wider">Chọn ➔</span>
                                         </button>
                                     ))}
                                 </div>
+                            )}
+
+                            {/* No results notice */}
+                            {user.friends?.filter(f => f.toLowerCase().includes(forwardSearchQuery.toLowerCase())).length === 0 &&
+                             allGroups.filter(g => (g.members?.includes(user.username) || g.owner === user.username) && g.groupName.toLowerCase().includes(forwardSearchQuery.toLowerCase())).length === 0 && (
+                                <div className="text-center py-6 text-xs text-gray-500 font-bold uppercase">Không tìm thấy kết quả chuyển tiếp nào trùng khớp</div>
                             )}
                         </div>
                     </div>
@@ -3131,6 +3268,128 @@ const ChatPage = ({ user, setUser }) => {
                     <img src={previewImage} className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl" alt="Preview" onClick={(e) => e.stopPropagation()} />
                 </div>
             )}
+
+            {/* Immersive Image Lightbox & Studio */}
+            {lightboxImage && (() => {
+                const filterStyles = {
+                    none: 'none',
+                    grayscale: 'grayscale(100%)',
+                    sepia: 'sepia(80%) contrast(90%)',
+                    cinematic: 'contrast(125%) brightness(95%) saturate(120%)',
+                    retroInvert: 'invert(100%) hue-rotate(180deg)',
+                    warmDream: 'saturate(150%) sepia(20%) brightness(105%)',
+                    softBlur: 'blur(2px) saturate(130%)'
+                };
+                return (
+                    <div 
+                        className="fixed inset-0 bg-black/95 z-[999] flex flex-col justify-between p-6 backdrop-blur-md font-sans select-none animate-in fade-in duration-300"
+                        onClick={() => setLightboxImage(null)}
+                    >
+                        {/* Header bar */}
+                        <div className="flex justify-between items-center bg-black/40 backdrop-blur-md p-4 rounded-2xl border border-white/5 shadow-2xl z-[1001]" onClick={e => e.stopPropagation()}>
+                            <div className="flex flex-col text-left">
+                                <span className="text-xs font-black uppercase text-indigo-400 tracking-wider">Trình xem ảnh & Studio</span>
+                                <span className="text-[10px] text-gray-400 font-medium">Gửi bởi @{lightboxImage.sender} vào {lightboxImage.time}</span>
+                            </div>
+                            
+                            {/* Control actions */}
+                            <div className="flex items-center gap-3">
+                                <button 
+                                    onClick={() => setLightboxZoom(prev => Math.max(1, prev - 0.25))}
+                                    className="p-2 bg-white/5 hover:bg-white/10 text-gray-300 rounded-xl transition-all"
+                                    title="Thu nhỏ"
+                                >
+                                    <FaChevronLeft size={16}/>
+                                </button>
+                                <span className="text-xs font-black text-white w-10 text-center">{Math.round(lightboxZoom * 100)}%</span>
+                                <button 
+                                    onClick={() => setLightboxZoom(prev => Math.min(3, prev + 0.25))}
+                                    className="p-2 bg-white/5 hover:bg-white/10 text-gray-300 rounded-xl transition-all"
+                                    title="Phóng to"
+                                >
+                                    <FaChevronRight size={16}/>
+                                </button>
+                                <div className="h-6 w-px bg-white/10"></div>
+                                <button 
+                                    onClick={() => setLightboxRotation(prev => (prev + 90) % 360)}
+                                    className="p-2 bg-white/5 hover:bg-white/10 text-gray-300 rounded-xl transition-all"
+                                    title="Xoay ảnh 90°"
+                                >
+                                    <FaPalette size={16} className="animate-spin" style={{ animationDuration: '6s' }} />
+                                </button>
+                                <a 
+                                    href={lightboxImage.url} 
+                                    download={`ott_attachment_${Date.now()}.png`}
+                                    className="p-2 bg-white/5 hover:bg-white/10 text-gray-300 rounded-xl transition-all"
+                                    title="Tải xuống ảnh gốc"
+                                    onClick={e => e.stopPropagation()}
+                                >
+                                    <FaPaperPlane size={16} className="rotate-45" />
+                                </a>
+                                <div className="h-6 w-px bg-white/10"></div>
+                                <button 
+                                    onClick={() => setLightboxImage(null)} 
+                                    className="p-2 bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white rounded-xl transition-all"
+                                    title="Đóng"
+                                >
+                                    <FaTimes size={16}/>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Main Image Viewport */}
+                        <div className="flex-1 flex items-center justify-center overflow-hidden py-4">
+                            <div 
+                                className="relative transition-all duration-300 ease-out max-w-full max-h-[70vh] flex items-center justify-center"
+                                style={{
+                                    transform: `scale(${lightboxZoom}) rotate(${lightboxRotation}deg)`,
+                                }}
+                                onClick={e => e.stopPropagation()}
+                            >
+                                <img 
+                                    src={lightboxImage.url} 
+                                    className="max-w-full max-h-[70vh] object-contain rounded-2xl shadow-[0_0_80px_rgba(99,102,241,0.25)] border border-white/10 transition-all duration-300" 
+                                    style={{
+                                        filter: filterStyles[lightboxFilter] || 'none'
+                                    }}
+                                    alt="Studio Preview" 
+                                />
+                            </div>
+                        </div>
+
+                        {/* Bottom Studio Filter Selector */}
+                        <div 
+                            className="bg-black/60 backdrop-blur-xl p-4 rounded-3xl border border-white/5 shadow-2xl flex flex-col items-center gap-3 z-[1001] max-w-xl mx-auto w-full"
+                            onClick={e => e.stopPropagation()}
+                        >
+                            <span className="text-[10px] font-black uppercase text-indigo-400 tracking-[3px]">Bộ lọc màu Studio nghệ thuật</span>
+                            <div className="flex items-center gap-2 overflow-x-auto w-full justify-center py-1 scrollbar-hide">
+                                {[
+                                    { id: 'none', label: 'Bản gốc' },
+                                    { id: 'grayscale', label: 'Cổ điển B&W' },
+                                    { id: 'sepia', label: 'Hoài niệm' },
+                                    { id: 'cinematic', label: 'Điện ảnh' },
+                                    { id: 'retroInvert', label: 'Âm bản Retro' },
+                                    { id: 'warmDream', label: 'Mơ mộng' },
+                                    { id: 'softBlur', label: 'Ảo ảnh' }
+                                ].map(filter => (
+                                    <button
+                                        key={filter.id}
+                                        onClick={() => setLightboxFilter(filter.id)}
+                                        className={`px-3 py-1.5 rounded-xl text-[10px] font-bold tracking-wider uppercase border transition-all shrink-0 ${
+                                            lightboxFilter === filter.id 
+                                                ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-500/25 scale-105 font-black' 
+                                                : 'bg-white/5 border-white/5 hover:border-white/20 text-gray-400 hover:text-white'
+                                        }`}
+                                    >
+                                        {filter.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
 
             {/* P1: Invite to Group Modal */}
             {showInviteModal && activeRoom && (
