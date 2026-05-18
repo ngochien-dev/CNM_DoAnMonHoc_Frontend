@@ -1137,7 +1137,7 @@ const ChatPage = ({ user, setUser }) => {
                 <div onClick={() => setShowGroupCreator(true)} className="w-12 h-12 bg-[#23a559] text-white rounded-2xl flex items-center justify-center cursor-pointer hover:rounded-xl transition-all shadow-md group relative"><FaPlusCircle size={22}/></div>
             </div>
 
-            <div className={`flex flex-col border-r transition-all duration-300 ${isSidebarVisible ? 'w-52 md:w-64' : 'w-0 overflow-hidden'} ${darkMode ? 'bg-[#1e293b]/50 backdrop-blur-xl border-white/5' : 'bg-slate-50 border-gray-200'}`}>
+            <div className={`flex flex-col border-r transition-all duration-300 ${isSidebarVisible ? 'w-60 md:w-72' : 'w-0 overflow-hidden'} ${darkMode ? 'bg-[#1e293b]/50 backdrop-blur-xl border-white/5' : 'bg-slate-50 border-gray-200'}`}>
                 <div className={`h-12 px-4 flex items-center border-b font-black uppercase text-[11px] tracking-widest opacity-60 italic ${darkMode ? 'border-white/5 text-indigo-400' : 'border-gray-200 text-indigo-600'}`}>OTT Community</div>
                 
                 {/* Folders/Tabs Bar */}
@@ -1778,7 +1778,33 @@ const ChatPage = ({ user, setUser }) => {
             </div>
 
             {/* Cột 4 Right Sidebar */}
-            <RightSidebar user={user} onlineUsers={onlineUsers} activeRoom={activeRoom} allGroups={allGroups} handleOpenProfile={handleOpenProfile} handleStartDM={handleStartDM} darkMode={darkMode} isVisible={isRightSidebarVisible && !showSearch} handleKick={handleKick} handleToggleRole={handleToggleRole} lastSeenMap={lastSeenMap} />
+            <RightSidebar 
+                user={user} 
+                onlineUsers={onlineUsers} 
+                activeRoom={activeRoom} 
+                allGroups={allGroups} 
+                handleOpenProfile={handleOpenProfile} 
+                handleStartDM={handleStartDM} 
+                darkMode={darkMode} 
+                isVisible={isRightSidebarVisible} 
+                handleKick={handleKick} 
+                handleToggleRole={handleToggleRole} 
+                lastSeenMap={lastSeenMap} 
+                mutedRooms={mutedRooms}
+                toggleMuteRoom={toggleMuteRoom}
+                clearChatHistory={clearChatHistory}
+                handleLeaveGroup={handleLeaveGroup}
+                setShowGroupSettings={setShowGroupSettings}
+                setShowInviteModal={setShowInviteModal}
+                setShowMediaGallery={setShowMediaGallery}
+                setShowWallpaperModal={setShowWallpaperModal}
+                selfDestructTimer={selfDestructTimer}
+                setSelfDestructTimer={setSelfDestructTimer}
+                handleVideoCall={handleVideoCall}
+                isCallBusy={isCallBusy}
+                setShowSearch={setShowSearch}
+                showSearch={showSearch}
+            />
 
             {/* Modals & Components phụ */}
             {showSearch && <MessageSearch darkMode={darkMode} messages={messages} activeRoom={activeRoom} user={user} onClose={() => setShowSearch(false)} />}
