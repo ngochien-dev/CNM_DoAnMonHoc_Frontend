@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   FaCircle,
   FaUserFriends,
@@ -31,7 +31,8 @@ import {
   FaSearch,
   FaEdit,
   FaVolumeMute,
-  FaInfoCircle
+  FaInfoCircle,
+  FaPaperclip
 } from "react-icons/fa";
 
 const RightSidebar = ({
@@ -61,7 +62,8 @@ const RightSidebar = ({
   handleVideoCall,
   isCallBusy,
   setShowSearch,
-  showSearch
+  showSearch,
+  messages = []
 }) => {
   const [expandedSections, setExpandedSections] = useState({
     chatInfo: true,
@@ -70,6 +72,230 @@ const RightSidebar = ({
     media: false,
     privacy: true
   });
+
+  const [searchContent, setSearchContent] = useState('');
+  const [filterUser, setFilterUser] = useState('');
+  const [filterDate, setFilterDate] = useState('');
+  const [filterType, setFilterType] = useState('all'); // all, file, link
+  const [searchResults, setSearchResults] = useState([]);
+
+  const handleSearch = () => {
+    if (!searchContent.trim() && filterType === 'all') {
+      setSearchResults([]);
+      return;
+    }
+
+    let filtered = (messages || []).filter(msg => {
+      const messageRoom = msg.roomId || 'chung';
+      const targetRoom = activeRoom?.id || 'chung';
+      
+      if (messageRoom !== targetRoom) return false;
+
+      // Filter theo nội dung
+      if (searchContent && !msg.text?.toLowerCase().includes(searchContent.toLowerCase())) {
+        return false;
+      }
+
+      // Filter theo người gửi
+      if (filterUser && msg.senderUsername !== filterUser) {
+        return false;
+      }
+
+      // Filter theo ngày
+      if (filterDate) {
+        const msgDate = new Date(msg.sentAt || msg.time).toLocaleDateString('vi-VN');
+        const filterDateObj = new Date(filterDate).toLocaleDateString('vi-VN');
+        if (msgDate !== filterDateObj) return false;
+      }
+
+      // Filter theo loại (file, link, hoặc all)
+      if (filterType === 'file' && !msg.fileData) {
+        return false;
+      }
+
+      if (filterType === 'link' && (!msg.text?.includes('http://') && !msg.text?.includes('https://'))) {
+        return false;
+      }
+
+      return true;
+    });
+
+    setSearchResults(filtered);
+  };
+
+  // Run search when state updates
+  useEffect(() => {
+    handleSearch();
+  }, [searchContent, filterUser, filterDate, filterType, messages]);
+
+  const renderSearch = () => {
+    const bgClass = darkMode ? 'bg-[#1e1f22]' : 'bg-slate-50';
+    const textClass = darkMode ? 'text-gray-100' : 'text-slate-800';
+    const inputBgClass = darkMode ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-200 text-slate-800 shadow-sm';
+    const secondaryTextClass = darkMode ? 'text-gray-400' : 'text-slate-500';
+
+    const uniqueSenders = [...new Set((messages || [])
+      .filter(m => (m.roomId || 'chung') === (activeRoom?.id || 'chung'))
+      .map(m => m.senderUsername))];
+
+    return (
+      <div className="flex flex-col h-full space-y-4 animate-in slide-in-from-right duration-300">
+        {/* Search Header */}
+        <div className="flex items-center justify-between pb-3 border-b border-slate-700/20">
+          <div className="flex items-center gap-2">
+            <FaSearch className="text-indigo-400 text-sm" />
+            <span className={`text-[13px] font-bold ${textClass}`}>Tìm kiếm tin nhắn</span>
+          </div>
+          <button
+            onClick={() => setShowSearch(false)}
+            className={`p-1.5 rounded-full transition-colors ${darkMode ? 'hover:bg-white/10 text-gray-300' : 'hover:bg-slate-200 text-slate-600'}`}
+            title="Đóng tìm kiếm"
+          >
+            <FaTimes size={13} />
+          </button>
+        </div>
+
+        {/* Filters & Inputs */}
+        <div className="space-y-3 shrink-0">
+          {/* Main search text input */}
+          <div className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border ${inputBgClass} focus-within:border-indigo-500 transition-colors`}>
+            <FaSearch className={`${secondaryTextClass} text-xs`} />
+            <input
+              type="text"
+              value={searchContent}
+              onChange={(e) => setSearchContent(e.target.value)}
+              placeholder="Tìm kiếm trong cuộc trò chuyện"
+              className="flex-1 bg-transparent outline-none text-xs placeholder:text-slate-500"
+            />
+            {searchContent && (
+              <button onClick={() => setSearchContent('')} className="text-slate-400 hover:text-white">
+                <FaTimes size={10} />
+              </button>
+            )}
+          </div>
+
+          {/* Quick Selectors layout */}
+          <div className="grid grid-cols-2 gap-2">
+            {/* Sender selection */}
+            <div className="relative">
+              <select
+                value={filterUser}
+                onChange={(e) => setFilterUser(e.target.value)}
+                className={`w-full px-2 py-2 rounded-xl border ${inputBgClass} text-[10px] font-semibold appearance-none cursor-pointer focus:outline-none focus:border-indigo-500`}
+              >
+                <option value="">👤 Người gửi</option>
+                {uniqueSenders.map(sender => (
+                  <option key={sender} value={sender}>@{sender}</option>
+                ))}
+              </select>
+              <FaChevronDown size={8} className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
+            </div>
+
+            {/* Type selection */}
+            <div className="relative">
+              <select
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+                className={`w-full px-2 py-2 rounded-xl border ${inputBgClass} text-[10px] font-semibold appearance-none cursor-pointer focus:outline-none focus:border-indigo-500`}
+              >
+                <option value="all">📄 Tất cả loại</option>
+                <option value="file">📎 Có Tệp tin</option>
+                <option value="link">🔗 Có Liên kết</option>
+              </select>
+              <FaChevronDown size={8} className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
+            </div>
+          </div>
+
+          {/* Date Selector */}
+          <div className="relative">
+            <input
+              type="date"
+              value={filterDate}
+              onChange={(e) => setFilterDate(e.target.value)}
+              className={`w-full px-3 py-2 rounded-xl border ${inputBgClass} text-[10px] font-semibold focus:outline-none focus:border-indigo-500`}
+            />
+            {filterDate && (
+              <button onClick={() => setFilterDate('')} className="absolute right-8 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white">
+                <FaTimes size={9} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Results Stream */}
+        <div className="flex-1 overflow-y-auto space-y-2.5 scrollbar-hide">
+          {searchResults.length > 0 ? (
+            <>
+              <p className={`text-[10px] font-bold ${secondaryTextClass} uppercase tracking-wider pl-1`}>
+                Đã tìm thấy <span className="text-indigo-400 font-black">{searchResults.length}</span> tin nhắn
+              </p>
+              <div className="space-y-2">
+                {searchResults.map((result, idx) => (
+                  <div
+                    key={idx}
+                    className={`p-3 rounded-2xl border transition-all duration-200 cursor-pointer ${
+                      darkMode 
+                        ? 'bg-white/5 border-white/5 hover:border-indigo-500/40 hover:bg-white/10' 
+                        : 'bg-white border-gray-100 hover:border-indigo-500 hover:bg-slate-100 shadow-sm'
+                    }`}
+                  >
+                    <div className="flex items-start gap-2.5 mb-1.5">
+                      <div className="w-6 h-6 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 font-bold text-[10px] shrink-0 uppercase border">
+                        {result.senderUsername[0]}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-[11px] font-bold truncate ${darkMode ? 'text-indigo-400' : 'text-indigo-600'}`}>
+                          @{result.senderUsername}
+                        </p>
+                        <p className="text-[8px] font-medium text-slate-500">
+                          {new Date(result.sentAt || result.time).toLocaleString('vi-VN')}
+                        </p>
+                      </div>
+                    </div>
+                    <p className={`text-[12px] break-words ${darkMode ? 'text-gray-200' : 'text-slate-700'}`}>
+                      {result.text}
+                    </p>
+                    {(result.fileData || result.text?.includes('http://') || result.text?.includes('https://')) && (
+                      <div className="flex gap-1.5 mt-2">
+                        {result.fileData && (
+                          <div className={`px-2 py-0.5 rounded-lg text-[9px] font-bold flex items-center gap-1 shrink-0 ${
+                            darkMode ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-600'
+                          }`}>
+                            <FaPaperclip size={8} /> File
+                          </div>
+                        )}
+                        {(result.text?.includes('http://') || result.text?.includes('https://')) && (
+                          <div className={`px-2 py-0.5 rounded-lg text-[9px] font-bold flex items-center gap-1 shrink-0 ${
+                            darkMode ? 'bg-cyan-500/10 text-cyan-400' : 'bg-cyan-50 text-cyan-600'
+                          }`}>
+                            <FaLink size={8} /> Link
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-16 text-center space-y-3">
+              <div className="w-12 h-12 rounded-full bg-slate-500/15 flex items-center justify-center">
+                <FaSearch className="text-xl text-slate-500" />
+              </div>
+              <div className="space-y-1">
+                <p className={`text-xs font-semibold ${secondaryTextClass}`}>
+                  Không tìm thấy tin nhắn nào
+                </p>
+                <p className="text-[10px] text-slate-500 max-w-[200px]">
+                  Thử đổi từ khóa hoặc loại bỏ bộ lọc để tìm lại.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   if (!isVisible) return null;
 
@@ -646,7 +872,11 @@ const RightSidebar = ({
           : "border-gray-200/80 bg-slate-50 text-slate-800"
       }`}
     >
-      {activeRoom ? renderChatInfo() : renderFriends()}
+      {activeRoom 
+        ? showSearch 
+          ? renderSearch() 
+          : renderChatInfo() 
+        : renderFriends()}
     </div>
   );
 };
