@@ -40,7 +40,10 @@ const RoomSidebar = ({
                     </div>
                     {(allGroups || []).filter(g => g.isPublic).map(g => (
                         <div key={g.groupId} onClick={() => handleSwitchRoom({id:g.groupId, name:g.groupName})} className={`p-2.5 rounded-lg flex items-center gap-3 cursor-pointer mb-1 relative transition-all ${activeRoom?.id === g.groupId ? 'bg-[#5865f2] text-white shadow-lg' : 'hover:bg-white/5 text-gray-400'}`}>
-                            <FaGlobe size={12} className="opacity-60"/> <span className="text-sm truncate uppercase tracking-tighter italic">{g.groupName}</span>
+                            <div className="w-6 h-6 rounded-lg bg-indigo-500/20 flex items-center justify-center text-white text-[10px] font-black uppercase overflow-hidden border border-white/5 shrink-0 shadow-inner">
+                                {g.avatar ? <img src={g.avatar} className="w-full h-full object-cover" alt="" /> : <FaGlobe size={11} className="opacity-60"/>}
+                            </div>
+                            <span className="text-sm truncate uppercase tracking-tighter italic">{g.groupName}</span>
                         </div>
                     ))}
                 </div>
@@ -53,7 +56,9 @@ const RoomSidebar = ({
         !g.isPublic && (g.members?.includes(user.username) || g.owner === user.username) // XÓA user.role === 'admin' ở đây
     ).map(g => (
         <div key={g.groupId} onClick={() => handleSwitchRoom({id:g.groupId, name:g.groupName})} className={`p-2.5 rounded-lg flex items-center gap-3 cursor-pointer mb-1 relative transition-all ${activeRoom?.id===g.groupId ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' : 'hover:bg-white/5 text-gray-400'}`}>
-            <FaLock size={10} className={activeRoom?.id === g.groupId ? 'text-white' : 'text-orange-400'}/>
+            <div className="w-6 h-6 rounded-lg bg-orange-500/20 flex items-center justify-center text-white text-[10px] font-black uppercase overflow-hidden border border-white/5 shrink-0 shadow-inner">
+                {g.avatar ? <img src={g.avatar} className="w-full h-full object-cover" alt="" /> : <FaLock size={9} className={activeRoom?.id === g.groupId ? 'text-white' : 'text-orange-400'}/>}
+            </div>
             <span className="truncate text-sm font-medium uppercase tracking-tighter italic">{g.groupName}</span>
             {unreadCounts[g.groupId] > 0 && (
                 <span className="absolute right-2 w-4 h-4 bg-red-500 text-white text-[8px] flex items-center justify-center rounded-full font-black animate-bounce">{unreadCounts[g.groupId]}</span>
