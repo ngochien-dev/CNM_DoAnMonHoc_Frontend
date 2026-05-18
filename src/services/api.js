@@ -26,13 +26,15 @@ api.interceptors.request.use((config) => {
     return config;
 });
 
-// Ngăn vòng lặp 401 vô hạn: khi nhận 401, reject ngay và không retry
+// Ngăn vòng lặp 401 vô hạn: khi nhận 401, đăng xuất và đẩy về trang đăng nhập
 api.interceptors.response.use(
     (response) => response,
     (error) => {
         if (error.response?.status === 401) {
-            // Token hết hạn hoặc đã bị xóa — không retry
-            console.warn('[API] 401 Unauthorized — bỏ qua request');
+            console.warn('[API] 401 Unauthorized — token hết hạn hoặc không hợp lệ. Đang đăng xuất...');
+            localStorage.removeItem('user_session');
+            // Redirect to home/login page
+            window.location.href = '/';
         }
         return Promise.reject(error);
     }
