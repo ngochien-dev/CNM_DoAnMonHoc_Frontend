@@ -148,6 +148,11 @@ const ChatPage = ({ user, setUser }) => {
     const [showWallpaperModal, setShowWallpaperModal] = useState(false);
     const [currentWallpaper, setCurrentWallpaper] = useState('');
     const [customWallpaperUrl, setCustomWallpaperUrl] = useState('');
+    
+    // Message Moderation states
+    const [showReportModal, setShowReportModal] = useState(false);
+    const [reportingMessage, setReportingMessage] = useState(null);
+    const [reportReason, setReportReason] = useState('Abuse');
 
     // P2: Periodically clean up expired messages from state
     useEffect(() => {
@@ -550,6 +555,30 @@ const ChatPage = ({ user, setUser }) => {
     };
 
     const handleOpenProfile = (uname) => setProfileModal({ isOpen: true, username: uname });
+
+    const handleOpenReportModal = (msg) => {
+        setReportingMessage(msg);
+        setReportReason('Abuse');
+        setShowReportModal(true);
+    };
+
+    const handleSubmitReport = async () => {
+        if (!reportingMessage) return;
+        try {
+            await api.post('/v1/messages/report', {
+                messageId: reportingMessage.messageId,
+                reason: reportReason
+            });
+            toast.success('Báo cáo tin nhắn thành công! Đang chờ Admin xử lý.', {
+                icon: '🛡️',
+                style: { borderRadius: '12px', background: '#333', color: '#fff' }
+            });
+            setShowReportModal(false);
+            setReportingMessage(null);
+        } catch (err) {
+            toast.error(err.response?.data?.error || 'Không thể gửi báo cáo tin nhắn');
+        }
+    };
 
     const getRecentChatUsers = () => {
         const chatUsers = new Set();
@@ -1819,6 +1848,12 @@ const ChatPage = ({ user, setUser }) => {
                                                                     )}
                                                                 </div>
 
+                                                                {!isMe && (
+                                                                    <button onClick={() => handleOpenReportModal(msg)} className="p-1 text-gray-400 hover:text-amber-500 transition-colors duration-200" title="Báo cáo vi phạm">
+                                                                        <FaShieldAlt size={12}/>
+                                                                    </button>
+                                                                )}
+
                                                                 {(isMe || user.role === 'admin') && (
                                                                     <>
                                                                         {isMe && msg.text && !msg.fileData && !msg.msgType && (
@@ -2071,6 +2106,71 @@ const ChatPage = ({ user, setUser }) => {
             {showMediaGallery && activeRoom && <MediaGallery roomId={activeRoom.id} darkMode={darkMode} onClose={() => setShowMediaGallery(false)} />}
             <CreateChat user={user} isOpen={showGroupCreator} onClose={() => setShowGroupCreator(false)} onCreateGroup={handleCreateGroup} darkMode={darkMode} />
             <UserProfileModal isOpen={profileModal.isOpen} onClose={()=>setProfileModal({isOpen:false, username:''})} targetUsername={profileModal.username} currentUser={user} onUpdateSuccess={handleUpdateSuccess} onStartDM={handleStartDM} />
+            
+            {/* Modal Báo Cáo Tin Nhắn Vi Phạm */}
+            {showReportModal && reportingMessage && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[600] backdrop-blur-md animate-in fade-in duration-200 p-4">
+                    <div className={`w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border transition-all duration-300 ${
+                        darkMode ? 'bg-[#0f172a] border-white/10 text-white' : 'bg-white border-gray-200 text-slate-800'
+                    }`}>
+                        <div className="p-6 bg-gradient-to-r from-red-500 to-rose-600 text-white flex justify-between items-center">
+                            <h3 className="font-black uppercase tracking-widest text-[11px] flex items-center gap-2">
+                                <FaShieldAlt size={16}/> Báo cáo tin nhắn vi phạm
+                            </h3>
+                            <button 
+                                onClick={() => { setShowReportModal(false); setReportingMessage(null); }}
+                                className="p-1 rounded-full hover:bg-white/10 text-white transition-colors"
+                            >
+                                <FaTimes size={14}/>
+                            </button>
+                        </div>
+                        <div className="p-6 space-y-6">
+                            <div className={`p-4 rounded-2xl border ${darkMode ? 'bg-white/5 border-white/5' : 'bg-slate-50 border-gray-100'}`}>
+                                <h4 className="text-[10px] uppercase font-black tracking-wider text-gray-400 mb-1">Nội dung bị báo cáo</h4>
+                                <p className={`text-sm italic font-medium leading-relaxed break-all ${darkMode ? 'text-slate-200' : 'text-slate-700'}`}>
+                                    "{reportingMessage.text || '[Tệp tin đính kèm]'}"
+                                </p>
+                                <span className="text-[9px] text-gray-500 mt-2 block">Gửi bởi: @{reportingMessage.senderUsername || reportingMessage.sender}</span>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-black uppercase tracking-wider text-gray-400 mb-2">Lý do báo cáo</label>
+                                <select 
+                                    value={reportReason}
+                                    onChange={(e) => setReportReason(e.target.value)}
+                                    className={`w-full px-4 py-3 rounded-2xl border font-bold text-sm outline-none transition-all ${
+                                        darkMode 
+                                            ? 'bg-slate-800 border-white/5 text-white focus:border-red-500' 
+                                            : 'bg-slate-50 border-gray-200 text-slate-700 focus:border-red-500 focus:bg-white'
+                                    }`}
+                                >
+                                    <option value="Abuse">Quấy rối, công kích, xúc phạm cá nhân</option>
+                                    <option value="Spam">Quảng cáo rác, lừa đảo, Spam</option>
+                                    <option value="Dangerous">Nội dung đồi trụy, độc hại, bạo lực</option>
+                                    <option value="Other">Lý do vi phạm khác</option>
+                                </select>
+                            </div>
+
+                            <div className="flex gap-4">
+                                <button 
+                                    onClick={() => { setShowReportModal(false); setReportingMessage(null); }}
+                                    className={`flex-1 py-3.5 rounded-2xl font-bold transition-all text-sm border ${
+                                        darkMode ? 'bg-white/5 hover:bg-white/10 border-white/5 text-white' : 'bg-slate-100 hover:bg-slate-200 border-gray-200 text-slate-600'
+                                    }`}
+                                >
+                                    Hủy bỏ
+                                </button>
+                                <button 
+                                    onClick={handleSubmitReport}
+                                    className="flex-1 py-3.5 rounded-2xl bg-gradient-to-r from-red-500 to-rose-600 text-white font-bold transition-all hover:opacity-90 shadow-lg shadow-rose-500/20 text-sm"
+                                >
+                                    Gửi báo cáo
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
             
             {/* Modal Tạo/Sửa Thư Mục Chat (Telegram Style) */}
             {showFolderModal && (
