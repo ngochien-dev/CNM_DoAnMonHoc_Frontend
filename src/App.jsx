@@ -3,7 +3,6 @@ import { useState, useEffect } from 'react';
 import AuthPage from './components/auth/AuthPage';
 import ChatPage from './components/ChatPage';
 import { CallProvider } from './context/CallContext';
-import ChatbotWidget from './components/ChatbotWidget';
 
 function normalizeUserSession(session) {
     if (!session) return null;
@@ -43,7 +42,6 @@ function App() {
                     <Route path="/" element={!user ? <AuthPage onLogin={handleLogin} /> : <Navigate to="/chat" />} />
                     <Route path="/chat" element={user ? <ChatPage user={user} setUser={setUser} /> : <Navigate to="/" />} />
                 </Routes>
-                {user && <ChatbotWidget />}
             </Router>
         </CallProvider>
     );
