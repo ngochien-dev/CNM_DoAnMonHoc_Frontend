@@ -3,11 +3,23 @@ import {
   FaUserFriends, FaUserCheck, FaCommentDots, FaCircle, FaUserPlus,
   FaGhost, FaUserShield, FaSearch, FaTimes, FaSortAlphaDown,
   FaSortAlphaUp, FaTags, FaPaperPlane, FaUserTag, FaSave,
-  FaTrashAlt, FaEdit, FaCheck,
+  FaTrashAlt, FaEdit, FaCheck, FaUserMinus, FaVideo,
 } from "react-icons/fa";
 import axios from "axios";
 
-const FriendsTab = ({ user, friends, friendRequests, loadData, onlineUsers, handleStartDM, handleOpenProfile }) => {
+const FriendsTab = ({
+  user,
+  friends,
+  friendRequests,
+  loadData,
+  onlineUsers,
+  handleStartDM,
+  handleOpenProfile,
+  callHistory = [],
+  startCall,
+  isCallBusy,
+  darkMode,
+}) => {
   // --- 1. STATES ---
   const [globalSearch, setGlobalSearch] = useState("");
   const [globalResults, setGlobalResults] = useState([]);
@@ -152,6 +164,54 @@ const FriendsTab = ({ user, friends, friendRequests, loadData, onlineUsers, hand
     return result;
   }, [friends, localSearch, selectedTag, friendTags, sortOrder, onlineUsers, detailsCache]);
 
+  const recentCallHistory = useMemo(() => {
+    return (callHistory || []).slice(0, 4).map((call) => {
+      const peerUsername =
+        call.callerUsername === user.username ? call.calleeUsername : call.callerUsername;
+      const peerInfo = onlineUsers[peerUsername] || detailsCache[peerUsername];
+
+      return {
+        ...call,
+        peerUsername,
+        peerDisplayName: peerInfo?.displayName || peerUsername,
+      };
+    });
+  }, [callHistory, detailsCache, onlineUsers, user.username]);
+
+  const startFriendCall = (friendUsername) => {
+    if (!startCall || isCallBusy) return;
+    const dmRoomId = `dm_${[user.username, friendUsername].sort().join("_")}`;
+    startCall(friendUsername, dmRoomId);
+  };
+
+  const formatCallStatus = (status) => {
+    const labels = {
+      ended: "Da ket thuc",
+      rejected: "Bi tu choi",
+      missed: "Bi nho",
+      cancelled: "Da huy",
+      timeout: "Het thoi gian",
+      in_call: "Dang goi",
+      connecting: "Dang ket noi",
+      ringing: "Dang do chuong",
+    };
+
+    return labels[status] || status || "Khong ro";
+  };
+
+  const formatCallTime = (value) => {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+
+    return date.toLocaleString("vi-VN", {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
   const renderMiniUser = (u, status, incoming = false) => {
     const uname = typeof u === 'string' ? u : u.S;
     const info = onlineUsers[uname] || detailsCache[uname];
@@ -268,6 +328,29 @@ const FriendsTab = ({ user, friends, friendRequests, loadData, onlineUsers, hand
           </div>
 
           <div className="flex-1 overflow-y-auto scrollbar-hide pb-20">
+            {recentCallHistory.length > 0 && (
+              <section className={`mb-8 rounded-[28px] border p-5 ${darkMode ? 'bg-black/20 border-white/5' : 'bg-white border-gray-100 shadow-sm'}`}>
+                <p className="text-[10px] font-black text-cyan-500 tracking-[4px] mb-4 uppercase">Lich su goi gan day</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                  {recentCallHistory.map((call) => (
+                    <div key={call.callId} className={`p-3 rounded-2xl border ${darkMode ? 'bg-white/5 border-white/5' : 'bg-slate-50 border-gray-100'}`}>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-8 h-8 rounded-xl bg-cyan-600/20 text-cyan-400 flex items-center justify-center shrink-0">
+                          <FaVideo size={12} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className={`text-[11px] font-black truncate ${darkMode ? 'text-white' : 'text-slate-800'}`}>
+                            {call.peerDisplayName}
+                          </p>
+                          <p className="text-[8px] text-gray-500 font-bold">{formatCallTime(call.createdAt)}</p>
+                        </div>
+                      </div>
+                      <p className="mt-2 text-[9px] font-black uppercase text-cyan-400">{formatCallStatus(call.status)}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
             {processedFriends.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center opacity-10 grayscale"><FaGhost size={100} className="mb-6"/><p className="text-2xl font-black tracking-[10px]">TRỐNG TRẢI</p></div>
             ) : (
@@ -300,9 +383,28 @@ const FriendsTab = ({ user, friends, friendRequests, loadData, onlineUsers, hand
                         <button onClick={() => assignTag(f.username, null)} className="p-2 rounded-xl text-gray-700 hover:text-red-500 transition-all"><FaTrashAlt size={14} /></button>
                         </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-4 mt-8">
-                        <button onClick={() => handleStartDM(f.username)} className="bg-indigo-600 hover:bg-indigo-500 text-white py-4 rounded-[20px] text-[10px] font-black transition-all shadow-xl active:scale-95 flex items-center justify-center gap-2 shadow-indigo-500/20"><FaCommentDots size={14} /> CHAT</button>
-                        <button onClick={() => handleOpenProfile(f.username)} className="bg-white/5 hover:bg-white/10 text-gray-400 py-4 rounded-[20px] text-[10px] font-black transition-all border border-white/5 active:scale-95 shadow-lg uppercase">PROFILE</button>
+                    <div className="grid grid-cols-4 gap-3 mt-8">
+                        <button onClick={() => handleStartDM(f.username)} className="bg-indigo-600 hover:bg-indigo-500 text-white py-3.5 rounded-[20px] text-[10px] font-black transition-all shadow-xl active:scale-95 flex items-center justify-center gap-2 shadow-indigo-500/20"><FaCommentDots size={12} /> CHAT</button>
+                        <button onClick={() => startFriendCall(f.username)} disabled={isCallBusy} className={`py-3.5 rounded-[20px] text-[10px] font-black transition-all border active:scale-95 flex items-center justify-center gap-1 ${isCallBusy ? 'bg-white/5 text-gray-600 border-white/5 cursor-not-allowed' : 'bg-cyan-600 hover:bg-cyan-500 text-white border-cyan-500 shadow-xl shadow-cyan-500/20'}`}><FaVideo size={11}/> VIDEO</button>
+                        <button onClick={() => handleOpenProfile(f.username)} className={`py-3.5 rounded-[20px] text-[10px] font-black transition-all border active:scale-95 shadow-sm uppercase flex items-center justify-center ${darkMode ? 'bg-white/5 hover:bg-white/10 text-gray-400 border-white/5' : 'bg-white hover:bg-slate-50 text-slate-500 border-gray-200'}`}>PROFILE</button>
+                        <button
+                          onClick={async () => {
+                            if (!window.confirm(`Hủy kết bạn với @${f.username}?`)) return;
+                            try {
+                              await axios.post('http://localhost:3001/api/friends/unfriend', {
+                                me: user.username,
+                                friendUname: f.username,
+                              });
+                              loadData();
+                            } catch {
+                              alert('Lỗi!');
+                            }
+                          }}
+                          className={`py-3.5 rounded-[20px] text-[10px] font-black transition-all border active:scale-95 uppercase flex items-center justify-center gap-1 ${darkMode ? 'bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white border-red-500/20' : 'bg-red-50 hover:bg-red-500 text-red-500 hover:text-white border-red-200'}`}
+                        >
+                          <FaUserMinus size={11}/> HỦY
+                        </button>
+                    </div>
                     </div>
                     </div>
                 ))}

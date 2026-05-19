@@ -3,7 +3,7 @@ import IncomingCallModal from '../components/call/IncomingCallModal';
 import OutgoingCallModal from '../components/call/OutgoingCallModal';
 import CallOverlay from '../components/call/CallOverlay';
 import { DEFAULT_WEBRTC_ICE_SERVERS } from '../config/appConfig';
-import { connectSocket, disconnectSocket } from '../services/socket';
+import { connectSocket, disconnectSocket, getSocketDebugSnapshot } from '../services/socket';
 import api from '../services/api';
 import useWebRTC from '../hooks/useWebRTC';
 import { getMediaErrorMessage } from '../utils/mediaError';
@@ -22,6 +22,17 @@ const RESET_UI_AFTER_MS = 4000;
 const HISTORY_REFRESH_DELAY_MS = 500;
 const LOCAL_FINALIZATION_TTL_MS = 15000;
 const DISCONNECTED_GRACE_MS = 5000;
+const CALL_EVENTS = {
+    invite: 'call-user',
+    incoming: 'incoming-call',
+    accept: 'accept-call',
+    reject: 'reject-call',
+    end: 'end-call',
+    ended: 'call-ended',
+    offer: 'offer',
+    answer: 'answer',
+    iceCandidate: 'ice-candidate',
+};
 const TERMINAL_STATUSES = new Set([
     'rejected',
     'timeout',
@@ -36,7 +47,7 @@ const TERMINAL_STATUSES = new Set([
     'not_found',
     'invalid_state',
 ]);
-const RINGING_STATUSES = new Set(['outgoing_ringing', 'incoming_ringing']);
+const RINGING_STATUSES = new Set(['outgoing', 'incoming']);
 const INITIAL_NEGOTIATION_STATE = {
     callId: null,
     offerStarted: false,
@@ -47,15 +58,42 @@ const INITIAL_NEGOTIATION_STATE = {
     answerApplied: false,
 };
 
+const CALL_DEBUG_ENABLED =
+    import.meta.env.VITE_CALL_DEBUG === 'true' ||
+    (import.meta.env.DEV && import.meta.env.VITE_CALL_DEBUG !== 'false');
+
 function logCall(message, context = {}) {
-    console.debug('[CALL]', message, context);
+    if (!CALL_DEBUG_ENABLED) return;
+    console.debug('[CALL][FRONTEND]', message, context);
+}
+
+function warnCall(message, context = {}) {
+    if (!CALL_DEBUG_ENABLED) return;
+    console.warn('[CALL][FRONTEND]', message, context);
+}
+
+function errorCall(message, error, context = {}) {
+    console.error('[CALL][FRONTEND]', message, {
+        ...context,
+        error: {
+            name: error?.name || null,
+            message: error?.message || null,
+            code: error?.code || null,
+            constraint: error?.constraint || error?.constraintName || null,
+            stack: error?.stack || null,
+            userMessage: error?.userMessage || null,
+            mediaDebug: error?.mediaDebug || null,
+        },
+    });
 }
 
 function logSocket(message, context = {}) {
-    console.debug('[SOCKET]', message, context);
+    if (!CALL_DEBUG_ENABLED) return;
+    console.debug('[SOCKET][FRONTEND]', message, context);
 }
 
 function logWebRTC(message, context = {}) {
+    if (!CALL_DEBUG_ENABLED) return;
     console.debug('[WEBRTC]', message, context);
 }
 
@@ -86,9 +124,31 @@ function summarizeSocketPayload(payload = {}) {
         callId: payload.callId ?? payload.call?.callId ?? null,
         status: payload.status ?? payload.call?.status ?? null,
         reason: payload.reason ?? payload.call?.endReason ?? null,
+        from: payload.from || payload.caller?.username || payload.call?.callerUsername || null,
+        to: payload.to || payload.callee?.username || payload.call?.calleeUsername || null,
         offer: payload.offer ? describeSessionDescription(payload.offer) : null,
         answer: payload.answer ? describeSessionDescription(payload.answer) : null,
         candidate: payload.candidate ? describeCandidate(payload.candidate) : null,
+        mediaError: payload.mediaError
+            ? {
+                  error: payload.mediaError.error || null,
+                  environment: payload.mediaError.environment || null,
+                  deviceCounts: payload.mediaError.mediaDebug
+                      ? {
+                            before: {
+                                audioinput: payload.mediaError.mediaDebug.devicesBefore?.audioinput,
+                                videoinput: payload.mediaError.mediaDebug.devicesBefore?.videoinput,
+                                audiooutput: payload.mediaError.mediaDebug.devicesBefore?.audiooutput,
+                            },
+                            afterFailure: {
+                                audioinput: payload.mediaError.mediaDebug.devicesAfterFailure?.audioinput,
+                                videoinput: payload.mediaError.mediaDebug.devicesAfterFailure?.videoinput,
+                                audiooutput: payload.mediaError.mediaDebug.devicesAfterFailure?.audiooutput,
+                            },
+                        }
+                      : null,
+              }
+            : null,
     };
 }
 
@@ -252,6 +312,10 @@ export function CallProvider({ children, user }) {
     }
 
     function resetCallUi({ preservePendingInvite = pendingInviteRef.current?.state === 'cancelled' } = {}) {
+        logCall('Resetting call UI and cleaning media/session.', {
+            preservePendingInvite,
+            ...getCallDebugSnapshot(),
+        });
         clearAllUiTimers();
         resetNegotiationState();
         cleanupSession('reset-call-ui');
@@ -264,6 +328,12 @@ export function CallProvider({ children, user }) {
 
     function moveToTerminalState(nextState, payload = {}, options = {}) {
         const { historyRefreshDelayMs = HISTORY_REFRESH_DELAY_MS, preservePendingInvite = false } = options;
+        logCall('Moving call to terminal state.', {
+            nextState,
+            payload: summarizeSocketPayload(payload),
+            preservePendingInvite,
+            ...getCallDebugSnapshot(),
+        });
         clearAllUiTimers();
         resetNegotiationState();
         cleanupSession(`terminal-${nextState}`);
@@ -292,7 +362,14 @@ export function CallProvider({ children, user }) {
         const socket = connectSocket();
         const payloadSummary = summarizeSocketPayload(payload);
 
-        logSocket(`Emitting ${eventName}.`, payloadSummary);
+        logSocket(`Emitting ${eventName}.`, {
+            ...payloadSummary,
+            currentUser: user?.username || null,
+            callState: callStateRef.current.status,
+            socketId: socket.id || null,
+            socketConnected: socket.connected,
+            peerUsername: callStateRef.current.peer?.username || null,
+        });
 
         socket.emit(eventName, payload, (response) => {
             logSocket(`Ack for ${eventName}.`, {
@@ -300,6 +377,9 @@ export function CallProvider({ children, user }) {
                 ok: response?.ok,
                 status: response?.status || null,
                 message: response?.message || null,
+                responseCallId: response?.call?.callId || null,
+                callState: callStateRef.current.status,
+                socketId: socket.id || null,
             });
             ack?.(response);
         });
@@ -311,7 +391,7 @@ export function CallProvider({ children, user }) {
         const activeCall = callStateRef.current.call;
         if (activeCall?.callId) {
             rememberLocallyFinalizedCall(activeCall.callId, 'failed');
-            emitSocketEvent('call:end', { callId: activeCall.callId, reason }, () => {});
+            emitSocketEvent(CALL_EVENTS.end, { callId: activeCall.callId, reason }, () => {});
         }
 
         moveToTerminalState('failed', {
@@ -350,7 +430,7 @@ export function CallProvider({ children, user }) {
                 previousState.call
                     ? {
                           ...previousState,
-                          status: 'in_call',
+                          status: 'in-call',
                           message: 'Ket noi thanh cong.',
                       }
                     : previousState,
@@ -363,10 +443,10 @@ export function CallProvider({ children, user }) {
             return;
         }
 
-        if (nextState === 'disconnected' && ['connecting', 'in_call'].includes(callStateRef.current.status)) {
+        if (nextState === 'disconnected' && ['connecting', 'in-call'].includes(callStateRef.current.status)) {
             clearDisconnectTimer();
             disconnectTimerRef.current = setTimeout(() => {
-                if (!['connecting', 'in_call'].includes(callStateRef.current.status)) {
+                if (!['connecting', 'in-call'].includes(callStateRef.current.status)) {
                     return;
                 }
 
@@ -385,7 +465,7 @@ export function CallProvider({ children, user }) {
             return;
         }
 
-        if (nextState === 'failed' && ['connecting', 'in_call'].includes(callStateRef.current.status)) {
+        if (nextState === 'failed' && ['connecting', 'in-call'].includes(callStateRef.current.status)) {
             finalizeConnectionFailure('Ket noi cuoc goi bi gian doan.', 'connection_lost');
         }
     };
@@ -401,6 +481,8 @@ export function CallProvider({ children, user }) {
         iceConnectionState,
         isCameraEnabled,
         isMicEnabled,
+        getDebugSnapshot: getWebRTCDebugSnapshot,
+        getMediaFailureDebugInfo,
         localStream,
         remoteStream,
         signalingState,
@@ -411,9 +493,33 @@ export function CallProvider({ children, user }) {
         onConnectionStateChange: handlePeerConnectionStateChange,
     });
 
+    function getCallDebugSnapshot(extra = {}) {
+        return {
+            currentUser: user?.username || null,
+            callState: callStateRef.current.status,
+            direction: callStateRef.current.direction,
+            callId: callStateRef.current.call?.callId || null,
+            callerUsername: callStateRef.current.call?.callerUsername || null,
+            calleeUsername: callStateRef.current.call?.calleeUsername || null,
+            peerUsername: callStateRef.current.peer?.username || null,
+            socket: getSocketDebugSnapshot(),
+            webrtc: getWebRTCDebugSnapshot?.() || null,
+            ...extra,
+        };
+    }
+
     useEffect(() => {
         callStateRef.current = callState;
     }, [callState]);
+
+    useEffect(() => {
+        logCall('CallContext initialized or user changed.', {
+            currentUser: user?.username || null,
+            hasUser: Boolean(user),
+            socket: getSocketDebugSnapshot(),
+            callState: callStateRef.current.status,
+        });
+    }, [user?.username]);
 
     useEffect(() => {
         logCall('Call state updated.', {
@@ -474,7 +580,7 @@ export function CallProvider({ children, user }) {
     useEffect(() => {
         clearDurationTimer();
 
-        if (callState.status !== 'in_call') {
+        if (callState.status !== 'in-call') {
             if (!TERMINAL_STATUSES.has(callState.status)) {
                 setCallDurationSec(0);
             }
@@ -494,13 +600,14 @@ export function CallProvider({ children, user }) {
     async function endCall(reason = 'ended') {
         const activeCall = callStateRef.current.call;
         logCall('Ending call from local UI.', {
-            callId: activeCall?.callId || null,
             reason,
-            status: callStateRef.current.status,
+            ...getCallDebugSnapshot({
+                callId: activeCall?.callId || null,
+            }),
         });
 
         if (!activeCall) {
-            if (reason === 'cancelled' && callStateRef.current.status === 'outgoing_ringing' && pendingInviteRef.current) {
+            if (reason === 'cancelled' && callStateRef.current.status === 'outgoing' && pendingInviteRef.current) {
                 pendingInviteRef.current = {
                     ...pendingInviteRef.current,
                     state: 'cancelled',
@@ -523,9 +630,14 @@ export function CallProvider({ children, user }) {
         }
 
         rememberLocallyFinalizedCall(activeCall.callId, reason === 'cancelled' ? 'cancelled' : 'ended');
-        emitSocketEvent('call:end', { callId: activeCall.callId, reason }, (response) => {
+        const payload = { callId: activeCall.callId, reason };
+        logCall('Sending end-call.', {
+            payload: summarizeSocketPayload(payload),
+            ...getCallDebugSnapshot(),
+        });
+        emitSocketEvent(CALL_EVENTS.end, payload, (response) => {
             if (!response?.ok && response?.status !== 'not_found') {
-                console.warn('[CallContext] call:end was not acknowledged:', response);
+                console.warn('[CallContext] end-call was not acknowledged:', response);
             }
         });
 
@@ -555,14 +667,19 @@ export function CallProvider({ children, user }) {
         resetNegotiationState();
 
         logCall('Starting outgoing call.', {
+            callerUsername: user.username,
+            calleeUsername: peerUsername,
             peerUsername,
             roomId: roomId || null,
             requestId,
+            callType: 'video',
+            stateBefore: callStateRef.current.status,
+            socket: getSocketDebugSnapshot(),
         });
 
         setConnectionLabel('Dang do chuong...');
         setCallState({
-            status: 'outgoing_ringing',
+            status: 'outgoing',
             call: null,
             peer: {
                 username: peerUsername,
@@ -574,10 +691,19 @@ export function CallProvider({ children, user }) {
             timeoutMs: 0,
         });
 
-        emitSocketEvent('call:invite', { calleeUsername: peerUsername, roomId }, (response) => {
+        const invitePayload = { calleeUsername: peerUsername, roomId };
+        logCall('Prepared call-user emit payload.', {
+            eventName: CALL_EVENTS.invite,
+            payload: invitePayload,
+            stateBeforeEmit: callStateRef.current.status,
+            callerUsername: user.username,
+            calleeUsername: peerUsername,
+        });
+
+        emitSocketEvent(CALL_EVENTS.invite, invitePayload, (response) => {
             const pendingInvite = pendingInviteRef.current;
             if (!pendingInvite || pendingInvite.requestId !== requestId) {
-                logCall('Ignoring stale call:invite ack because pending invite no longer matches.', {
+                logCall('Ignoring stale call-user ack because pending invite no longer matches.', {
                     requestId,
                     ackCallId: response?.call?.callId || null,
                 });
@@ -589,7 +715,7 @@ export function CallProvider({ children, user }) {
 
                 if (response?.ok && response.call?.callId) {
                     rememberLocallyFinalizedCall(response.call.callId, 'cancelled');
-                    emitSocketEvent('call:end', { callId: response.call.callId, reason: 'cancelled' }, () => {});
+                    emitSocketEvent(CALL_EVENTS.end, { callId: response.call.callId, reason: 'cancelled' }, () => {});
                 }
                 return;
             }
@@ -614,7 +740,7 @@ export function CallProvider({ children, user }) {
             if (
                 response.call?.callId &&
                 currentCallId === response.call.callId &&
-                !['idle', 'outgoing_ringing'].includes(currentStatus)
+                !['idle', 'outgoing'].includes(currentStatus)
             ) {
                 logCall('Invite ack arrived after call state had already advanced; preserving newer state.', {
                     callId: response.call.callId,
@@ -633,8 +759,16 @@ export function CallProvider({ children, user }) {
                 ensureNegotiationState(response.call.callId);
             }
 
+            logCall('call-user acknowledged with active ringing call.', {
+                callId: response.call?.callId || null,
+                callerUsername: response.call?.callerUsername || user.username,
+                calleeUsername: response.call?.calleeUsername || peerUsername,
+                timeoutMs: response.timeoutMs || 0,
+                stateBeforeSet: callStateRef.current.status,
+            });
+
             setCallState({
-                status: 'outgoing_ringing',
+                status: 'outgoing',
                 call: response.call,
                 peer: response.callee || {
                     username: peerUsername,
@@ -656,25 +790,18 @@ export function CallProvider({ children, user }) {
         logCall('Accepting incoming call.', {
             callId: activeCall.callId,
             from: activeCall.callerUsername,
+            to: activeCall.calleeUsername,
+            stateBefore: callStateRef.current.status,
+            socket: getSocketDebugSnapshot(),
         });
 
-        try {
-            setConnectionLabel('Dang mo camera va micro...');
-            await ensureLocalStream();
-        } catch (error) {
-            moveToTerminalState('failed', {
-                call: activeCall,
-                peer: callStateRef.current.peer,
-                direction: 'incoming',
-                message: getMediaErrorMessage(
-                    error,
-                    'Khong the mo camera va micro de nhan cuoc goi.',
-                ),
-            });
-            return;
-        }
-
-        emitSocketEvent('call:accept', { callId: activeCall.callId }, (response) => {
+        setConnectionLabel('Dang xac nhan cuoc goi...');
+        const acceptPayload = { callId: activeCall.callId };
+        logCall('Sending accept-call.', {
+            payload: acceptPayload,
+            ...getCallDebugSnapshot(),
+        });
+        emitSocketEvent(CALL_EVENTS.accept, acceptPayload, (response) => {
             if (!response?.ok) {
                 moveToTerminalState('failed', {
                     call: activeCall,
@@ -685,6 +812,12 @@ export function CallProvider({ children, user }) {
                 return;
             }
 
+            logCall('accept-call acknowledged; moving receiver to connecting.', {
+                responseCallId: response.call?.callId || null,
+                stateBeforeSet: callStateRef.current.status,
+                callerUsername: response.call?.callerUsername || activeCall.callerUsername,
+                calleeUsername: response.call?.calleeUsername || activeCall.calleeUsername,
+            });
             setConnectionLabel('Dang cho tin hieu WebRTC...');
             setCallState((previousState) => ({
                 ...previousState,
@@ -702,10 +835,15 @@ export function CallProvider({ children, user }) {
         rememberLocallyFinalizedCall(activeCall.callId, 'rejected');
         logCall('Rejecting incoming call.', {
             callId: activeCall.callId,
+            reason: 'rejected',
+            callerUsername: activeCall.callerUsername,
+            calleeUsername: activeCall.calleeUsername,
+            stateBefore: callStateRef.current.status,
         });
-        emitSocketEvent('call:reject', { callId: activeCall.callId }, (response) => {
+        const rejectPayload = { callId: activeCall.callId, reason: 'rejected' };
+        emitSocketEvent(CALL_EVENTS.reject, rejectPayload, (response) => {
             if (!response?.ok && response?.status !== 'not_found') {
-                console.warn('[CallContext] call:reject was not acknowledged:', response);
+                console.warn('[CallContext] reject-call was not acknowledged:', response);
             }
         });
 
@@ -722,7 +860,17 @@ export function CallProvider({ children, user }) {
     }
 
     const handleIncomingCall = useEffectEvent((payload) => {
-        logSocket('Received call:incoming.', summarizeSocketPayload(payload));
+        logSocket('Received incoming-call.', {
+            ...summarizeSocketPayload(payload),
+            currentUser: user?.username || null,
+            currentState: callStateRef.current.status,
+            socket: getSocketDebugSnapshot(),
+        });
+
+        if (!payload?.call?.callId) {
+            logCall('Ignoring incoming-call because payload is missing callId.', summarizeSocketPayload(payload));
+            return;
+        }
 
         if (callStateRef.current.status !== 'idle') {
             // Fall back to rejecting on the client if another call UI is already active.
@@ -730,36 +878,67 @@ export function CallProvider({ children, user }) {
                 callId: payload.call?.callId || null,
                 currentStatus: callStateRef.current.status,
             });
-            emitSocketEvent('call:reject', { callId: payload.call.callId }, () => {});
+            emitSocketEvent(CALL_EVENTS.reject, { callId: payload.call.callId }, () => {});
             return;
         }
 
         ensureNegotiationState(payload.call?.callId || null);
         setConnectionLabel('Cuoc goi den');
-        setCallState({
-            status: 'incoming_ringing',
+        const nextIncomingState = {
+            status: 'incoming',
             call: payload.call,
             peer: payload.peer || payload.caller,
             message: 'Cuoc goi video den',
             direction: 'incoming',
             timeoutMs: payload.timeoutMs || 0,
+        };
+        setCallState((previousState) => {
+            logCall('Setting incoming call state.', {
+                stateBefore: previousState.status,
+                stateAfter: nextIncomingState.status,
+                callerUsername: payload.call?.callerUsername || payload.caller?.username || null,
+                receiverUsername: user?.username || payload.call?.calleeUsername || null,
+                callId: payload.call?.callId || null,
+            });
+            return nextIncomingState;
         });
     });
 
     const handleAcceptedCall = useEffectEvent(async (payload) => {
-        logSocket('Received call:accepted.', summarizeSocketPayload(payload));
+        logSocket('Received accept-call.', summarizeSocketPayload(payload));
 
-        if (wasLocallyFinalized(payload.call?.callId)) {
-            logCall('Ignoring call:accepted because this call was already finalized locally.', {
-                callId: payload.call?.callId || null,
+        const callId = payload.call?.callId;
+        const activeCallId = callStateRef.current.call?.callId || null;
+        if (!callId) {
+            logCall('Ignoring accept-call because payload is missing callId.', summarizeSocketPayload(payload));
+            return;
+        }
+
+        if (!activeCallId || activeCallId !== callId) {
+            logCall('Ignoring accept-call because active call does not match.', {
+                callId,
+                activeCallId,
+                currentStatus: callStateRef.current.status,
             });
             return;
         }
 
-        const callId = payload.call?.callId;
+        if (wasLocallyFinalized(callId)) {
+            logCall('Ignoring accept-call because this call was already finalized locally.', {
+                callId,
+            });
+            return;
+        }
+
         const negotiationState = ensureNegotiationState(callId);
 
         setConnectionLabel('Dang thiet lap ket noi...');
+        logCall('Processing accept-call event.', {
+            ...getCallDebugSnapshot({
+                incomingPayload: summarizeSocketPayload(payload),
+            }),
+            isCurrentUserCaller: payload.call.callerUsername === user?.username,
+        });
         setCallState((previousState) => ({
             ...previousState,
             status: 'connecting',
@@ -776,7 +955,7 @@ export function CallProvider({ children, user }) {
         }
 
         if (negotiationState.offerStarted || negotiationState.offerSent) {
-            logCall('Ignoring duplicate call:accepted because offer creation already started.', {
+            logCall('Ignoring duplicate accept-call because offer creation already started.', {
                 callId,
                 offerStarted: negotiationState.offerStarted,
                 offerSent: negotiationState.offerSent,
@@ -787,9 +966,19 @@ export function CallProvider({ children, user }) {
         negotiationState.offerStarted = true;
 
         try {
+            logCall('Caller accepted event received; preparing local media before WebRTC offer.', {
+                callId,
+                callerUsername: payload.call.callerUsername,
+                calleeUsername: payload.call.calleeUsername,
+                stateBeforeMedia: callStateRef.current.status,
+            });
             await ensureLocalStream();
         } catch (error) {
-            console.error('[CallContext] Could not access local media before creating offer:', error);
+            errorCall('Could not access local media before creating offer.', error, {
+                callId,
+                state: callStateRef.current.status,
+                mediaFailure: getMediaFailureDebugInfo?.(error) || null,
+            });
             negotiationState.offerStarted = false;
             rememberLocallyFinalizedCall(payload.call.callId, 'failed');
             moveToTerminalState('failed', {
@@ -801,17 +990,30 @@ export function CallProvider({ children, user }) {
                     'Khong the mo camera va micro de bat dau cuoc goi.',
                 ),
             });
-            emitSocketEvent('call:end', { callId: payload.call.callId, reason: 'media_error' }, () => {});
+            emitSocketEvent(
+                CALL_EVENTS.end,
+                {
+                    callId: payload.call.callId,
+                    reason: 'media_error',
+                    mediaError: getMediaFailureDebugInfo?.(error) || null,
+                },
+                () => {},
+            );
             return;
         }
 
         try {
+            logWebRTC('Starting WebRTC offer creation after accept-call.', {
+                callId,
+                callerUsername: payload.call.callerUsername,
+                calleeUsername: payload.call.calleeUsername,
+            });
             // Caller creates the SDP offer after the callee has accepted.
             const offer = await createOffer({
                 callId,
                 onIceCandidate: (candidate) => {
                     emitSocketEvent(
-                        'webrtc:ice-candidate',
+                        CALL_EVENTS.iceCandidate,
                         {
                             callId,
                             candidate,
@@ -829,7 +1031,7 @@ export function CallProvider({ children, user }) {
             });
 
             emitSocketEvent(
-                'webrtc:offer',
+                CALL_EVENTS.offer,
                 {
                     callId,
                     offer,
@@ -844,11 +1046,15 @@ export function CallProvider({ children, user }) {
                         direction: callStateRef.current.direction,
                         message: response?.message || 'Khong the gui offer WebRTC.',
                     });
-                    emitSocketEvent('call:end', { callId, reason: 'signaling_error' }, () => {});
+                    emitSocketEvent(CALL_EVENTS.end, { callId, reason: 'signaling_error' }, () => {});
                 },
             );
         } catch (error) {
-            console.error('[CallContext] Could not create offer:', error);
+            errorCall('Could not create offer.', error, {
+                callId,
+                state: callStateRef.current.status,
+                webrtc: getWebRTCDebugSnapshot?.() || null,
+            });
             negotiationState.offerStarted = false;
             negotiationState.offerSent = false;
             rememberLocallyFinalizedCall(callId, 'failed');
@@ -858,25 +1064,25 @@ export function CallProvider({ children, user }) {
                 direction: callStateRef.current.direction,
                 message: 'Khong the tao ket noi WebRTC de bat dau cuoc goi.',
             });
-            emitSocketEvent('call:end', { callId, reason: 'signaling_error' }, () => {});
+            emitSocketEvent(CALL_EVENTS.end, { callId, reason: 'signaling_error' }, () => {});
         }
     });
 
     const handleOffer = useEffectEvent(async ({ callId, offer }) => {
-        logSocket('Received webrtc:offer.', {
+        logSocket('Received offer.', {
             ...summarizeSocketPayload({ callId, offer }),
             localCallId: callStateRef.current.call?.callId || null,
         });
 
         if (!callStateRef.current.call || callStateRef.current.call.callId !== callId) {
-            logCall('Ignoring webrtc:offer because active call does not match.', {
+            logCall('Ignoring offer because active call does not match.', {
                 callId,
                 activeCallId: callStateRef.current.call?.callId || null,
             });
             return;
         }
         if (wasLocallyFinalized(callId)) {
-            logCall('Ignoring webrtc:offer because call was already finalized locally.', {
+            logCall('Ignoring offer because call was already finalized locally.', {
                 callId,
             });
             return;
@@ -884,7 +1090,7 @@ export function CallProvider({ children, user }) {
 
         const negotiationState = ensureNegotiationState(callId);
         if (negotiationState.answerStarted || negotiationState.answerSent) {
-            logCall('Ignoring duplicate webrtc:offer because answer creation already started.', {
+            logCall('Ignoring duplicate offer because answer creation already started.', {
                 callId,
                 answerStarted: negotiationState.answerStarted,
                 answerSent: negotiationState.answerSent,
@@ -896,9 +1102,19 @@ export function CallProvider({ children, user }) {
         negotiationState.answerStarted = true;
 
         try {
+            logCall('Receiver got offer; preparing local media before WebRTC answer.', {
+                callId,
+                stateBeforeMedia: callStateRef.current.status,
+                callerUsername: callStateRef.current.call?.callerUsername || null,
+                calleeUsername: callStateRef.current.call?.calleeUsername || null,
+            });
             await ensureLocalStream();
         } catch (error) {
-            console.error('[CallContext] Could not access local media before creating answer:', error);
+            errorCall('Could not access local media before creating answer.', error, {
+                callId,
+                state: callStateRef.current.status,
+                mediaFailure: getMediaFailureDebugInfo?.(error) || null,
+            });
             negotiationState.answerStarted = false;
             rememberLocallyFinalizedCall(callId, 'failed');
             moveToTerminalState('failed', {
@@ -910,18 +1126,30 @@ export function CallProvider({ children, user }) {
                     'Khong the mo camera va micro de nhan cuoc goi.',
                 ),
             });
-            emitSocketEvent('call:end', { callId, reason: 'media_error' }, () => {});
+            emitSocketEvent(
+                CALL_EVENTS.end,
+                {
+                    callId,
+                    reason: 'media_error',
+                    mediaError: getMediaFailureDebugInfo?.(error) || null,
+                },
+                () => {},
+            );
             return;
         }
 
         try {
+            logWebRTC('Starting WebRTC answer creation after receiving offer.', {
+                callId,
+                offer: describeSessionDescription(offer),
+            });
             // Callee receives offer, applies it, then replies with SDP answer.
             const answer = await createAnswer({
                 callId,
                 offer,
                 onIceCandidate: (candidate) => {
                     emitSocketEvent(
-                        'webrtc:ice-candidate',
+                        CALL_EVENTS.iceCandidate,
                         {
                             callId,
                             candidate,
@@ -939,7 +1167,7 @@ export function CallProvider({ children, user }) {
             });
 
             emitSocketEvent(
-                'webrtc:answer',
+                CALL_EVENTS.answer,
                 {
                     callId,
                     answer,
@@ -954,11 +1182,15 @@ export function CallProvider({ children, user }) {
                         direction: callStateRef.current.direction,
                         message: response?.message || 'Khong the gui answer WebRTC.',
                     });
-                    emitSocketEvent('call:end', { callId, reason: 'signaling_error' }, () => {});
+                    emitSocketEvent(CALL_EVENTS.end, { callId, reason: 'signaling_error' }, () => {});
                 },
             );
         } catch (error) {
-            console.error('[CallContext] Could not create answer:', error);
+            errorCall('Could not create answer.', error, {
+                callId,
+                state: callStateRef.current.status,
+                webrtc: getWebRTCDebugSnapshot?.() || null,
+            });
             negotiationState.answerStarted = false;
             negotiationState.answerSent = false;
             rememberLocallyFinalizedCall(callId, 'failed');
@@ -968,25 +1200,25 @@ export function CallProvider({ children, user }) {
                 direction: callStateRef.current.direction,
                 message: 'Khong the hoan tat ket noi WebRTC.',
             });
-            emitSocketEvent('call:end', { callId, reason: 'signaling_error' }, () => {});
+            emitSocketEvent(CALL_EVENTS.end, { callId, reason: 'signaling_error' }, () => {});
         }
     });
 
     const handleAnswer = useEffectEvent(async ({ callId, answer }) => {
-        logSocket('Received webrtc:answer.', {
+        logSocket('Received answer.', {
             ...summarizeSocketPayload({ callId, answer }),
             activeCallId: callStateRef.current.call?.callId || null,
         });
 
         if (!callStateRef.current.call || callStateRef.current.call.callId !== callId) {
-            logCall('Ignoring webrtc:answer because active call does not match.', {
+            logCall('Ignoring answer because active call does not match.', {
                 callId,
                 activeCallId: callStateRef.current.call?.callId || null,
             });
             return;
         }
         if (wasLocallyFinalized(callId)) {
-            logCall('Ignoring webrtc:answer because call was already finalized locally.', {
+            logCall('Ignoring answer because call was already finalized locally.', {
                 callId,
             });
             return;
@@ -994,7 +1226,7 @@ export function CallProvider({ children, user }) {
 
         const negotiationState = ensureNegotiationState(callId);
         if (negotiationState.answerApplied) {
-            logCall('Ignoring duplicate webrtc:answer because it was already applied.', {
+            logCall('Ignoring duplicate answer because it was already applied.', {
                 callId,
             });
             return;
@@ -1020,7 +1252,11 @@ export function CallProvider({ children, user }) {
                 iceConnectionState,
                 signalingState,
             });
-            console.error('[CallContext] Could not apply answer:', error);
+            errorCall('Could not apply answer.', error, {
+                callId,
+                state: callStateRef.current.status,
+                webrtc: getWebRTCDebugSnapshot?.() || null,
+            });
             rememberLocallyFinalizedCall(callId, 'failed');
             moveToTerminalState('failed', {
                 call: callStateRef.current.call,
@@ -1028,22 +1264,22 @@ export function CallProvider({ children, user }) {
                 direction: callStateRef.current.direction,
                 message: 'Khong the dong bo ket noi video.',
             });
-            emitSocketEvent('call:end', { callId, reason: 'signaling_error' }, () => {});
+            emitSocketEvent(CALL_EVENTS.end, { callId, reason: 'signaling_error' }, () => {});
         }
     });
 
     const handleIceCandidate = useEffectEvent(async ({ callId, candidate }) => {
-        logSocket('Received webrtc:ice-candidate.', summarizeSocketPayload({ callId, candidate }));
+        logSocket('Received ice-candidate.', summarizeSocketPayload({ callId, candidate }));
 
         if (!callStateRef.current.call || callStateRef.current.call.callId !== callId) {
-            logCall('Ignoring webrtc:ice-candidate because active call does not match.', {
+            logCall('Ignoring ice-candidate because active call does not match.', {
                 callId,
                 activeCallId: callStateRef.current.call?.callId || null,
             });
             return;
         }
         if (wasLocallyFinalized(callId)) {
-            logCall('Ignoring webrtc:ice-candidate because call was already finalized locally.', {
+            logCall('Ignoring ice-candidate because call was already finalized locally.', {
                 callId,
             });
             return;
@@ -1075,9 +1311,19 @@ export function CallProvider({ children, user }) {
     });
 
     const handleRejected = useEffectEvent((payload) => {
-        logSocket('Received call:rejected.', summarizeSocketPayload(payload));
+        logSocket('Received reject-call.', summarizeSocketPayload(payload));
 
         if (wasLocallyFinalized(payload.call?.callId, 'rejected')) {
+            return;
+        }
+
+        const activeCallId = callStateRef.current.call?.callId || null;
+        if (!activeCallId || (payload.call?.callId && activeCallId !== payload.call.callId)) {
+            logCall('Ignoring reject-call because active call does not match.', {
+                callId: payload.call?.callId || null,
+                activeCallId,
+                currentStatus: callStateRef.current.status,
+            });
             return;
         }
 
@@ -1093,6 +1339,16 @@ export function CallProvider({ children, user }) {
         logSocket('Received call:timeout.', summarizeSocketPayload(payload));
 
         if (wasLocallyFinalized(payload.call?.callId)) {
+            return;
+        }
+
+        const activeCallId = callStateRef.current.call?.callId || null;
+        if (!activeCallId || (payload.call?.callId && activeCallId !== payload.call.callId)) {
+            logCall('Ignoring call:timeout because active call does not match.', {
+                callId: payload.call?.callId || null,
+                activeCallId,
+                currentStatus: callStateRef.current.status,
+            });
             return;
         }
 
@@ -1116,6 +1372,16 @@ export function CallProvider({ children, user }) {
             return;
         }
 
+        const activeCallId = callStateRef.current.call?.callId || null;
+        if (!activeCallId || (payload.call?.callId && activeCallId !== payload.call.callId)) {
+            logCall('Ignoring call:failed because active call does not match.', {
+                callId: payload.call?.callId || null,
+                activeCallId,
+                currentStatus: callStateRef.current.status,
+            });
+            return;
+        }
+
         moveToTerminalState(payload.status || 'failed', {
             call: payload.call || callStateRef.current.call,
             peer: payload.peer || callStateRef.current.peer,
@@ -1125,10 +1391,15 @@ export function CallProvider({ children, user }) {
     });
 
     const handleEnded = useEffectEvent((payload) => {
-        logSocket('Received call:ended.', summarizeSocketPayload(payload));
+        logSocket('Received call-ended.', summarizeSocketPayload(payload));
 
-        const activeCallId = callStateRef.current.call?.callId;
-        if (activeCallId && payload.call?.callId && activeCallId !== payload.call.callId) {
+        const activeCallId = callStateRef.current.call?.callId || null;
+        if (!activeCallId || (payload.call?.callId && activeCallId !== payload.call.callId)) {
+            warnCall('ignored stale call-ended', {
+                callId: payload.call?.callId || null,
+                activeCallId,
+                currentStatus: callStateRef.current.status,
+            });
             return;
         }
 
@@ -1163,49 +1434,69 @@ export function CallProvider({ children, user }) {
             return undefined;
         }
 
+        logCall('CallContext preparing socket listeners for active user.', {
+            currentUser: user.username,
+            socketBeforeConnect: getSocketDebugSnapshot(),
+            callState: callStateRef.current.status,
+        });
         const socket = connectSocket();
 
-        socket.off('call:incoming', handleIncomingCall);
-        socket.off('call:accepted', handleAcceptedCall);
+        socket.off(CALL_EVENTS.incoming, handleIncomingCall);
+        socket.off(CALL_EVENTS.accept, handleAcceptedCall);
         socket.off('call:busy', handleBusy);
-        socket.off('call:rejected', handleRejected);
+        socket.off(CALL_EVENTS.reject, handleRejected);
         socket.off('call:timeout', handleTimeout);
         socket.off('call:failed', handleFailed);
-        socket.off('call:ended', handleEnded);
-        socket.off('webrtc:offer', handleOffer);
-        socket.off('webrtc:answer', handleAnswer);
-        socket.off('webrtc:ice-candidate', handleIceCandidate);
+        socket.off(CALL_EVENTS.ended, handleEnded);
+        socket.off(CALL_EVENTS.offer, handleOffer);
+        socket.off(CALL_EVENTS.answer, handleAnswer);
+        socket.off(CALL_EVENTS.iceCandidate, handleIceCandidate);
 
-        socket.on('call:incoming', handleIncomingCall);
-        socket.on('call:accepted', handleAcceptedCall);
+        socket.on(CALL_EVENTS.incoming, handleIncomingCall);
+        socket.on(CALL_EVENTS.accept, handleAcceptedCall);
         socket.on('call:busy', handleBusy);
-        socket.on('call:rejected', handleRejected);
+        socket.on(CALL_EVENTS.reject, handleRejected);
         socket.on('call:timeout', handleTimeout);
         socket.on('call:failed', handleFailed);
-        socket.on('call:ended', handleEnded);
-        socket.on('webrtc:offer', handleOffer);
-        socket.on('webrtc:answer', handleAnswer);
-        socket.on('webrtc:ice-candidate', handleIceCandidate);
+        socket.on(CALL_EVENTS.ended, handleEnded);
+        socket.on(CALL_EVENTS.offer, handleOffer);
+        socket.on(CALL_EVENTS.answer, handleAnswer);
+        socket.on(CALL_EVENTS.iceCandidate, handleIceCandidate);
 
         logSocket('Registered call and WebRTC listeners on socket.', {
             socketId: socket.id || null,
+            connected: socket.connected,
+            currentUser: user.username,
+            events: [
+                CALL_EVENTS.incoming,
+                CALL_EVENTS.accept,
+                CALL_EVENTS.reject,
+                CALL_EVENTS.ended,
+                CALL_EVENTS.offer,
+                CALL_EVENTS.answer,
+                CALL_EVENTS.iceCandidate,
+            ],
         });
 
         return () => {
-            socket.off('call:incoming', handleIncomingCall);
-            socket.off('call:accepted', handleAcceptedCall);
+            logSocket('Removing call and WebRTC listeners from socket.', {
+                currentUser: user.username,
+                socket: getSocketDebugSnapshot(),
+            });
+            socket.off(CALL_EVENTS.incoming, handleIncomingCall);
+            socket.off(CALL_EVENTS.accept, handleAcceptedCall);
             socket.off('call:busy', handleBusy);
-            socket.off('call:rejected', handleRejected);
+            socket.off(CALL_EVENTS.reject, handleRejected);
             socket.off('call:timeout', handleTimeout);
             socket.off('call:failed', handleFailed);
-            socket.off('call:ended', handleEnded);
-            socket.off('webrtc:offer', handleOffer);
-            socket.off('webrtc:answer', handleAnswer);
-            socket.off('webrtc:ice-candidate', handleIceCandidate);
+            socket.off(CALL_EVENTS.ended, handleEnded);
+            socket.off(CALL_EVENTS.offer, handleOffer);
+            socket.off(CALL_EVENTS.answer, handleAnswer);
+            socket.off(CALL_EVENTS.iceCandidate, handleIceCandidate);
             clearAllUiTimers();
             clearHistoryRefreshTimer();
         };
-    }, [user]);
+    }, [user?.username]);
 
     return (
         <CallContext.Provider
@@ -1220,7 +1511,7 @@ export function CallProvider({ children, user }) {
                 currentCall: callState.call,
                 dismissCallUi: resetCallUi,
                 endCall,
-                incomingCall: callState.status === 'incoming_ringing' ? callState.call : null,
+                incomingCall: callState.status === 'incoming' ? callState.call : null,
                 isCallBusy: callState.status !== 'idle',
                 isCameraEnabled,
                 isMicEnabled,
@@ -1236,7 +1527,7 @@ export function CallProvider({ children, user }) {
             {children}
 
             <IncomingCallModal
-                visible={callState.status === 'incoming_ringing'}
+                visible={callState.status === 'incoming'}
                 peer={callState.peer}
                 countdownSec={ringCountdownSec}
                 onAccept={acceptIncomingCall}
@@ -1244,7 +1535,7 @@ export function CallProvider({ children, user }) {
             />
 
             <OutgoingCallModal
-                visible={callState.status === 'outgoing_ringing' || TERMINAL_STATUSES.has(callState.status)}
+                visible={callState.status === 'outgoing' || TERMINAL_STATUSES.has(callState.status)}
                 status={callState.status}
                 direction={callState.direction}
                 peer={callState.peer}
@@ -1255,7 +1546,7 @@ export function CallProvider({ children, user }) {
             />
 
             <CallOverlay
-                visible={['connecting', 'in_call'].includes(callState.status)}
+                visible={['connecting', 'in-call'].includes(callState.status)}
                 status={callState.status}
                 peer={callState.peer}
                 localStream={localStream}
@@ -1265,7 +1556,7 @@ export function CallProvider({ children, user }) {
                 onToggleMic={toggleMic}
                 onToggleCamera={toggleCamera}
                 onEndCall={() => endCall('ended')}
-                connectionLabel={callState.status === 'in_call' ? 'Da ket noi video' : connectionLabel}
+                connectionLabel={callState.status === 'in-call' ? 'Da ket noi video' : connectionLabel}
                 connectionState={connectionState}
                 callDurationSec={callDurationSec}
             />
