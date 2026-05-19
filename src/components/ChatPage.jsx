@@ -10,6 +10,10 @@ import {
 
 import UserProfileModal from './user/UserProfileModal';
 import AdminStats from './statistics/AdminStats';
+import Home from './chat/Home';
+import RightSidebar from './chat/RightSidebar';
+import MessageSearch from './chat/MessageSearch';
+import CreateChat from './function/CreateChat';
 import api from '../services/api';
 import { connectSocket } from '../services/socket';
 import useCall from '../context/useCall';
@@ -23,6 +27,8 @@ const ChatPage = ({ user, setUser }) => {
     const [allGroups, setAllGroups] = useState([]);
     const [activeRoom, setActiveRoom] = useState(null); 
     const [unreadCounts, setUnreadCounts] = useState({}); 
+    const [friends, setFriends] = useState(user?.friends || []);
+    const [friendRequests, setFriendRequests] = useState(user?.friendRequests || []);
 
     const [showFriendsTab, setShowFriendsTab] = useState(false);
     const [showDiscoveryTab, setShowDiscoveryTab] = useState(false);
@@ -41,9 +47,13 @@ const ChatPage = ({ user, setUser }) => {
     const fileInputRef = useRef(null);
     const emojiPickerRef = useRef(null);
     const { startCall, isCallBusy, callHistoryVersion } = useCall();
-    const socket = connectSocket();
+    const activeRoomId = activeRoom?.id || null;
+    const activeRoomName = activeRoom?.name || '';
+    const activeRoomIsDM = Boolean(activeRoom?.isDM);
+    const socket = { emit: (...args) => connectSocket().emit(...args) };
 
     const loadData = async () => {
+        if (!user?.username) return;
         try {
             const [m, g, u, c] = await Promise.all([
                 api.get(`/messages/${user.username}`),
@@ -63,14 +73,14 @@ const ChatPage = ({ user, setUser }) => {
     };
 
     useEffect(() => {
-        if (!user) return;
+        if (!user?.username) return;
         const socket = connectSocket();
         socket.emit('user_online', { ...user });
         loadData();
         socket.on('groups_updated', loadData);
         socket.on('receive_message', (d) => {
             setMessages(p => [...p, d]);
-            if (d.roomId !== activeRoom.id && d.senderUsername !== user.username) {
+            if (d.roomId !== activeRoomId && d.senderUsername !== user.username) {
                 const rId = d.roomId || 'chung';
                 setUnreadCounts(prev => ({ ...prev, [rId]: (prev[rId] || 0) + 1 }));
             }
@@ -78,16 +88,17 @@ const ChatPage = ({ user, setUser }) => {
         socket.on('update_user_list', (u) => setOnlineUsers(u));
         socket.on('message_revoked', (id) => setMessages(p => p.map(m => m.messageId === id ? { ...m, text: "Tin nhắn này đã bị thu hồi", isRevoked: true, fileData: null, fileType: null } : m)));
         return () => { socket.off('groups_updated'); socket.off('receive_message'); socket.off('update_user_list'); socket.off('message_revoked'); };
-    }, [user.username, activeRoom.id]);
+    }, [user?.username, activeRoomId]);
 
     useEffect(() => {
-        if (!user) return;
+        if (!user?.username) return;
         loadData();
-    }, [user.username, callHistoryVersion]);
+    }, [user?.username, callHistoryVersion]);
 
     useEffect(() => { scrollRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, activeRoom]);
 
     const deleteForMe = async (id) => {
+        if (!user?.username) return;
         if (window.confirm("Xóa phía bạn?")) {
             await api.post('/messages/delete-for-me', { username: user.username, messageId: id });
             setMessages(prev => prev.filter(m => m.messageId !== id));
@@ -95,9 +106,10 @@ const ChatPage = ({ user, setUser }) => {
     };
 
     const clearChatHistory = async () => {
+        if (!user?.username || !activeRoomId) return;
         if (window.confirm(`Xóa sạch chat tại ${activeRoom.name}?`)) {
-            await api.post('/messages/clear-history', { username: user.username, roomId: activeRoom.id });
-            setMessages(prev => prev.filter(m => m.roomId !== activeRoom.id));
+            await api.post('/messages/clear-history', { username: user.username, roomId: activeRoomId });
+            setMessages(prev => prev.filter(m => m.roomId !== activeRoomId));
         }
     };
 
@@ -116,25 +128,33 @@ const ChatPage = ({ user, setUser }) => {
         return Array.from(chatUsers);
     };
 
-    const handleSwitchRoom = (room) => { setActiveRoom(room); setShowFriendsTab(false); setIsAdminMode(false); setUnreadCounts(prev => ({ ...prev, [room.id]: 0 })); };
+    const handleSwitchRoom = (room) => {
+        setActiveRoom(room || null);
+        setShowFriendsTab(false);
+        setIsAdminMode(false);
+        if (room?.id) {
+            setUnreadCounts(prev => ({ ...prev, [room.id]: 0 }));
+        }
+    };
     const handleStartDM = (friendUname) => { const dmId = `dm_${[user.username, friendUname].sort().join("_")}`; handleSwitchRoom({ id: dmId, name: friendUname, isDM: true }); };
     const handleOpenProfile = (uname) => setProfileModal({ isOpen: true, username: uname });
-    const handleVideoCall = (targetUsername = activeRoom.name) => {
+    const handleVideoCall = (targetUsername = activeRoomName) => {
         if (!targetUsername || isCallBusy) return;
-        startCall(targetUsername, activeRoom.isDM ? activeRoom.id : undefined);
+        startCall(targetUsername, activeRoomIsDM ? activeRoomId : undefined);
     };
 
     const handleSendText = () => {
-        const currentG = allGroups.find(g => g.groupId === activeRoom.id);
+        if (!user?.username || !activeRoomId) return;
+        const currentG = allGroups.find(g => g.groupId === activeRoomId);
         if (currentG?.isDisabled) return alert("Kênh đã khóa!");
         if (!msgInput.trim()) return;
-        socket.emit('send_message', { sender: user.displayName, senderUsername: user.username, text: msgInput, roomId: activeRoom.id, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+        socket.emit('send_message', { sender: user.displayName, senderUsername: user.username, text: msgInput, roomId: activeRoomId, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
         setMsgInput(''); setShowEmojiPicker(false);
     };
 
-    const handleCreateGroup = async (name) => {
+    const handleCreateGroup = async (name, isPublic = false) => {
         if(!name.trim()) return;
-        await api.post('/groups/create', { groupName: name, owner: user.username, isPublic: isNewGroupPublic });
+        await api.post('/groups/create', { groupName: name, owner: user.username, isPublic });
         setShowGroupCreator(false);
         loadData();
     };
@@ -151,18 +171,41 @@ const ChatPage = ({ user, setUser }) => {
     };
 
     const handleManageGroup = async (action) => {
+        if (!activeRoomId) return;
         if(window.confirm(`Xác nhận?`)) {
-            await api.post('/groups/manage', { groupId: activeRoom.id, action });
+            await api.post('/groups/manage', { groupId: activeRoomId, action });
             if(action === 'delete') { setActiveRoom({ id: 'chung', name: 'Chung' }); setShowGroupSettings(false); }
             loadData();
         }
     };
 
     const handleKick = async (target) => {
+        if (!activeRoomId) return;
         if(window.confirm(`Kích @${target}?`)) {
-            await api.post('/groups/remove-member', { groupId: activeRoom.id, targetUsername: target });
+            await api.post('/groups/remove-member', { groupId: activeRoomId, targetUsername: target });
             loadData();
         }
+    };
+
+    const handleFileUpload = (event) => {
+        const file = event.target.files?.[0];
+        if (!file || !user?.username || !activeRoomId) return;
+
+        const reader = new FileReader();
+        reader.onload = () => {
+            socket.emit('send_message', {
+                sender: user.displayName || user.username,
+                senderUsername: user.username,
+                roomId: activeRoomId,
+                text: '',
+                fileData: reader.result,
+                fileName: file.name,
+                fileType: file.type?.startsWith('image/') ? 'image' : file.type || 'file',
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            });
+            event.target.value = '';
+        };
+        reader.readAsDataURL(file);
     };
 
     const callStatusLabelMap = {
@@ -205,9 +248,13 @@ const ChatPage = ({ user, setUser }) => {
         return call.callerUsername === user.username ? call.calleeUsername : call.callerUsername;
     };
 
-    const currentGroup = allGroups.find(g => g.groupId === activeRoom.id);
+    if (!user?.username) {
+        return <div className="p-6 text-sm font-bold text-gray-500">Dang tai thong tin nguoi dung...</div>;
+    }
+
+    const currentGroup = activeRoomId ? allGroups.find(g => g.groupId === activeRoomId) : null;
     const isAdminOfGroup = currentGroup?.owner === user.username || user.role === 'admin';
-    const isMember = activeRoom.id === 'chung' || activeRoom.id.startsWith('dm_') || currentGroup?.isPublic || currentGroup?.members?.includes(user.username) || user.role === 'admin';
+    const isMember = activeRoomId === 'chung' || activeRoomId?.startsWith('dm_') || currentGroup?.isPublic || currentGroup?.members?.includes(user.username) || user.role === 'admin';
 
     return (
         <div className={`flex h-screen overflow-hidden font-sans transition-colors duration-500 ${darkMode ? 'bg-[#0f172a] text-[#dbdee1]' : 'bg-white text-[#313338]'}`}>
@@ -328,7 +375,7 @@ const ChatPage = ({ user, setUser }) => {
             {showSearch && <MessageSearch darkMode={darkMode} messages={messages} activeRoom={activeRoom} user={user} onClose={() => setShowSearch(false)} />}
 
             <CreateChat user={user} isOpen={showGroupCreator} onClose={() => setShowGroupCreator(false)} onCreateGroup={handleCreateGroup} darkMode={darkMode} />
-            {showGroupSettings && (
+            {showGroupSettings && activeRoom && (
                 <div className="fixed inset-0 bg-[#020617]/90 flex items-center justify-center z-[300] backdrop-blur-md p-4 animate-in zoom-in-95"><div className={`w-full max-w-[450px] rounded-[40px] overflow-hidden shadow-2xl border border-white/10 ${darkMode ? 'bg-slate-900' : 'bg-white'}`}><div className="p-8 border-b border-white/5 flex justify-between items-center bg-gradient-to-r from-slate-900 to-indigo-900 text-white shadow-xl"><div><h2 className="text-xl font-black uppercase italic tracking-tighter">Cấu hình #{activeRoom.name}</h2><p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest opacity-60 italic uppercase">Admin Control Center</p></div><button onClick={()=>setShowGroupSettings(false)} className="w-10 h-10 flex items-center justify-center bg-white/5 hover:bg-red-500 rounded-full transition-all"><FaTimes/></button></div><div className="p-8 space-y-8 font-bold"><div className="grid grid-cols-2 gap-4"><button onClick={() => handleManageGroup('disable')} className={`p-4 rounded-2xl border-2 flex items-center justify-center gap-2 uppercase text-[10px] font-black transition-all ${currentGroup?.isDisabled ? 'border-emerald-500 text-emerald-500 bg-emerald-500/5 shadow-inner' : 'border-red-500 text-red-500 bg-red-500/5 shadow-inner'}`}>{currentGroup?.isDisabled ? <><FaPlayCircle size={14}/> Mở cửa</> : <><FaPauseCircle size={14}/> Khóa chat</>}</button><button onClick={() => handleManageGroup('delete')} className="p-4 rounded-2xl border-2 border-gray-600 text-gray-400 flex items-center justify-center gap-2 uppercase text-[10px] font-black hover:bg-red-600 hover:text-white transition-all shadow-md"><FaTrash size={14}/> Giải tán</button></div>{!currentGroup?.isPublic && (<div className="space-y-3 max-h-[300px] overflow-y-auto scrollbar-hide"><p className="text-[9px] font-black uppercase text-gray-500 tracking-[2px] italic mb-4 border-l-2 border-indigo-500 pl-3 uppercase">Đội ngũ thám hiểm ({currentGroup?.members?.length})</p>{currentGroup?.members?.map(u => (<div key={u} className="flex items-center justify-between p-3 rounded-2xl bg-white/5 border border-white/5 group/user hover:border-indigo-500/30 transition-all shadow-sm"><span className="text-sm font-bold italic text-indigo-100 truncate flex-1 uppercase tracking-tighter">@{u} {u === currentGroup.owner && <span className="text-[8px] bg-indigo-500 text-white px-2 py-0.5 rounded-full uppercase ml-1 shadow-md">Host</span>}</span>{u !== currentGroup.owner && <button onClick={() => handleKick(u)} className="text-red-400 opacity-0 group-hover/user:opacity-100 transition-all hover:scale-110 active:text-red-600"><FaUserMinus size={16}/></button>}</div>))}</div>)}</div></div></div>
             )}
 
