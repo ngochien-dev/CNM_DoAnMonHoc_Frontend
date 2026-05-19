@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+
 import {
   FaSearch, FaTimes, FaCalendarAlt, FaPaperclip,
   FaLink, FaChevronDown
@@ -67,15 +67,15 @@ const MessageSearch = ({ darkMode, messages, activeRoom, user, onClose }) => {
     .filter(m => (m.roomId || 'chung') === (activeRoom?.id || 'chung'))
     .map(m => m.senderUsername))];
 
-  const bgClass = darkMode ? 'bg-discord-darker border-white/10' : 'bg-white border-gray-200';
-  const textClass = darkMode ? 'text-white' : 'text-gray-900';
-  const inputBgClass = darkMode ? 'bg-white/5 border-white/10 text-white' : 'bg-gray-50 border-gray-300 text-gray-900';
-  const secondaryTextClass = darkMode ? 'text-gray-400' : 'text-gray-600';
+  const bgClass = darkMode ? 'bg-[#0f172a] border-white/10' : 'bg-slate-50 border-gray-200';
+  const textClass = darkMode ? 'text-white' : 'text-slate-800';
+  const inputBgClass = darkMode ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-200 text-slate-800 shadow-sm';
+  const secondaryTextClass = darkMode ? 'text-gray-400' : 'text-slate-500';
 
   return (
-    <div className={`w-full max-w-sm border-l ${darkMode ? 'border-white/10 bg-discord-darker' : 'border-gray-200 bg-white'} h-full flex flex-col animate-in slide-in-from-right`}>
+    <div className={`w-full max-w-sm border-l h-full flex flex-col animate-in slide-in-from-right ${darkMode ? 'border-white/10 bg-[#020617]' : 'border-gray-200 bg-white'}`}>
       {/* Header */}
-      <div className={`p-4 border-b ${darkMode ? 'border-white/10' : 'border-gray-200'} flex items-center justify-between shrink-0`}>
+      <div className={`p-4 border-b flex items-center justify-between shrink-0 ${darkMode ? 'border-white/10' : 'border-gray-200'}`}>
         <h2 className={`text-sm font-black uppercase tracking-widest ${textClass}`}>
           <FaSearch className="inline mr-2" />
           Tìm Kiếm
@@ -103,7 +103,7 @@ const MessageSearch = ({ darkMode, messages, activeRoom, user, onClose }) => {
         </div>
 
         {/* Filters - Vertical Layout */}
-        <div className="space-y-3 pb-4 border-b ${darkMode ? 'border-white/10' : 'border-gray-200'}">
+        <div className={`space-y-3 pb-4 border-b ${darkMode ? 'border-white/10' : 'border-gray-100'}`}>
           <p className={`text-xs font-bold uppercase tracking-wider ${secondaryTextClass}`}>
             Lọc Theo:
           </p>
@@ -158,7 +158,7 @@ const MessageSearch = ({ darkMode, messages, activeRoom, user, onClose }) => {
               {searchResults.map((result, idx) => (
                 <div
                   key={idx}
-                  className={`p-3 rounded-lg border transition-all cursor-pointer ${darkMode ? 'bg-white/5 border-white/5 hover:border-indigo-500/50 hover:bg-white/10' : 'bg-gray-50 border-gray-200 hover:border-indigo-500 hover:bg-gray-100'}`}
+                  className={`p-3 rounded-xl border transition-all cursor-pointer ${darkMode ? 'bg-white/5 border-white/5 hover:border-indigo-500/50 hover:bg-white/10' : 'bg-white border-gray-100 hover:border-indigo-500 hover:bg-slate-50 shadow-sm'}`}
                 >
                   <div className="flex items-start gap-3 mb-2">
                     <div className="w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 font-bold text-sm shrink-0">

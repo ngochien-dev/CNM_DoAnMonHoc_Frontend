@@ -3,17 +3,30 @@ import { useState, useEffect } from 'react';
 import AuthPage from './components/auth/AuthPage';
 import ChatPage from './components/ChatPage';
 import { CallProvider } from './context/CallContext';
+import ChatbotWidget from './components/ChatbotWidget';
 
-
-
-//VITE_API_URL=http://localhost:3001
-//VITE_SOCKET_URL=http://localhost:3001
+function normalizeUserSession(session) {
+    if (!session) return null;
+    return {
+        ...session,
+        id: session.id || session.userId || session.username,
+    };
+}
 
 function App() {
     const [user, setUser] = useState(() => {
         const savedUser = localStorage.getItem('user_session');
-        return savedUser ? JSON.parse(savedUser) : null;
+        try {
+            return savedUser ? normalizeUserSession(JSON.parse(savedUser)) : null;
+        } catch (error) {
+            localStorage.removeItem('user_session');
+            return null;
+        }
     });
+
+    const handleLogin = (session) => {
+        setUser(normalizeUserSession(session));
+    };
 
     useEffect(() => {
         if (user) {
@@ -27,9 +40,10 @@ function App() {
         <CallProvider user={user}>
             <Router>
                 <Routes>
-                    <Route path="/" element={!user ? <AuthPage onLogin={setUser} /> : <Navigate to="/chat" />} />
+                    <Route path="/" element={!user ? <AuthPage onLogin={handleLogin} /> : <Navigate to="/chat" />} />
                     <Route path="/chat" element={user ? <ChatPage user={user} setUser={setUser} /> : <Navigate to="/" />} />
                 </Routes>
+                {user && <ChatbotWidget />}
             </Router>
         </CallProvider>
     );
