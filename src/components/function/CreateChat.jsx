@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FaGlobe, FaLock, FaTimes } from 'react-icons/fa';
+import { FaGlobe, FaLock, FaTimes, FaHashtag } from 'react-icons/fa';
 
 const CreateChat = ({ user, isOpen, onClose, onCreateGroup, darkMode }) => {
     // State local để quản lý việc chọn loại nhóm bên trong Modal
