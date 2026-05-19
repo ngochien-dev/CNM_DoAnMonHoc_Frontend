@@ -7,7 +7,8 @@ import {
     FaChartBar, FaImage, FaSmile, FaMoon, FaSun, FaPalette,
     FaGlobe, FaCog, FaUserMinus, FaPauseCircle, FaPlayCircle, 
     FaUserFriends, FaCommentDots, FaUserPlus, FaTimes, FaUserCheck, FaLock, FaUsers, FaSearch,
-    FaVideo, FaShare, FaThumbtack, FaPoll, FaCalendarAlt, FaReply, FaMicrophone, FaStopCircle, FaSmileBeam, FaEdit, FaExchangeAlt, FaTh, FaPlus, FaCamera, FaFolderPlus, FaLanguage, FaCloud, FaMapMarkerAlt, FaGamepad, FaCalendarCheck, FaPhoneAlt, FaArchive, FaRobot, FaFolderOpen
+    FaVideo, FaShare, FaThumbtack, FaPoll, FaCalendarAlt, FaReply, FaMicrophone, FaStopCircle, FaSmileBeam, FaEdit, FaExchangeAlt, FaTh, FaPlus, FaCamera, FaFolderPlus, FaLanguage, FaCloud, FaMapMarkerAlt, FaGamepad, FaCalendarCheck, FaPhoneAlt, FaArchive, FaRobot, FaFolderOpen,
+    FaEllipsisH, FaEllipsisV, FaEye, FaEyeSlash, FaExclamationTriangle, FaCheck, FaBell, FaBellSlash, FaClock
 } from 'react-icons/fa';
 import { Toaster, toast } from 'react-hot-toast';
 import StoryBar from './social/StoryBar';
@@ -368,7 +369,64 @@ const ChatPage = ({ user, setUser }) => {
     const [showInviteModal, setShowInviteModal] = useState(false); // P1: Invite to group modal
     const [lastSeenMap, setLastSeenMap] = useState({}); // P1: Last seen timestamps
     const [activeSidebarTab, setActiveSidebarTab] = useState('all'); // Folders: all, personal, groups, unread
-    const [selfDestructTimer, setSelfDestructTimer] = useState(0); // 0 = disabled, else seconds
+    const [selfDestructTimers, setSelfDestructTimers] = useState(() => {
+        try { return JSON.parse(localStorage.getItem('selfDestructTimers') || '{}'); } catch { return {}; }
+    });
+    const selfDestructTimer = activeRoom ? (selfDestructTimers[activeRoom.id] || 0) : 0;
+    const setSelfDestructTimer = (val) => {
+        if (!activeRoom?.id) return;
+        setSelfDestructTimers(prev => {
+            const next = { ...prev, [activeRoom.id]: val };
+            if (val === 0) delete next[activeRoom.id];
+            localStorage.setItem('selfDestructTimers', JSON.stringify(next));
+            return next;
+        });
+    };
+    const [activeRoomMenu, setActiveRoomMenu] = useState(null); // { roomId, name, isDM, isPinned, x, y }
+
+    const toggleRoomClassification = (folderId, roomId) => {
+        setCustomFolders(prev => prev.map(f => {
+            if (f.id === folderId) {
+                const exists = f.roomIds.includes(roomId);
+                return {
+                    ...f,
+                    roomIds: exists ? f.roomIds.filter(id => id !== roomId) : [...f.roomIds, roomId]
+                };
+            }
+            return f;
+        }));
+        toast.success('Đã cập nhật phân loại thư mục');
+    };
+
+    const toggleMuteRoomDuration = (roomId, durationMs) => {
+        setMutedRooms(prev => {
+            let next;
+            if (durationMs === null) {
+                next = { ...prev };
+                delete next[roomId];
+            } else if (durationMs === -1) {
+                next = { ...prev, [roomId]: 'forever' };
+            } else {
+                next = { ...prev, [roomId]: (Date.now() + durationMs).toString() };
+            }
+            localStorage.setItem('mutedRooms', JSON.stringify(next));
+            mutedRoomsRef.current = next;
+            return next;
+        });
+        toast.success(durationMs === null ? 'Đã bật lại thông báo' : 'Đã tắt thông báo cuộc trò chuyện');
+    };
+
+    const updateRoomSelfDestructTimer = (roomId, val) => {
+        if (!roomId) return;
+        setSelfDestructTimers(prev => {
+            const next = { ...prev, [roomId]: val };
+            if (val === 0) delete next[roomId];
+            localStorage.setItem('selfDestructTimers', JSON.stringify(next));
+            return next;
+        });
+        toast.success(`Đã đặt hẹn giờ tự xóa tin nhắn`);
+    };
+
     const [isSecretMode, setIsSecretMode] = useState(false); // P2: Secret Chat (no server logs)
     const [secretChatStatus, setSecretChatStatus] = useState('idle'); // 'idle' | 'waiting' | 'requested' | 'established'
     const [secretChatRequester, setSecretChatRequester] = useState(null);
@@ -1897,7 +1955,8 @@ const ChatPage = ({ user, setUser }) => {
                     if (!rId) return;
                     setUnreadCounts(prev => ({ ...prev, [rId]: (prev[rId] || 0) + 1 }));
                     // P1: Check if room is muted before playing sound/notification
-                    const isMuted = mutedRoomsRef.current[rId];
+                    const muteVal = mutedRoomsRef.current[rId];
+                    const isMuted = muteVal && (muteVal === true || muteVal === 'forever' || Date.now() < Number(muteVal));
                     if (!isMuted) {
                         playNotificationSound();
                         // P0: Browser push notification
@@ -2602,23 +2661,35 @@ const ChatPage = ({ user, setUser }) => {
                                                     <FaThumbtack size={9} className="text-indigo-400 rotate-45 shrink-0"/>
                                                 )}
 
-                                                {/* Hover actions */}
-                                                <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-opacity duration-200">
-                                                    <button 
-                                                        onClick={(e) => { e.stopPropagation(); handleTogglePin(r.id, isPinned); }} 
-                                                        className={`p-1 rounded transition-colors ${isActive ? 'hover:bg-white/20 text-white/80' : 'hover:bg-slate-200 dark:hover:bg-white/10 text-gray-400'}`} 
-                                                        title={isPinned ? "Bỏ ghim" : "Ghim"}
-                                                    >
-                                                        <FaThumbtack size={9} className={isPinned ? 'text-indigo-400 rotate-45' : 'text-gray-500'} />
-                                                    </button>
-                                                    <button 
-                                                        onClick={(e) => { e.stopPropagation(); handleToggleArchive(r.id, false); }} 
-                                                        className={`p-1 rounded transition-colors ${isActive ? 'hover:bg-white/20 text-white/80' : 'hover:bg-slate-200 dark:hover:bg-white/10 text-gray-400'}`} 
-                                                        title="Lưu trữ"
-                                                    >
-                                                        <FaArchive size={9} className="text-gray-500" />
-                                                    </button>
-                                                </div>
+                                                 {/* Hover actions: replaced by 3-dot button */}
+                                                 <div className="opacity-0 group-hover:opacity-100 flex items-center transition-opacity duration-200">
+                                                     <button 
+                                                         onClick={(e) => { 
+                                                             e.stopPropagation(); 
+                                                             const rect = e.currentTarget.getBoundingClientRect();
+                                                             
+                                                             // Calculate y position dynamically to prevent bottom clipping
+                                                             const menuHeight = 320;
+                                                             let yPos = rect.bottom + window.scrollY + 4;
+                                                             if (rect.bottom + menuHeight > window.innerHeight) {
+                                                                 yPos = rect.top + window.scrollY - menuHeight - 4;
+                                                             }
+
+                                                             setActiveRoomMenu({
+                                                                 roomId: r.id,
+                                                                 isPinned,
+                                                                 name: r.name,
+                                                                 isDM: r.isDM,
+                                                                 x: rect.right - 220,
+                                                                 y: yPos
+                                                             });
+                                                         }} 
+                                                         className={`p-1.5 rounded-full transition-colors ${isActive ? 'hover:bg-white/20 text-white' : 'hover:bg-slate-200 dark:hover:bg-white/10 text-gray-400'}`} 
+                                                         title="Tùy chọn"
+                                                     >
+                                                         <FaEllipsisH size={12} />
+                                                     </button>
+                                                 </div>
                                             </div>
                                         </div>
                                     </div>
@@ -3511,6 +3582,260 @@ const ChatPage = ({ user, setUser }) => {
             {/* Modals & Components phụ */}
             {showGlobalSearch && <GlobalSearch darkMode={darkMode} onClose={() => setShowGlobalSearch(false)} onSelectResult={handleSelectSearchResult} />}
             <AddFriendModal isOpen={showAddFriend} onClose={() => setShowAddFriend(false)} user={user} loadData={loadData} darkMode={darkMode} />
+
+            {/* Context menu 3 chấm cho phòng chat */}
+            {activeRoomMenu && (
+                <>
+                    {/* Backdrop */}
+                    <div 
+                        className="fixed inset-0 z-[999]" 
+                        onClick={() => setActiveRoomMenu(null)}
+                        onContextMenu={(e) => { e.preventDefault(); setActiveRoomMenu(null); }}
+                    />
+                    
+                    {/* Menu Container */}
+                    <div 
+                        style={{ top: `${activeRoomMenu.y}px`, left: `${activeRoomMenu.x}px` }}
+                        className={`fixed z-[1000] w-56 rounded-2xl border p-1.5 flex flex-col shadow-2xl transition-all duration-200 animate-in fade-in zoom-in-95 ${
+                            darkMode ? 'bg-[#1e1f22] border-white/10 text-gray-200 shadow-black/60' : 'bg-white border-gray-200 text-slate-800 shadow-slate-300/40'
+                        }`}
+                    >
+                        {/* 1. Ghim hội thoại / Bỏ ghim */}
+                        <button 
+                            onClick={() => {
+                                handleTogglePin(activeRoomMenu.roomId, activeRoomMenu.isPinned);
+                                setActiveRoomMenu(null);
+                            }}
+                            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left text-xs font-semibold transition-colors ${
+                                darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-100'
+                            }`}
+                        >
+                            <FaThumbtack size={12} className={`text-slate-400 ${activeRoomMenu.isPinned ? 'rotate-45 text-indigo-400' : ''}`} />
+                            <span>{activeRoomMenu.isPinned ? 'Bỏ ghim hội thoại' : 'Ghim hội thoại'}</span>
+                        </button>
+
+                        {/* 2. Phân loại */}
+                        <div className={`relative group/sub w-full flex items-center justify-between px-3 py-2 rounded-xl text-left text-xs font-semibold cursor-pointer transition-colors ${
+                            darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-100'
+                        }`}>
+                            <div className="flex items-center gap-2.5">
+                                <FaFolderPlus size={12} className="text-slate-400" />
+                                <span>Phân loại</span>
+                            </div>
+                            <FaChevronRight size={8} className="text-slate-400" />
+
+                            {/* Submenu */}
+                            <div className={`absolute left-full top-0 ml-1.5 hidden group-hover/sub:block w-48 rounded-xl border p-1.5 flex flex-col shadow-xl ${
+                                darkMode ? 'bg-[#1e1f22] border-white/10 text-gray-200' : 'bg-white border-gray-200 text-slate-800'
+                            }`}>
+                                <p className="text-[9px] font-black uppercase text-gray-500 px-2 py-1 mb-1 tracking-wider">Thư mục phân loại</p>
+                                {customFolders.map(folder => {
+                                    const inFolder = folder.roomIds.includes(activeRoomMenu.roomId);
+                                    return (
+                                        <button 
+                                            key={folder.id}
+                                            onClick={() => {
+                                                toggleRoomClassification(folder.id, activeRoomMenu.roomId);
+                                                setActiveRoomMenu(null);
+                                            }}
+                                            className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-[11px] font-medium transition-colors ${
+                                                darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-50'
+                                            }`}
+                                        >
+                                            <span className="truncate">{folder.name}</span>
+                                            {inFolder && <FaCheck size={9} className="text-emerald-500" />}
+                                        </button>
+                                    );
+                                })}
+                                {customFolders.length === 0 && (
+                                    <div className="text-[10px] text-gray-500 px-2.5 py-1.5 italic">Chưa có thư mục nào</div>
+                                )}
+                                <div className={`my-1 border-t ${darkMode ? 'border-white/5' : 'border-gray-100'}`} />
+                                <button 
+                                    onClick={() => {
+                                        setEditingFolder(null);
+                                        setFolderName('');
+                                        setFolderRooms([activeRoomMenu.roomId]);
+                                        setShowFolderModal(true);
+                                        setActiveRoomMenu(null);
+                                    }}
+                                    className={`w-full flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-left text-[10px] font-bold text-indigo-500 transition-colors ${
+                                        darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-55'
+                                    }`}
+                                >
+                                    <FaPlus size={8} /> Tạo thư mục mới...
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* 3. Đánh dấu chưa đọc / đã đọc */}
+                        {(() => {
+                            const isUnread = (unreadCounts[activeRoomMenu.roomId] || 0) > 0;
+                            return (
+                                <button 
+                                    onClick={() => {
+                                        setUnreadCounts(prev => ({
+                                            ...prev,
+                                            [activeRoomMenu.roomId]: isUnread ? 0 : 1
+                                        }));
+                                        setActiveRoomMenu(null);
+                                    }}
+                                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left text-xs font-semibold transition-colors ${
+                                        darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-100'
+                                    }`}
+                                >
+                                    {isUnread ? (
+                                        <>
+                                            <FaEye size={12} className="text-slate-400" />
+                                            <span>Đánh dấu đã đọc</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <FaEyeSlash size={12} className="text-slate-400" />
+                                            <span>Đánh dấu chưa đọc</span>
+                                        </>
+                                    )}
+                                </button>
+                            );
+                        })()}
+
+                        <div className={`my-1 border-t ${darkMode ? 'border-white/5' : 'border-gray-100'}`} />
+
+                        {/* 4. Tắt thông báo */}
+                        <div className={`relative group/sub w-full flex items-center justify-between px-3 py-2 rounded-xl text-left text-xs font-semibold cursor-pointer transition-colors ${
+                            darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-100'
+                        }`}>
+                            <div className="flex items-center gap-2.5">
+                                <FaBellSlash size={12} className="text-slate-400" />
+                                <span>Tắt thông báo</span>
+                            </div>
+                            <FaChevronRight size={8} className="text-slate-400" />
+
+                            {/* Submenu */}
+                            <div className={`absolute left-full top-0 ml-1.5 hidden group-hover/sub:block w-48 rounded-xl border p-1.5 flex flex-col shadow-xl ${
+                                darkMode ? 'bg-[#1e1f22] border-white/10 text-gray-200' : 'bg-white border-gray-200 text-slate-800'
+                            }`}>
+                                <p className="text-[9px] font-black uppercase text-gray-500 px-2 py-1 mb-1 tracking-wider">Thời gian tắt thông báo</p>
+                                {[
+                                    { label: 'Tắt trong 1 giờ', ms: 1 * 60 * 60 * 1000 },
+                                    { label: 'Tắt trong 4 giờ', ms: 4 * 60 * 60 * 1000 },
+                                    { label: 'Tắt trong 24 giờ', ms: 24 * 60 * 60 * 1000 },
+                                    { label: 'Tắt cho đến khi bật lại', ms: -1 }
+                                ].map(opt => (
+                                    <button 
+                                        key={opt.label}
+                                        onClick={() => {
+                                            toggleMuteRoomDuration(activeRoomMenu.roomId, opt.ms);
+                                            setActiveRoomMenu(null);
+                                        }}
+                                        className={`w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-colors ${
+                                            darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-50'
+                                        }`}
+                                    >
+                                        {opt.label}
+                                    </button>
+                                ))}
+                                {mutedRooms[activeRoomMenu.roomId] && (
+                                    <>
+                                        <div className={`my-1 border-t ${darkMode ? 'border-white/5' : 'border-gray-100'}`} />
+                                        <button 
+                                            onClick={() => {
+                                                toggleMuteRoomDuration(activeRoomMenu.roomId, null);
+                                                setActiveRoomMenu(null);
+                                            }}
+                                            className="w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-emerald-500 hover:bg-emerald-500/10 transition-colors"
+                                        >
+                                            Bật lại thông báo
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* 5. Ẩn trò chuyện */}
+                        <button 
+                            onClick={() => {
+                                handleToggleArchive(activeRoomMenu.roomId, false);
+                                setActiveRoomMenu(null);
+                            }}
+                            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left text-xs font-semibold transition-colors ${
+                                darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-100'
+                            }`}
+                        >
+                            <FaEyeSlash size={12} className="text-slate-400" />
+                            <span>Ẩn trò chuyện</span>
+                        </button>
+
+                        {/* 6. Tin nhắn tự xóa */}
+                        <div className={`relative group/sub w-full flex items-center justify-between px-3 py-2 rounded-xl text-left text-xs font-semibold cursor-pointer transition-colors ${
+                            darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-100'
+                        }`}>
+                            <div className="flex items-center gap-2.5">
+                                <FaClock size={12} className="text-slate-400" />
+                                <span>Tin nhắn tự xóa</span>
+                            </div>
+                            <FaChevronRight size={8} className="text-slate-400" />
+
+                            {/* Submenu */}
+                            <div className={`absolute left-full top-0 ml-1.5 hidden group-hover/sub:block w-40 rounded-xl border p-1.5 flex flex-col shadow-xl ${
+                                darkMode ? 'bg-[#1e1f22] border-white/10 text-gray-200' : 'bg-white border-gray-200 text-slate-800'
+                            }`}>
+                                <p className="text-[9px] font-black uppercase text-gray-500 px-2 py-1 mb-1 tracking-wider">Thời gian tự hủy</p>
+                                {[
+                                    { label: 'Tắt', value: 0 },
+                                    { label: '1 ngày', value: 86400 },
+                                    { label: '7 ngày', value: 604800 },
+                                    { label: '30 ngày', value: 2592000 }
+                                ].map(opt => (
+                                    <button 
+                                        key={opt.value}
+                                        onClick={() => {
+                                            updateRoomSelfDestructTimer(activeRoomMenu.roomId, opt.value);
+                                            setActiveRoomMenu(null);
+                                        }}
+                                        className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-[11px] font-medium transition-colors ${
+                                            darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-50'
+                                        }`}
+                                    >
+                                        <span>{opt.label}</span>
+                                        {(selfDestructTimers[activeRoomMenu.roomId] || 0) === opt.value && (
+                                            <FaCheck size={8} className="text-orange-500" />
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className={`my-1 border-t ${darkMode ? 'border-white/5' : 'border-gray-100'}`} />
+
+                        {/* 7. Xóa hội thoại */}
+                        <button 
+                            onClick={() => {
+                                clearChatHistory(activeRoomMenu.roomId);
+                                setActiveRoomMenu(null);
+                            }}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left text-xs font-semibold text-red-500 hover:bg-red-500/10 transition-colors"
+                        >
+                            <FaTrash size={12} />
+                            <span>Xóa hội thoại</span>
+                        </button>
+
+                        {/* 8. Báo xấu */}
+                        <button 
+                            onClick={() => {
+                                alert("Đã ghi nhận báo cáo nội dung cuộc trò chuyện.");
+                                setActiveRoomMenu(null);
+                            }}
+                            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left text-xs font-semibold transition-colors ${
+                                darkMode ? 'hover:bg-white/5 text-gray-400 hover:text-white' : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'
+                            }`}
+                        >
+                            <FaExclamationTriangle size={12} />
+                            <span>Báo xấu</span>
+                        </button>
+                    </div>
+                </>
+            )}
             {showStickerPicker && <div className="absolute bottom-24 left-6 z-50"><StickerPicker onSelect={handleSendSticker} darkMode={darkMode} onClose={() => setShowStickerPicker(false)} /></div>}
             {showMediaGallery && activeRoom && <MediaGallery roomId={activeRoom.id} darkMode={darkMode} onClose={() => setShowMediaGallery(false)} />}
             <CreateChat user={user} isOpen={showGroupCreator} onClose={() => setShowGroupCreator(false)} onCreateGroup={handleCreateGroup} darkMode={darkMode} isPublicMode={isPublicGroupCreator} />
