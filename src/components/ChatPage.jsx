@@ -333,6 +333,7 @@ const ChatPage = ({ user, setUser }) => {
     const [activeThread, setActiveThread] = useState(null);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [showGroupCreator, setShowGroupCreator] = useState(false);
+    const [isPublicGroupCreator, setIsPublicGroupCreator] = useState(false);
     const [showGroupSettings, setShowGroupSettings] = useState(false);
     const [showStickerPicker, setShowStickerPicker] = useState(false);
     const [profileModal, setProfileModal] = useState({ isOpen: false, username: '' });
@@ -1153,9 +1154,9 @@ const ChatPage = ({ user, setUser }) => {
         setShowCloudDriveTab(false);
     };
 
-    const handleCreateGroup = async (name, isPublic, isChannel = false, members = []) => {
+    const handleCreateGroup = async (name, isPublic, isChannel = false, members = [], description = '') => {
         const publicStatus = user.role === 'admin' ? isPublic : false;
-        await api.post('/groups/create', { groupName: name, owner: user.username, isPublic: publicStatus, isChannel, members });
+        await api.post('/groups/create', { groupName: name, owner: user.username, isPublic: publicStatus, isChannel, members, description });
         setShowGroupCreator(false);
         loadData();
     };
@@ -2216,13 +2217,15 @@ const ChatPage = ({ user, setUser }) => {
                     </div>
                 )}
                 
-                {/* 15. Tạo nhóm */}
-                <div className="group relative flex items-center justify-center w-full">
-                    <div onClick={() => setShowGroupCreator(true)} className="w-12 h-12 bg-[#23a559] text-white rounded-2xl flex items-center justify-center cursor-pointer hover:rounded-xl transition-all shadow-md">
-                        <FaPlusCircle size={22}/>
+                {/* 15. Tạo nhóm cộng đồng (Admin Only) */}
+                {user.role === 'admin' && (
+                    <div className="group relative flex items-center justify-center w-full">
+                        <div onClick={() => { setIsPublicGroupCreator(true); setShowGroupCreator(true); }} className="w-12 h-12 bg-[#23a559] text-white rounded-2xl flex items-center justify-center cursor-pointer hover:rounded-xl transition-all shadow-md">
+                            <FaPlusCircle size={22}/>
+                        </div>
+                        <div className="absolute left-16 px-2.5 py-1.5 bg-slate-900/90 text-white text-[11px] font-bold rounded-lg shadow-xl opacity-0 scale-90 pointer-events-none group-hover:opacity-100 group-hover:scale-100 transition-all duration-150 origin-left whitespace-nowrap z-50 border border-white/10">Tạo nhóm cộng đồng</div>
                     </div>
-                    <div className="absolute left-16 px-2.5 py-1.5 bg-slate-900/90 text-white text-[11px] font-bold rounded-lg shadow-xl opacity-0 scale-90 pointer-events-none group-hover:opacity-100 group-hover:scale-100 transition-all duration-150 origin-left whitespace-nowrap z-50 border border-white/10">Tạo nhóm chat mới</div>
-                </div>
+                )}
             </div>
 
             <div className={`flex flex-col border-r transition-all duration-300 ${isSidebarVisible ? 'w-60 md:w-72' : 'w-0 overflow-hidden'} ${darkMode ? 'bg-[#1e293b]/50 backdrop-blur-xl border-white/5' : 'bg-slate-50 border-gray-200'}`}>
@@ -2266,7 +2269,7 @@ const ChatPage = ({ user, setUser }) => {
 
                     {/* Create Group Action */}
                     <button 
-                        onClick={() => setShowGroupCreator(true)} 
+                        onClick={() => { setIsPublicGroupCreator(false); setShowGroupCreator(true); }} 
                         className={`p-2.5 rounded-xl border transition-all active:scale-90 shrink-0 ${
                             darkMode 
                                 ? 'bg-white/5 border-white/5 text-gray-300 hover:bg-white/10 hover:text-emerald-400' 
@@ -3510,7 +3513,7 @@ const ChatPage = ({ user, setUser }) => {
             <AddFriendModal isOpen={showAddFriend} onClose={() => setShowAddFriend(false)} user={user} loadData={loadData} darkMode={darkMode} />
             {showStickerPicker && <div className="absolute bottom-24 left-6 z-50"><StickerPicker onSelect={handleSendSticker} darkMode={darkMode} onClose={() => setShowStickerPicker(false)} /></div>}
             {showMediaGallery && activeRoom && <MediaGallery roomId={activeRoom.id} darkMode={darkMode} onClose={() => setShowMediaGallery(false)} />}
-            <CreateChat user={user} isOpen={showGroupCreator} onClose={() => setShowGroupCreator(false)} onCreateGroup={handleCreateGroup} darkMode={darkMode} />
+            <CreateChat user={user} isOpen={showGroupCreator} onClose={() => setShowGroupCreator(false)} onCreateGroup={handleCreateGroup} darkMode={darkMode} isPublicMode={isPublicGroupCreator} />
             <UserProfileModal isOpen={profileModal.isOpen} onClose={()=>setProfileModal({isOpen:false, username:''})} targetUsername={profileModal.username} currentUser={user} onUpdateSuccess={handleUpdateSuccess} onStartDM={handleStartDM} />
             
             {/* Modal Báo Cáo Tin Nhắn Vi Phạm */}
