@@ -6,14 +6,15 @@ const GroupDiscovery = ({ allGroups, user, handleRequestJoin, darkMode, onJoinSu
     const [filterType, setFilterType] = useState('all');
 
     const filteredGroups = allGroups.filter(g => {
+        // Chỉ hiện nhóm công khai trong phần khám phá
+        if (!g.isPublic) return false;
+
         const matchesSearch = g.groupName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                              g.owner.toLowerCase().includes(searchTerm.toLowerCase());
         const isJoined = g.members?.includes(user.username) || g.owner === user.username;
 
         if (!matchesSearch) return false;
         switch (filterType) {
-            case 'public': return g.isPublic;
-            case 'private': return !g.isPublic;
             case 'joined': return isJoined;
             case 'not_joined': return !isJoined;
             default: return true;
@@ -22,8 +23,6 @@ const GroupDiscovery = ({ allGroups, user, handleRequestJoin, darkMode, onJoinSu
 
     const filterButtons = [
         { id: 'all', label: 'Tất cả', icon: <FaHashtag size={10}/> },
-        { id: 'public', label: 'Công khai', icon: <FaGlobe size={10}/> },
-        { id: 'private', label: 'Riêng tư', icon: <FaLock size={10}/> },
         { id: 'joined', label: 'Đã vào', icon: <FaUserCheck size={10}/> },
         { id: 'not_joined', label: 'Chưa vào', icon: <FaUserPlus size={10}/> },
     ];
