@@ -132,11 +132,6 @@ const ChatPage = ({ user, setUser }) => {
         setMsgInput(''); setShowEmojiPicker(false);
     };
 
-    const handleStartDM = (friendUname) => { 
-        const dmId = `dm_${[user.username, friendUname].sort().join("_")}`; 
-        handleSwitchRoom({ id: dmId, name: friendUname, isDM: true }); 
-    };
-
     const handleCreateGroup = async (name) => {
         if(!name.trim()) return;
         await api.post('/groups/create', { groupName: name, owner: user.username, isPublic: isNewGroupPublic });

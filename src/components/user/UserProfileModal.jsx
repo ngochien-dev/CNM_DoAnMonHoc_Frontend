@@ -291,7 +291,6 @@ const UserProfileModal = ({ isOpen, onClose, targetUsername, currentUser, onStar
                   )}
                 </>
               )}
-            </div>
           </div>
         </div>
       )}
