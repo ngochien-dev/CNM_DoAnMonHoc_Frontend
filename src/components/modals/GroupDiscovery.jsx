@@ -108,7 +108,11 @@ const GroupDiscovery = ({ allGroups, user, handleRequestJoin, darkMode, onJoinSu
                                         </div>
 
                                         <h3 className="text-2xl font-black mb-1 italic uppercase tracking-tighter group-hover:text-indigo-500 transition-colors truncate">#{g.groupName}</h3>
-                                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-8">Host: <span className="text-indigo-400">@{g.owner}</span></p>
+                                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">Host: <span className="text-indigo-400">@{g.owner}</span></p>
+                                        
+                                        <p className={`text-xs font-normal normal-case not-italic tracking-normal mb-6 line-clamp-2 min-h-[2.5rem] leading-relaxed ${darkMode ? 'text-gray-400' : 'text-slate-500'}`}>
+                                            {g.description || 'Vũ trụ này hiện chưa có mô tả chi tiết.'}
+                                        </p>
 
                                         <div className={`mt-auto pt-6 border-t ${darkMode ? 'border-white/5' : 'border-gray-100'}`}>
                                             {isJoined ? (
