@@ -41,7 +41,7 @@ const GroupDiscovery = ({ allGroups, user, handleRequestJoin, darkMode, onJoinSu
 
                     <div className="relative group">
                         <div className="absolute inset-0 bg-indigo-500/5 blur-xl rounded-full opacity-0 group-focus-within:opacity-100 transition-opacity"></div>
-                        <div className="relative flex items-center bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-2xl px-4 py-3 backdrop-blur-xl focus-within:border-indigo-500/50 transition-all w-full md:w-96">
+                        <div className={`relative flex items-center border rounded-2xl px-4 py-3 backdrop-blur-xl focus-within:border-indigo-500/50 transition-all w-full md:w-96 ${darkMode ? 'bg-white/5 border-white/10' : 'bg-white border-gray-200 shadow-sm'}`}>
                             <FaSearch className="text-gray-500 group-focus-within:text-indigo-500 transition-colors" />
                             <input 
                                 type="text"
@@ -54,7 +54,7 @@ const GroupDiscovery = ({ allGroups, user, handleRequestJoin, darkMode, onJoinSu
                     </div>
                 </div>
 
-                <div className="flex flex-wrap gap-2 items-center border-b border-black/5 dark:border-white/5 pb-6">
+                <div className={`flex flex-wrap gap-2 items-center border-b pb-6 ${darkMode ? 'border-white/5' : 'border-gray-200'}`}>
                     <div className="flex items-center gap-2 mr-4 text-gray-400 text-[9px] font-black uppercase tracking-widest">
                         <FaFilter/> Lọc theo:
                     </div>
@@ -65,7 +65,7 @@ const GroupDiscovery = ({ allGroups, user, handleRequestJoin, darkMode, onJoinSu
                             className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 border ${
                                 filterType === btn.id 
                                 ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20 scale-105' 
-                                : 'bg-black/5 dark:bg-white/5 border-transparent text-gray-500 hover:text-indigo-500'
+                                : (darkMode ? 'bg-white/5 border-transparent text-gray-500 hover:text-indigo-500 hover:bg-white/10' : 'bg-white border-gray-200 text-slate-500 hover:text-indigo-600 hover:bg-slate-50 shadow-sm')
                             }`}
                         >
                             {btn.icon} {btn.label}
@@ -96,7 +96,7 @@ const GroupDiscovery = ({ allGroups, user, handleRequestJoin, darkMode, onJoinSu
                                             <div className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-[2px] flex items-center gap-2 ${g.isPublic ? 'bg-emerald-500/10 text-emerald-500' : 'bg-orange-500/10 text-orange-500'}`}>
                                                 {g.isPublic ? <FaGlobe/> : <FaLock/>} {g.isPublic ? 'Public' : 'Private'}
                                             </div>
-                                            <div className="bg-black/10 dark:bg-white/10 px-3 py-1.5 rounded-xl flex items-center gap-2 text-[10px] font-black text-indigo-500">
+                                            <div className={`px-3 py-1.5 rounded-xl flex items-center gap-2 text-[10px] font-black text-indigo-500 ${darkMode ? 'bg-white/10' : 'bg-indigo-50'}`}>
                                                 <FaUsers /> {g.members?.length || 0}
                                             </div>
                                         </div>
@@ -104,7 +104,7 @@ const GroupDiscovery = ({ allGroups, user, handleRequestJoin, darkMode, onJoinSu
                                         <h3 className="text-2xl font-black mb-1 italic uppercase tracking-tighter group-hover:text-indigo-500 transition-colors truncate">#{g.groupName}</h3>
                                         <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-8">Host: <span className="text-indigo-400">@{g.owner}</span></p>
 
-                                        <div className="mt-auto pt-6 border-t border-black/5 dark:border-white/5">
+                                        <div className={`mt-auto pt-6 border-t ${darkMode ? 'border-white/5' : 'border-gray-100'}`}>
                                             {isJoined ? (
                                                 <button 
                                                     onClick={() => onJoinSuccess(g.groupId, g.groupName)}

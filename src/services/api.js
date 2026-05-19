@@ -29,4 +29,20 @@ api.interceptors.request.use((config) => {
     return config;
 });
 
+api.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        const requestUrl = error.config?.url || '';
+        const isAuthRequest = requestUrl.includes('/auth/');
+        if (error.response?.status === 401 && !isAuthRequest) {
+            console.warn('[API] 401 Unauthorized. Clearing local session.');
+            localStorage.removeItem('user_session');
+            if (window.location.pathname !== '/') {
+                window.location.href = '/';
+            }
+        }
+        return Promise.reject(error);
+    },
+);
+
 export default api;
