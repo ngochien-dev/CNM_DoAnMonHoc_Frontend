@@ -5,11 +5,28 @@ import ChatPage from './components/ChatPage';
 import { CallProvider } from './context/CallContext';
 import ChatbotWidget from './components/ChatbotWidget';
 
+function normalizeUserSession(session) {
+    if (!session) return null;
+    return {
+        ...session,
+        id: session.id || session.userId || session.username,
+    };
+}
+
 function App() {
     const [user, setUser] = useState(() => {
         const savedUser = localStorage.getItem('user_session');
-        return savedUser ? JSON.parse(savedUser) : null;
+        try {
+            return savedUser ? normalizeUserSession(JSON.parse(savedUser)) : null;
+        } catch (error) {
+            localStorage.removeItem('user_session');
+            return null;
+        }
     });
+
+    const handleLogin = (session) => {
+        setUser(normalizeUserSession(session));
+    };
 
     useEffect(() => {
         if (user) {
@@ -23,7 +40,7 @@ function App() {
         <CallProvider user={user}>
             <Router>
                 <Routes>
-                    <Route path="/" element={!user ? <AuthPage onLogin={setUser} /> : <Navigate to="/chat" />} />
+                    <Route path="/" element={!user ? <AuthPage onLogin={handleLogin} /> : <Navigate to="/chat" />} />
                     <Route path="/chat" element={user ? <ChatPage user={user} setUser={setUser} /> : <Navigate to="/" />} />
                 </Routes>
                 {user && <ChatbotWidget />}

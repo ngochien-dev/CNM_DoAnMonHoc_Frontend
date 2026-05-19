@@ -2,8 +2,42 @@ import { useEffect, useRef, useState } from 'react';
 import { DEFAULT_WEBRTC_ICE_SERVERS } from '../config/appConfig';
 import { getMediaPrerequisiteError, normalizeGetUserMediaError } from '../utils/mediaError';
 
+const CALL_DEBUG_ENABLED =
+    import.meta.env.VITE_CALL_DEBUG === 'true' ||
+    (import.meta.env.DEV && import.meta.env.VITE_CALL_DEBUG !== 'false');
+
 function logWebRTC(message, context = {}) {
+    if (!CALL_DEBUG_ENABLED) return;
     console.debug('[WEBRTC]', message, context);
+}
+
+function warnWebRTC(message, context = {}) {
+    if (!CALL_DEBUG_ENABLED) return;
+    console.warn('[WEBRTC]', message, context);
+}
+
+function errorWebRTC(message, error, context = {}) {
+    console.error('[WEBRTC]', message, {
+        ...context,
+        error: describeError(error),
+    });
+}
+
+function logMedia(message, context = {}) {
+    if (!CALL_DEBUG_ENABLED) return;
+    console.debug('[MEDIA]', message, context);
+}
+
+function warnMedia(message, context = {}) {
+    if (!CALL_DEBUG_ENABLED) return;
+    console.warn('[MEDIA]', message, context);
+}
+
+function errorMedia(message, error, context = {}) {
+    console.error('[MEDIA]', message, {
+        ...context,
+        error: describeError(error),
+    });
 }
 
 function describeSessionDescription(description) {
@@ -13,6 +47,161 @@ function describeSessionDescription(description) {
         type: description.type || null,
         sdpLength: description.sdp?.length || 0,
     };
+}
+
+function sanitizeIceServers(iceServers = []) {
+    if (!Array.isArray(iceServers)) return [];
+    return iceServers.map((server) => ({
+        urls: server?.urls || null,
+        hasUsername: Boolean(server?.username),
+        hasCredential: Boolean(server?.credential),
+    }));
+}
+
+function describeError(error) {
+    if (!error) return null;
+    return {
+        name: error.name || null,
+        message: error.message || null,
+        code: error.code || null,
+        constraint: error.constraint || error.constraintName || null,
+        stack: error.stack || null,
+        userMessage: error.userMessage || null,
+        mediaDebug: error.mediaDebug || null,
+    };
+}
+
+function mapMediaErrorToVietnamese(error) {
+    switch (error?.name) {
+        case 'NotAllowedError':
+        case 'PermissionDeniedError':
+            return 'Nguoi dung, trinh duyet hoac he dieu hanh dang chan quyen camera/micro.';
+        case 'NotFoundError':
+        case 'DevicesNotFoundError':
+            return 'Khong tim thay camera hoac micro.';
+        case 'NotReadableError':
+        case 'TrackStartError':
+            return 'Camera hoac micro dang bi ung dung khac su dung, hoac he dieu hanh dang chan truy cap.';
+        case 'OverconstrainedError':
+        case 'ConstraintNotSatisfiedError':
+            return 'Rang buoc media khong phu hop voi thiet bi hien co.';
+        case 'SecurityError':
+            return 'Ngu canh hien tai khong duoc phep truy cap media do khong phai secure context.';
+        case 'AbortError':
+            return 'Thiet bi media gap loi bat thuong hoac yeu cau bi huy.';
+        default:
+            return 'Khong the mo camera hoac micro.';
+    }
+}
+
+function describeTrack(track) {
+    if (!track) return null;
+    return {
+        id: track.id || null,
+        kind: track.kind || null,
+        label: track.label || '',
+        enabled: track.enabled,
+        muted: track.muted,
+        readyState: track.readyState,
+    };
+}
+
+function describeStream(stream) {
+    if (!stream) {
+        return {
+            exists: false,
+            id: null,
+            audioTracks: 0,
+            videoTracks: 0,
+            tracks: [],
+        };
+    }
+
+    return {
+        exists: true,
+        id: stream.id || null,
+        audioTracks: stream.getAudioTracks().length,
+        videoTracks: stream.getVideoTracks().length,
+        tracks: stream.getTracks().map(describeTrack),
+    };
+}
+
+function describePeerConnection(peerConnection) {
+    if (!peerConnection) {
+        return {
+            exists: false,
+            connectionState: null,
+            iceConnectionState: null,
+            signalingState: null,
+        };
+    }
+
+    return {
+        exists: true,
+        connectionState: peerConnection.connectionState,
+        iceConnectionState: peerConnection.iceConnectionState,
+        signalingState: peerConnection.signalingState,
+        localDescription: describeSessionDescription(peerConnection.localDescription),
+        remoteDescription: describeSessionDescription(peerConnection.remoteDescription),
+    };
+}
+
+function buildMediaEnvironmentSnapshot(constraints = null) {
+    return {
+        constraints,
+        hasMediaDevices: Boolean(globalThis.navigator?.mediaDevices),
+        hasGetUserMedia: Boolean(globalThis.navigator?.mediaDevices?.getUserMedia),
+        hasEnumerateDevices: Boolean(globalThis.navigator?.mediaDevices?.enumerateDevices),
+        isSecureContext: Boolean(globalThis.isSecureContext),
+        protocol: globalThis.location?.protocol || '',
+        hostname: globalThis.location?.hostname || '',
+        userAgent: globalThis.navigator?.userAgent || '',
+    };
+}
+
+async function enumerateMediaDevicesSnapshot(reason = 'media-device-snapshot') {
+    if (!globalThis.navigator?.mediaDevices?.enumerateDevices) {
+        const unavailable = {
+            reason,
+            supported: false,
+            audioinput: 0,
+            videoinput: 0,
+            audiooutput: 0,
+            devices: [],
+        };
+        warnMedia('enumerateDevices is not available.', unavailable);
+        return unavailable;
+    }
+
+    try {
+        const devices = await globalThis.navigator.mediaDevices.enumerateDevices();
+        const summary = {
+            reason,
+            supported: true,
+            audioinput: devices.filter((device) => device.kind === 'audioinput').length,
+            videoinput: devices.filter((device) => device.kind === 'videoinput').length,
+            audiooutput: devices.filter((device) => device.kind === 'audiooutput').length,
+            devices: devices.slice(0, 12).map((device, index) => ({
+                index,
+                kind: device.kind,
+                label: device.label || '(label hidden until permission is granted)',
+            })),
+        };
+        logMedia('enumerateDevices snapshot.', summary);
+        return summary;
+    } catch (error) {
+        errorMedia('enumerateDevices failed.', error, { reason });
+        return {
+            reason,
+            supported: true,
+            failed: true,
+            error: describeError(error),
+            audioinput: null,
+            videoinput: null,
+            audiooutput: null,
+            devices: [],
+        };
+    }
 }
 
 function describeCandidate(candidate) {
@@ -133,9 +322,7 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
                 callId: currentCallIdRef.current,
                 role: peerRoleRef.current,
                 reason,
-                connectionState: peerConnection.connectionState,
-                signalingState: peerConnection.signalingState,
-                iceConnectionState: peerConnection.iceConnectionState,
+                peerConnection: describePeerConnection(peerConnection),
             });
 
             peerConnection.onicecandidate = null;
@@ -154,6 +341,11 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
         setPeerStateSnapshot();
 
         if (remoteStreamRef.current) {
+            logWebRTC('Stopping remote media tracks.', {
+                callId: currentCallIdRef.current,
+                reason,
+                remoteStream: describeStream(remoteStreamRef.current),
+            });
             remoteStreamRef.current.getTracks().forEach((track) => track.stop());
             remoteStreamRef.current = null;
         }
@@ -171,8 +363,7 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
 
         logWebRTC('Stopping local media tracks.', {
             callId: currentCallIdRef.current,
-            audioTracks: localStreamRef.current.getAudioTracks().length,
-            videoTracks: localStreamRef.current.getVideoTracks().length,
+            localStream: describeStream(localStreamRef.current),
         });
 
         localStreamRef.current.getTracks().forEach((track) => track.stop());
@@ -184,29 +375,61 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
 
     async function ensureLocalStream() {
         if (localStreamRef.current) {
-            logWebRTC('Reusing existing local media stream.', {
+            logMedia('Reusing existing local media stream.', {
                 callId: currentCallIdRef.current,
+                localStream: describeStream(localStreamRef.current),
             });
             return localStreamRef.current;
         }
 
+        const constraints = {
+            audio: true,
+            video: true,
+        };
+        const environmentSnapshot = buildMediaEnvironmentSnapshot(constraints);
+
+        logMedia('Preparing to call getUserMedia.', {
+            callId: currentCallIdRef.current,
+            ...environmentSnapshot,
+        });
+        const devicesBefore = await enumerateMediaDevicesSnapshot('before-getUserMedia');
+
         const prerequisiteError = getMediaPrerequisiteError();
         if (prerequisiteError) {
+            prerequisiteError.mediaDebug = {
+                environment: environmentSnapshot,
+                devicesBefore,
+                vietnameseReason: mapMediaErrorToVietnamese(prerequisiteError),
+            };
+            errorMedia('Media prerequisite check failed before getUserMedia.', prerequisiteError, {
+                callId: currentCallIdRef.current,
+            });
             throw prerequisiteError;
         }
 
         let stream;
         try {
-            logWebRTC('Requesting camera and microphone access.', {
+            logMedia('Calling navigator.mediaDevices.getUserMedia.', {
                 callId: currentCallIdRef.current,
+                constraints,
             });
 
-            stream = await navigator.mediaDevices.getUserMedia({
-                audio: true,
-                video: true,
-            });
+            stream = await navigator.mediaDevices.getUserMedia(constraints);
         } catch (error) {
-            throw normalizeGetUserMediaError(error);
+            const normalizedError = normalizeGetUserMediaError(error);
+            const devicesAfterFailure = await enumerateMediaDevicesSnapshot('after-getUserMedia-error');
+            normalizedError.mediaDebug = {
+                environment: environmentSnapshot,
+                constraints,
+                devicesBefore,
+                devicesAfterFailure,
+                originalError: describeError(error),
+                vietnameseReason: mapMediaErrorToVietnamese(error),
+            };
+            errorMedia('getUserMedia failed.', normalizedError, {
+                callId: currentCallIdRef.current,
+            });
+            throw normalizedError;
         }
 
         localStreamRef.current = stream;
@@ -214,10 +437,11 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
         setIsMicEnabled(true);
         setIsCameraEnabled(true);
 
-        logWebRTC('Local media stream is ready.', {
+        const devicesAfterSuccess = await enumerateMediaDevicesSnapshot('after-getUserMedia-success');
+        logMedia('Local media stream is ready.', {
             callId: currentCallIdRef.current,
-            audioTracks: stream.getAudioTracks().length,
-            videoTracks: stream.getVideoTracks().length,
+            localStream: describeStream(stream),
+            devicesAfterSuccess,
         });
 
         return stream;
@@ -245,7 +469,8 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
         logWebRTC('Created RTCPeerConnection.', {
             callId: currentCallIdRef.current,
             role: peerRoleRef.current,
-            iceServersCount: Array.isArray(iceServers) ? iceServers.length : 0,
+            iceServers: sanitizeIceServers(iceServers),
+            peerConnection: describePeerConnection(peerConnection),
         });
 
         peerConnection.onicecandidate = (event) => {
@@ -262,6 +487,7 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
                 callId: currentCallIdRef.current,
                 role: peerRoleRef.current,
                 candidate: describeCandidate(candidate),
+                peerConnection: describePeerConnection(peerConnection),
             });
             onIceCandidate?.(candidate);
         };
@@ -275,6 +501,8 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
                     callId: currentCallIdRef.current,
                     role: peerRoleRef.current,
                     trackKind: event.track?.kind || 'unknown',
+                    track: describeTrack(event.track),
+                    peerConnection: describePeerConnection(peerConnection),
                 });
                 return;
             }
@@ -290,7 +518,17 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
                 callId: currentCallIdRef.current,
                 role: peerRoleRef.current,
                 trackKind: event.track?.kind || 'unknown',
-                remoteTrackCount: remoteMediaStream.getTracks().length,
+                track: describeTrack(event.track),
+                remoteStream: describeStream(remoteMediaStream),
+                peerConnection: describePeerConnection(peerConnection),
+            });
+        };
+
+        peerConnection.onnegotiationneeded = () => {
+            logWebRTC('negotiationneeded fired.', {
+                callId: currentCallIdRef.current,
+                role: peerRoleRef.current,
+                peerConnection: describePeerConnection(peerConnection),
             });
         };
 
@@ -317,7 +555,8 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
             logWebRTC('Attached local tracks to peer connection.', {
                 callId: currentCallIdRef.current,
                 role: peerRoleRef.current,
-                trackCount: localStreamRef.current.getTracks().length,
+                localStream: describeStream(localStreamRef.current),
+                peerConnection: describePeerConnection(peerConnection),
             });
         }
 
@@ -361,12 +600,16 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
                     remainingPendingCount: pendingCandidatesRef.current.length,
                 });
             } catch (error) {
-                logWebRTC('Could not apply queued remote ICE candidate.', {
+                warnWebRTC('Could not apply queued remote ICE candidate.', {
                     callId: currentCallIdRef.current,
                     candidate: describeCandidate(candidate),
                     error: error?.message || 'Unknown ICE candidate error',
                 });
-                console.error('[WEBRTC] Could not add queued ICE candidate:', error);
+                errorWebRTC('Could not add queued ICE candidate.', error, {
+                    callId: currentCallIdRef.current,
+                    candidate: describeCandidate(candidate),
+                    peerConnection: describePeerConnection(peerConnection),
+                });
             }
         }
     }
@@ -383,19 +626,21 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
 
         logWebRTC('Creating SDP offer.', {
             callId: currentCallIdRef.current,
+            peerConnection: describePeerConnection(peerConnection),
         });
 
         const offer = await peerConnection.createOffer();
         logWebRTC('SDP offer created.', {
             callId: currentCallIdRef.current,
             offer: describeSessionDescription(offer),
+            peerConnection: describePeerConnection(peerConnection),
         });
 
         await peerConnection.setLocalDescription(offer);
         logWebRTC('Local description set with SDP offer.', {
             callId: currentCallIdRef.current,
             localDescription: describeSessionDescription(peerConnection.localDescription),
-            signalingState: peerConnection.signalingState,
+            peerConnection: describePeerConnection(peerConnection),
         });
 
         return toDescriptionInit(peerConnection.localDescription || offer);
@@ -414,31 +659,34 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
         logWebRTC('Applying remote offer.', {
             callId: currentCallIdRef.current,
             offer: describeSessionDescription(offer),
+            peerConnection: describePeerConnection(peerConnection),
         });
 
         await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
         logWebRTC('Remote offer applied.', {
             callId: currentCallIdRef.current,
-            signalingState: peerConnection.signalingState,
+            peerConnection: describePeerConnection(peerConnection),
         });
 
         await flushPendingCandidates({ reason: 'after-remote-offer' });
 
         logWebRTC('Creating SDP answer.', {
             callId: currentCallIdRef.current,
+            peerConnection: describePeerConnection(peerConnection),
         });
 
         const answer = await peerConnection.createAnswer();
         logWebRTC('SDP answer created.', {
             callId: currentCallIdRef.current,
             answer: describeSessionDescription(answer),
+            peerConnection: describePeerConnection(peerConnection),
         });
 
         await peerConnection.setLocalDescription(answer);
         logWebRTC('Local description set with SDP answer.', {
             callId: currentCallIdRef.current,
             localDescription: describeSessionDescription(peerConnection.localDescription),
-            signalingState: peerConnection.signalingState,
+            peerConnection: describePeerConnection(peerConnection),
         });
 
         return toDescriptionInit(peerConnection.localDescription || answer);
@@ -482,13 +730,13 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
         logWebRTC('Applying remote answer.', {
             callId: currentCallIdRef.current,
             answer: describeSessionDescription(answer),
-            signalingState: peerConnection.signalingState,
+            peerConnection: describePeerConnection(peerConnection),
         });
 
         await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
         logWebRTC('Remote answer applied.', {
             callId: currentCallIdRef.current,
-            signalingState: peerConnection.signalingState,
+            peerConnection: describePeerConnection(peerConnection),
         });
 
         await flushPendingCandidates({ reason: 'after-remote-answer' });
@@ -513,6 +761,7 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
                 remoteDescriptionReady: Boolean(peerConnection?.remoteDescription),
                 pendingCount: pendingCandidatesRef.current.length,
                 candidate: describeCandidate(candidate),
+                peerConnection: describePeerConnection(peerConnection),
             });
             return;
         }
@@ -522,15 +771,19 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
             logWebRTC('Applied remote ICE candidate.', {
                 callId: currentCallIdRef.current,
                 candidate: describeCandidate(candidate),
-                signalingState: peerConnection.signalingState,
+                peerConnection: describePeerConnection(peerConnection),
             });
         } catch (error) {
-            logWebRTC('Could not add remote ICE candidate.', {
+            warnWebRTC('Could not add remote ICE candidate.', {
                 callId: currentCallIdRef.current,
                 candidate: describeCandidate(candidate),
                 error: error?.message || 'Unknown ICE candidate error',
+                peerConnection: describePeerConnection(peerConnection),
             });
-            console.error('[WEBRTC] Could not add ICE candidate:', error);
+            errorWebRTC('Could not add ICE candidate.', error, {
+                callId: currentCallIdRef.current,
+                candidate: describeCandidate(candidate),
+            });
         }
     }
 
@@ -560,6 +813,10 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
         logWebRTC('Cleaning up WebRTC session.', {
             callId: currentCallIdRef.current,
             reason,
+            peerConnection: describePeerConnection(peerConnectionRef.current),
+            localStream: describeStream(localStreamRef.current),
+            remoteStream: describeStream(remoteStreamRef.current),
+            pendingIceCandidates: pendingCandidatesRef.current.length,
         });
 
         resetPeerConnection({
@@ -568,6 +825,30 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
             clearCallContext: true,
         });
         destroyLocalStream();
+    }
+
+    function getDebugSnapshot() {
+        return {
+            callId: currentCallIdRef.current,
+            role: peerRoleRef.current,
+            peerConnection: describePeerConnection(peerConnectionRef.current),
+            localStream: describeStream(localStreamRef.current),
+            remoteStream: describeStream(remoteStreamRef.current),
+            pendingIceCandidates: pendingCandidatesRef.current.length,
+        };
+    }
+
+    function getMediaFailureDebugInfo(error = null) {
+        return {
+            callId: currentCallIdRef.current,
+            error: describeError(error),
+            mediaDebug: error?.mediaDebug || null,
+            snapshot: getDebugSnapshot(),
+            environment: buildMediaEnvironmentSnapshot({
+                audio: true,
+                video: true,
+            }),
+        };
     }
 
     useEffect(() => () => cleanupSession('hook-unmount'), []);
@@ -583,6 +864,8 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
         iceConnectionState,
         isCameraEnabled,
         isMicEnabled,
+        getDebugSnapshot,
+        getMediaFailureDebugInfo,
         localStream,
         remoteStream,
         signalingState,

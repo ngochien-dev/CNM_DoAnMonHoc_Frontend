@@ -1,7 +1,41 @@
+import { useEffect } from 'react';
 import { FaPhoneSlash, FaVideo } from 'react-icons/fa';
 
+const CALL_DEBUG_ENABLED =
+    import.meta.env.VITE_CALL_DEBUG === 'true' ||
+    (import.meta.env.DEV && import.meta.env.VITE_CALL_DEBUG !== 'false');
+
 const IncomingCallModal = ({ visible, peer, countdownSec, onAccept, onReject }) => {
+    useEffect(() => {
+        if (!visible || !CALL_DEBUG_ENABLED) return;
+        console.debug('[CALL][FRONTEND]', 'IncomingCallModal visible.', {
+            peerUsername: peer?.username || null,
+            peerDisplayName: peer?.displayName || null,
+            countdownSec,
+        });
+    }, [visible, peer?.username, peer?.displayName, countdownSec]);
+
     if (!visible) return null;
+
+    const handleAccept = () => {
+        if (CALL_DEBUG_ENABLED) {
+            console.debug('[CALL][FRONTEND]', 'IncomingCallModal accept clicked.', {
+                peerUsername: peer?.username || null,
+                countdownSec,
+            });
+        }
+        onAccept();
+    };
+
+    const handleReject = () => {
+        if (CALL_DEBUG_ENABLED) {
+            console.debug('[CALL][FRONTEND]', 'IncomingCallModal reject clicked.', {
+                peerUsername: peer?.username || null,
+                countdownSec,
+            });
+        }
+        onReject();
+    };
 
     return (
         <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
@@ -27,7 +61,7 @@ const IncomingCallModal = ({ visible, peer, countdownSec, onAccept, onReject }) 
                 <div className="mt-8 flex items-center justify-center gap-5">
                     <button
                         type="button"
-                        onClick={onReject}
+                        onClick={handleReject}
                         className="w-16 h-16 rounded-full bg-red-500 text-white flex items-center justify-center shadow-lg active:scale-95"
                         title="Tu choi cuoc goi"
                     >
@@ -35,7 +69,7 @@ const IncomingCallModal = ({ visible, peer, countdownSec, onAccept, onReject }) 
                     </button>
                     <button
                         type="button"
-                        onClick={onAccept}
+                        onClick={handleAccept}
                         className="w-16 h-16 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-lg active:scale-95"
                         title="Nhan cuoc goi"
                     >

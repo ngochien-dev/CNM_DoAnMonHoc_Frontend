@@ -129,7 +129,13 @@ const AuthPage = ({ onLogin }) => {
                     username: form.username,
                     password: form.password,
                 });
-                if (response.data.requires2FA) {
+                if (response.data?.requires2FA) {
+                    setForm((current) => ({
+                        ...current,
+                        username: response.data.username || current.username,
+                        email: response.data.email || current.email,
+                        otp: '',
+                    }));
                     setView('verify2fa');
                     return;
                 }

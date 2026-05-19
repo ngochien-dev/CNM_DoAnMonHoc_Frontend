@@ -1,12 +1,31 @@
 import { io } from 'socket.io-client';
 import { SOCKET_URL } from '../config/appConfig';
-import { getStoredToken, getStoredSession } from './api';
+import { getStoredSession, getStoredToken } from './api';
 
 let socketInstance = null;
 const SOCKET_DEBUG_FLAG = '__videoCallDebugBound';
+const SOCKET_DEBUG_ENABLED =
+    import.meta.env.VITE_CALL_DEBUG === 'true' ||
+    (import.meta.env.DEV && import.meta.env.VITE_CALL_DEBUG !== 'false');
 
 function logSocket(message, context = {}) {
-    console.debug('[SOCKET]', message, context);
+    if (!SOCKET_DEBUG_ENABLED) return;
+    console.debug('[SOCKET][FRONTEND]', message, context);
+}
+
+function warnSocket(message, context = {}) {
+    if (!SOCKET_DEBUG_ENABLED) return;
+    console.warn('[SOCKET][FRONTEND]', message, context);
+}
+
+function describeSocket(socket = socketInstance) {
+    return {
+        exists: Boolean(socket),
+        connected: Boolean(socket?.connected),
+        active: Boolean(socket?.active),
+        socketId: socket?.id || null,
+        url: SOCKET_URL,
+    };
 }
 
 function attachSocketDebugListeners(socket) {
@@ -22,20 +41,48 @@ function attachSocketDebugListeners(socket) {
     });
 
     socket.on('disconnect', (reason) => {
-        logSocket('Disconnected from signaling server.', {
+        warnSocket('Disconnected from signaling server.', {
             socketId: socket.id,
             reason,
         });
     });
 
     socket.on('connect_error', (error) => {
-        logSocket('Socket connection error.', {
+        warnSocket('Socket connection error.', {
+            socketId: socket.id || null,
             message: error?.message || 'Unknown socket error',
+        });
+    });
+
+    socket.io.on('reconnect_attempt', (attempt) => {
+        logSocket('Reconnect attempt.', {
+            attempt,
+            socketId: socket.id || null,
+        });
+    });
+
+    socket.io.on('reconnect', (attempt) => {
+        logSocket('Reconnected to signaling server.', {
+            attempt,
+            socketId: socket.id || null,
+        });
+    });
+
+    socket.io.on('reconnect_error', (error) => {
+        warnSocket('Reconnect error.', {
+            socketId: socket.id || null,
+            message: error?.message || 'Unknown reconnect error',
         });
     });
 }
 
 function buildSocket() {
+    logSocket('Creating socket instance.', {
+        url: SOCKET_URL,
+        hasToken: Boolean(getStoredToken()),
+        hasSessionId: Boolean(getStoredSession()?.sessionId),
+    });
+
     const socket = io(SOCKET_URL, {
         autoConnect: false,
         transports: ['websocket'],
@@ -60,6 +107,10 @@ export function getSocket() {
     };
 
     return socketInstance;
+}
+
+export function getSocketDebugSnapshot() {
+    return describeSocket();
 }
 
 export function connectSocket() {

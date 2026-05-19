@@ -19,29 +19,30 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-    const token = getStoredToken();
-    if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-    }
     const session = getStoredSession();
-    if (session && session.sessionId) {
-        config.headers['X-Session-Id'] = session.sessionId;
+    if (session?.token) {
+        config.headers.Authorization = `Bearer ${session.token}`;
+    }
+    if (session?.sessionId) {
+        config.headers['x-session-id'] = session.sessionId;
     }
     return config;
 });
 
-// Ngăn vòng lặp 401 vô hạn: khi nhận 401, đăng xuất và đẩy về trang đăng nhập
 api.interceptors.response.use(
     (response) => response,
     (error) => {
-        if (error.response?.status === 401) {
-            console.warn('[API] 401 Unauthorized — token hết hạn hoặc không hợp lệ. Đang đăng xuất...');
+        const requestUrl = error.config?.url || '';
+        const isAuthRequest = requestUrl.includes('/auth/');
+        if (error.response?.status === 401 && !isAuthRequest) {
+            console.warn('[API] 401 Unauthorized. Clearing local session.');
             localStorage.removeItem('user_session');
-            // Redirect to home/login page
-            window.location.href = '/';
+            if (window.location.pathname !== '/') {
+                window.location.href = '/';
+            }
         }
         return Promise.reject(error);
-    }
+    },
 );
 
-export default api;
+export default api;

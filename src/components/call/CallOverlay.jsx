@@ -1,6 +1,10 @@
 import { useEffect, useRef } from 'react';
 import CallControls from './CallControls';
 
+const CALL_DEBUG_ENABLED =
+    import.meta.env.VITE_CALL_DEBUG === 'true' ||
+    (import.meta.env.DEV && import.meta.env.VITE_CALL_DEBUG !== 'false');
+
 function attachStream(videoElement, stream, muted = false) {
     if (!videoElement) return;
     if (videoElement.srcObject === stream) return;
@@ -11,6 +15,23 @@ function attachStream(videoElement, stream, muted = false) {
     if (stream) {
         videoElement.play().catch(() => {});
     }
+}
+
+function describeStream(stream) {
+    if (!stream) return { exists: false, audioTracks: 0, videoTracks: 0 };
+    return {
+        exists: true,
+        id: stream.id || null,
+        audioTracks: stream.getAudioTracks().length,
+        videoTracks: stream.getVideoTracks().length,
+        tracks: stream.getTracks().map((track) => ({
+            kind: track.kind,
+            label: track.label || '',
+            enabled: track.enabled,
+            muted: track.muted,
+            readyState: track.readyState,
+        })),
+    };
 }
 
 function formatDuration(durationSec) {
@@ -42,11 +63,39 @@ const CallOverlay = ({
 
     useEffect(() => {
         attachStream(localVideoRef.current, localStream, true);
+        if (visible && CALL_DEBUG_ENABLED) {
+            console.debug('[CALL][FRONTEND]', 'CallOverlay local stream attached/updated.', {
+                status,
+                peerUsername: peer?.username || null,
+                localStream: describeStream(localStream),
+            });
+        }
     }, [localStream]);
 
     useEffect(() => {
         attachStream(remoteVideoRef.current, remoteStream, false);
+        if (visible && CALL_DEBUG_ENABLED) {
+            console.debug('[CALL][FRONTEND]', 'CallOverlay remote stream attached/updated.', {
+                status,
+                peerUsername: peer?.username || null,
+                remoteStream: describeStream(remoteStream),
+            });
+        }
     }, [remoteStream]);
+
+    useEffect(() => {
+        if (!visible || !CALL_DEBUG_ENABLED) return;
+        console.debug('[CALL][FRONTEND]', 'CallOverlay visible.', {
+            status,
+            peerUsername: peer?.username || null,
+            connectionLabel,
+            connectionState,
+            isMicEnabled,
+            isCameraEnabled,
+            localStream: describeStream(localStream),
+            remoteStream: describeStream(remoteStream),
+        });
+    }, [visible, status, peer?.username, connectionLabel, connectionState, isMicEnabled, isCameraEnabled]);
 
     if (!visible) return null;
 
