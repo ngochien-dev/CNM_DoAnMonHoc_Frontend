@@ -865,6 +865,17 @@ const ChatPage = ({ user, setUser }) => {
         socket.emit('message_read', { messageIds: unreadMsgIds, roomId: activeRoomRef.current.id });
     }, [user?.username, socket]);
 
+    // P0: Mark messages as delivered when loaded or received
+    const markMessagesAsDelivered = useCallback((roomMessages, roomId) => {
+        if (!user?.username || !roomId) return;
+        const undeliveredMsgIds = roomMessages
+            .filter(m => m.senderUsername !== user.username && !(m.deliveredTo || []).includes(user.username))
+            .map(m => m.messageId);
+        if (undeliveredMsgIds.length === 0) return;
+        // Emit via socket for real-time bulk update
+        socket.emit('messages_delivered', { messageIds: undeliveredMsgIds, roomId });
+    }, [user?.username, socket]);
+
     // P0: Pagination — load messages for a specific room
     const loadRoomMessages = useCallback(async (roomId, before = null) => {
         if (!roomId || loadingMessages) return;
@@ -1741,6 +1752,9 @@ const ChatPage = ({ user, setUser }) => {
                 }, 60);
             }
             if (d.senderUsername !== user.username) {
+                // Emit delivery receipt immediately
+                socket.emit('messages_delivered', { messageIds: [d.messageId], roomId: d.roomId });
+
                 // Mention check
                 const isMentioned = d.text && d.text.includes(`@${user.username}`);
                 if (isMentioned) {
@@ -1803,6 +1817,16 @@ const ChatPage = ({ user, setUser }) => {
             setMessages(prev => prev.map(m => {
                 const update = updates.find(u => u.messageId === m.messageId);
                 if (update) return { ...m, readBy: update.readBy };
+                return m;
+            }));
+        });
+
+        // P0: Delivery receipts — update deliveredTo when others receive messages
+        socket.on('messages_delivered_bulk_update', ({ deliveree, roomId, updates }) => {
+            if (deliveree === user.username) return; // Skip own deliveries
+            setMessages(prev => prev.map(m => {
+                const update = updates.find(u => u.messageId === m.messageId);
+                if (update) return { ...m, deliveredTo: update.deliveredTo };
                 return m;
             }));
         });
@@ -1903,6 +1927,7 @@ const ChatPage = ({ user, setUser }) => {
             socket.off('message_revoked'); 
             socket.off('message_edited');
             socket.off('messages_read_update');
+            socket.off('messages_delivered_bulk_update');
             socket.off('user_typing_start');
             socket.off('user_typing_end');
             socket.off('new_friend_request');
@@ -1931,16 +1956,18 @@ const ChatPage = ({ user, setUser }) => {
         }
     }, [activeRoom?.id]);
 
-    // P0: Mark visible messages as read when switching rooms or receiving new messages
+    // P0: Mark visible messages as read and delivered when switching rooms or receiving new messages
     useEffect(() => {
         if (!activeRoom || !user?.username) return;
-        const roomMsgs = messages.filter(m => {
         const roomMsgs = messages.filter(m => m.roomId === activeRoom.id);
-        });
+        
+        // Mark as delivered immediately
+        markMessagesAsDelivered(roomMsgs, activeRoom.id);
+
         // Small delay to batch read receipts
         const timer = setTimeout(() => markMessagesAsRead(roomMsgs), 1000);
         return () => clearTimeout(timer);
-    }, [activeRoom?.id, messages.length, markMessagesAsRead]);
+    }, [activeRoom?.id, messages.length, markMessagesAsRead, markMessagesAsDelivered]);
 
     const currentGroup = allGroups.find(g => g.groupId === activeRoom?.id);
     const isAdminOfGroup = currentGroup?.owner === user.username; 
@@ -2588,12 +2615,39 @@ const ChatPage = ({ user, setUser }) => {
                                                 <div className={`max-w-[75%] flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
                                                     <div className={`text-[10px] mb-1.5 font-black uppercase tracking-tighter italic flex items-center gap-1 ${darkMode ? 'text-gray-500' : 'text-slate-400'}`}>
                                                         @{msg.senderUsername} • {msg.time}
-                                                        {/* P0: Read receipt indicator */}
-                                                        {isMe && !msg.isRevoked && (
-                                                            <span className={`ml-1 text-[9px] ${(msg.readBy || []).filter(u => u !== user.username).length > 0 ? 'text-blue-400' : 'text-gray-600'}`} title={(msg.readBy || []).filter(u => u !== user.username).join(', ') || 'Chưa ai đọc'}>
-                                                                {(msg.readBy || []).filter(u => u !== user.username).length > 0 ? '✓✓' : '✓'}
-                                                            </span>
-                                                        )}
+                                                        {isMe && !msg.isRevoked && (() => {
+                                                            const readerCount = (msg.readBy || []).filter(u => u !== user.username).length;
+                                                            const delivereeCount = (msg.deliveredTo || []).filter(u => u !== user.username).length;
+                                                            
+                                                            if (readerCount > 0) {
+                                                                return (
+                                                                    <span 
+                                                                        className="ml-1 text-[9px] text-blue-400 font-bold" 
+                                                                        title={`Đã xem bởi: ${(msg.readBy || []).filter(u => u !== user.username).join(', ')}`}
+                                                                    >
+                                                                        ✓✓
+                                                                    </span>
+                                                                );
+                                                            } else if (delivereeCount > 0) {
+                                                                return (
+                                                                    <span 
+                                                                        className="ml-1 text-[9px] text-gray-400 font-bold" 
+                                                                        title={`Đã nhận bởi: ${(msg.deliveredTo || []).filter(u => u !== user.username).join(', ')}`}
+                                                                    >
+                                                                        ✓✓
+                                                                    </span>
+                                                                );
+                                                            } else {
+                                                                return (
+                                                                    <span 
+                                                                        className="ml-1 text-[9px] text-gray-600" 
+                                                                        title="Đã gửi"
+                                                                    >
+                                                                        ✓
+                                                                    </span>
+                                                                );
+                                                            }
+                                                        })()}
                                                     </div>
                                                     <div className="relative group/bubble">
                                                         {!msg.isRevoked && (
