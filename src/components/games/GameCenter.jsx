@@ -346,7 +346,7 @@ const FlappyBird = ({ user, onScoreUpdate }) => {
 };
 
 
-const GameCenter = ({ user, onClose }) => {
+const GameCenter = ({ user, onClose, darkMode }) => {
     const [leaderboard, setLeaderboard] = useState([]);
     const [activeGame, setActiveGame] = useState(null); // null means showing menu
     const [lbTab, setLbTab] = useState('snake');
@@ -384,30 +384,43 @@ const GameCenter = ({ user, onClose }) => {
     }, [socket, fetchLeaderboard, lbTab]);
 
     return (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 sm:p-8 animate-fade-in">
-            <div className="bg-slate-800 w-full max-w-5xl h-full max-h-[800px] rounded-3xl shadow-2xl overflow-hidden flex flex-col md:flex-row border border-slate-700 relative">
+        <div className={`flex-1 flex flex-col md:flex-row h-full overflow-hidden select-none transition-colors duration-300 ${
+            darkMode ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-800'
+        }`}>
+            {/* Game Screen Column */}
+            <div className={`flex-1 flex flex-col relative ${
+                darkMode ? 'bg-slate-950 border-slate-800' : 'bg-white border-slate-200'
+            } border-r`}>
                 
-                {/* Nút Đóng */}
+                {/* Close Button / Back to menu if in game */}
                 <button 
                     onClick={onClose}
-                    className="absolute top-4 right-4 w-10 h-10 bg-slate-700/50 hover:bg-red-500 text-gray-300 hover:text-white rounded-full flex items-center justify-center z-50 transition-colors"
+                    className={`absolute top-4 right-4 w-10 h-10 ${
+                        darkMode ? 'bg-slate-800/80 hover:bg-red-500 text-gray-300 hover:text-white' : 'bg-slate-100 hover:bg-red-500 text-gray-500 hover:text-white'
+                    } rounded-full flex items-center justify-center z-50 transition-colors shadow-sm`}
+                    title="Thoát Game Center"
                 >
-                    <FaTimes size={20} />
+                    <FaTimes size={18} />
                 </button>
 
                 {/* Phần Game Play */}
-                <div className="flex-1 bg-slate-900 border-r border-slate-700 flex flex-col relative">
+                <div className="flex-1 flex flex-col relative h-full">
                     {activeGame !== null ? (
                         <>
-                            <div className="p-4 border-b border-slate-800 flex items-center gap-3">
+                            <div className={`p-4 border-b ${
+                                darkMode ? 'border-slate-800/80 bg-slate-900/50' : 'border-slate-200 bg-slate-50'
+                            } flex items-center gap-3`}>
                                 <button 
                                     onClick={() => setActiveGame(null)}
-                                    className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-gray-400 hover:text-white transition-colors"
+                                    className={`p-2 ${
+                                        darkMode ? 'bg-slate-800 hover:bg-slate-700 text-gray-400' : 'bg-slate-200/60 hover:bg-slate-200 text-slate-600'
+                                    } rounded-lg hover:text-indigo-500 transition-colors`}
+                                    title="Quay lại danh sách game"
                                 >
                                     <FaChevronLeft />
                                 </button>
-                                <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                                    <FaGamepad className="text-indigo-400"/> Trung tâm Trò chơi
+                                <h2 className={`text-xl font-black ${darkMode ? 'text-white' : 'text-slate-800'} flex items-center gap-2`}>
+                                    <FaGamepad className="text-indigo-500 animate-pulse"/> Trung tâm Trò chơi
                                 </h2>
                             </div>
                             <div className="flex-1 flex items-center justify-center overflow-auto p-4">
@@ -416,84 +429,107 @@ const GameCenter = ({ user, onClose }) => {
                             </div>
                         </>
                     ) : (
-                        <div className="p-8 h-full flex flex-col">
-                            <h2 className="text-3xl font-black text-white mb-2 flex items-center gap-3">
-                                <FaGamepad className="text-indigo-400 text-4xl"/> Game Center
-                            </h2>
-                            <p className="text-gray-400 mb-8 font-medium">Giải trí, thi tài cùng bạn bè trên bảng xếp hạng toàn máy chủ.</p>
-                            
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                                {/* Thẻ Game 1 */}
-                                <div className="bg-slate-800 border border-slate-700 rounded-2xl p-5 hover:border-indigo-500 transition-all group cursor-pointer" onClick={() => setActiveGame('snake')}>
-                                    <div className="w-16 h-16 bg-gradient-to-br from-green-400 to-emerald-600 rounded-2xl flex items-center justify-center shadow-lg mb-4 group-hover:scale-110 transition-transform">
-                                        <span className="text-3xl">🐍</span>
+                        <div className="p-8 h-full flex flex-col justify-center overflow-y-auto">
+                            <div className="max-w-3xl mx-auto w-full">
+                                <h2 className={`text-3xl font-black ${darkMode ? 'text-white' : 'text-slate-800'} mb-2 flex items-center gap-3`}>
+                                    <FaGamepad className="text-indigo-500 text-4xl animate-bounce"/> Game Center
+                                </h2>
+                                <p className={`mb-8 font-medium ${darkMode ? 'text-gray-400' : 'text-slate-500'}`}>Giải trí, thi tài cùng bạn bè trên bảng xếp hạng toàn máy chủ.</p>
+                                
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                    {/* Thẻ Game 1 */}
+                                    <div className={`border rounded-3xl p-6 transition-all group cursor-pointer shadow-sm hover:shadow-lg ${
+                                        darkMode ? 'bg-slate-800 border-slate-700 hover:border-indigo-500' : 'bg-white border-slate-200 hover:border-indigo-500'
+                                    }`} onClick={() => setActiveGame('snake')}>
+                                        <div className="w-16 h-16 bg-gradient-to-br from-green-400 to-emerald-600 rounded-2xl flex items-center justify-center shadow-lg mb-4 group-hover:scale-110 transition-transform">
+                                            <span className="text-3xl">🐍</span>
+                                        </div>
+                                        <h3 className={`text-xl font-bold mb-2 group-hover:text-indigo-500 transition-colors ${darkMode ? 'text-white' : 'text-slate-800'}`}>Rắn Săn Mồi</h3>
+                                        <p className={`text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-slate-500'}`}>Ăn mồi để dài ra và sống sót càng lâu càng tốt. Ghi danh lên bảng vàng!</p>
+                                        <button className="mt-5 w-full py-3 bg-indigo-500/10 hover:bg-indigo-500 text-indigo-500 hover:text-white rounded-xl font-bold transition-colors">Chơi Ngay</button>
                                     </div>
-                                    <h3 className="text-xl font-bold text-white mb-2 group-hover:text-indigo-400 transition-colors">Rắn Săn Mồi</h3>
-                                    <p className="text-sm text-gray-400 font-medium">Ăn mồi để dài ra và sống sót càng lâu càng tốt. Ghi danh lên bảng vàng!</p>
-                                    <button className="mt-4 w-full py-2.5 bg-indigo-500/10 hover:bg-indigo-500 text-indigo-400 hover:text-white rounded-xl font-bold transition-colors">Chơi Ngay</button>
-                                </div>
 
-                                <div className="bg-slate-800 border border-slate-700 rounded-2xl p-5 hover:border-sky-500 transition-all group cursor-pointer" onClick={() => setActiveGame('flappy')}>
-                                    <div className="w-16 h-16 bg-gradient-to-br from-sky-400 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg mb-4 group-hover:scale-110 transition-transform">
-                                        <span className="text-3xl">🦅</span>
+                                    {/* Thẻ Game 2 */}
+                                    <div className={`border rounded-3xl p-6 transition-all group cursor-pointer shadow-sm hover:shadow-lg ${
+                                        darkMode ? 'bg-slate-800 border-slate-700 hover:border-sky-500' : 'bg-white border-slate-200 hover:border-sky-500'
+                                    }`} onClick={() => setActiveGame('flappy')}>
+                                        <div className="w-16 h-16 bg-gradient-to-br from-sky-400 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg mb-4 group-hover:scale-110 transition-transform">
+                                            <span className="text-3xl">🦅</span>
+                                        </div>
+                                        <h3 className={`text-xl font-bold mb-2 group-hover:text-sky-500 transition-colors ${darkMode ? 'text-white' : 'text-slate-850'}`}>Chim Bay (Flappy)</h3>
+                                        <p className={`text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-slate-500'}`}>Nhấn Space để bay qua các ống nước. Cực kỳ ức chế và dễ nghiện!</p>
+                                        <button className="mt-5 w-full py-3 bg-sky-500/10 hover:bg-sky-500 text-sky-500 hover:text-white rounded-xl font-bold transition-colors">Chơi Ngay</button>
                                     </div>
-                                    <h3 className="text-xl font-bold text-white mb-2 group-hover:text-sky-400 transition-colors">Chim Bay (Flappy)</h3>
-                                    <p className="text-sm text-gray-400 font-medium">Nhấn Space để bay qua các ống nước. Cực kỳ ức chế và dễ nghiện!</p>
-                                    <button className="mt-4 w-full py-2.5 bg-sky-500/10 hover:bg-sky-500 text-sky-400 hover:text-white rounded-xl font-bold transition-colors">Chơi Ngay</button>
                                 </div>
                             </div>
                         </div>
                     )}
                 </div>
+            </div>
 
-                {/* Bảng xếp hạng (Leaderboard) */}
-                <div className="w-full md:w-80 bg-slate-800 flex flex-col h-full shrink-0">
-                    <div className="p-5 border-b border-slate-700 bg-slate-800/80 sticky top-0 z-10 flex flex-col gap-3">
-                        <div className="flex items-center justify-between">
-                            <h3 className="text-lg font-black text-white flex items-center gap-2">
-                                <FaTrophy className="text-yellow-400 text-xl"/> {lbTab === 'snake' ? 'BXH Cờ Rắn' : 'BXH Chim Bay'}
-                            </h3>
-                            <p className="text-xs text-gray-400 font-medium">(Top 10)</p>
+            {/* Bảng xếp hạng (Leaderboard) */}
+            <div className={`w-full md:w-80 flex flex-col h-full shrink-0 ${darkMode ? 'bg-slate-900' : 'bg-slate-50/50'}`}>
+                <div className={`p-5 border-b ${darkMode ? 'border-slate-800 bg-slate-900/80' : 'border-slate-200 bg-slate-100/50'} sticky top-0 z-10 flex flex-col gap-3`}>
+                    <div className="flex items-center justify-between">
+                        <h3 className={`text-lg font-black flex items-center gap-2 ${darkMode ? 'text-white' : 'text-slate-800'}`}>
+                            <FaTrophy className="text-yellow-500 text-xl animate-bounce"/> {lbTab === 'snake' ? 'BXH Cờ Rắn' : 'BXH Chim Bay'}
+                        </h3>
+                        <p className={`text-xs font-bold ${darkMode ? 'text-gray-500' : 'text-slate-400'}`}>(Top 10)</p>
+                    </div>
+                    {activeGame === null && (
+                        <div className={`flex rounded-xl p-1 border ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-200/50 border-slate-300/30'} animate-fade-in`}>
+                            <button 
+                                onClick={() => setLbTab('snake')}
+                                className={`flex-1 py-2 text-xs font-black rounded-lg transition-all ${lbTab === 'snake' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-indigo-500'}`}
+                            >
+                                🐍 Rắn Săn Mồi
+                            </button>
+                            <button 
+                                onClick={() => setLbTab('flappy')}
+                                className={`flex-1 py-2 text-xs font-black rounded-lg transition-all ${lbTab === 'flappy' ? 'bg-sky-500 text-white shadow-lg' : 'text-slate-500 hover:text-sky-500'}`}
+                            >
+                                🦅 Chim Bay
+                            </button>
                         </div>
-                        {activeGame === null && (
-                            <div className="flex bg-slate-900 rounded-lg p-1 animate-fade-in">
-                                <button 
-                                    onClick={() => setLbTab('snake')}
-                                    className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${lbTab === 'snake' ? 'bg-indigo-500 text-white shadow' : 'text-gray-400 hover:text-white'}`}
-                                >
-                                    🐍 Rắn Săn Mồi
-                                </button>
-                                <button 
-                                    onClick={() => setLbTab('flappy')}
-                                    className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${lbTab === 'flappy' ? 'bg-sky-500 text-white shadow' : 'text-gray-400 hover:text-white'}`}
-                                >
-                                    🦅 Chim Bay
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                    <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-                        {leaderboard.length === 0 ? (
-                            <div className="text-center text-gray-500 mt-10 font-medium">Chưa có ai ghi điểm ở game này!</div>
-                        ) : (
-                            <div className="flex flex-col gap-3">
-                                {leaderboard.map((lb, idx) => (
-                                    <div key={idx} className={`flex items-center gap-3 p-3 rounded-xl transition-all ${idx === 0 ? 'bg-yellow-500/10 border border-yellow-500/30' : idx === 1 ? 'bg-slate-300/10 border border-slate-300/20' : idx === 2 ? 'bg-orange-500/10 border border-orange-500/20' : 'bg-slate-700/50 hover:bg-slate-700'}`}>
-                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black ${idx === 0 ? 'bg-yellow-500 text-yellow-900 shadow-[0_0_10px_rgba(234,179,8,0.4)]' : idx === 1 ? 'bg-slate-300 text-slate-800' : idx === 2 ? 'bg-orange-400 text-orange-900' : 'bg-slate-600 text-gray-300'}`}>
-                                            {idx + 1}
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="font-bold text-sm text-gray-200 truncate flex items-center gap-1">
-                                                {lb.displayName} {lb.username === user.username && <span className="text-[10px] bg-indigo-500 text-white px-1.5 py-0.5 rounded-full ml-1">Bạn</span>}
-                                            </div>
-                                            <div className="text-xs text-gray-400 truncate">@{lb.username}</div>
-                                        </div>
-                                        <div className="font-black text-indigo-400">{lb.score}</div>
+                    )}
+                </div>
+                <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                    {leaderboard.length === 0 ? (
+                        <div className={`text-center mt-10 font-bold ${darkMode ? 'text-gray-500' : 'text-slate-400'}`}>Chưa có ai ghi điểm ở game này!</div>
+                    ) : (
+                        <div className="flex flex-col gap-3">
+                            {leaderboard.map((lb, idx) => (
+                                <div key={idx} className={`flex items-center gap-3 p-3 rounded-2xl transition-all border ${
+                                    idx === 0 
+                                        ? 'bg-yellow-500/10 border-yellow-500/30' 
+                                        : idx === 1 
+                                            ? 'bg-slate-400/10 border-slate-400/20' 
+                                            : idx === 2 
+                                                ? 'bg-orange-500/10 border-orange-500/20' 
+                                                : darkMode ? 'bg-slate-800/40 border-slate-700/50 hover:bg-slate-800' : 'bg-white border-slate-200 hover:bg-slate-100/50'
+                                }`}>
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black ${
+                                        idx === 0 
+                                            ? 'bg-yellow-500 text-yellow-950 shadow-[0_0_10px_rgba(234,179,8,0.4)]' 
+                                            : idx === 1 
+                                                ? 'bg-slate-350 text-slate-800' 
+                                                : idx === 2 
+                                                    ? 'bg-orange-400 text-orange-950' 
+                                                    : darkMode ? 'bg-slate-700 text-gray-300' : 'bg-slate-200 text-slate-700'
+                                    }`}>
+                                        {idx + 1}
                                     </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className={`font-black text-sm truncate flex items-center gap-1.5 ${darkMode ? 'text-gray-200' : 'text-slate-800'}`}>
+                                            {lb.displayName} {lb.username === user.username && <span className="text-[10px] bg-indigo-650 text-white px-2 py-0.5 rounded-full font-black">Bạn</span>}
+                                        </div>
+                                        <div className={`text-xs truncate ${darkMode ? 'text-gray-500' : 'text-slate-400'}`}>@{lb.username}</div>
+                                    </div>
+                                    <div className="font-black text-indigo-500">{lb.score}</div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
