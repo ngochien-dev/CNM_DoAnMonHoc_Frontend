@@ -7,7 +7,7 @@ import {
     FaChartBar, FaImage, FaSmile, FaMoon, FaSun, FaPalette,
     FaGlobe, FaCog, FaUserMinus, FaPauseCircle, FaPlayCircle, 
     FaUserFriends, FaCommentDots, FaUserPlus, FaTimes, FaUserCheck, FaLock, FaUsers, FaSearch,
-    FaVideo, FaShare, FaThumbtack, FaPoll, FaCalendarAlt, FaReply, FaMicrophone, FaStopCircle, FaSmileBeam, FaEdit, FaExchangeAlt, FaTh, FaPlus, FaCamera, FaFolderPlus, FaLanguage, FaCloud
+    FaVideo, FaShare, FaThumbtack, FaPoll, FaCalendarAlt, FaReply, FaMicrophone, FaStopCircle, FaSmileBeam, FaEdit, FaExchangeAlt, FaTh, FaPlus, FaCamera, FaFolderPlus, FaLanguage, FaCloud, FaMapMarkerAlt
 } from 'react-icons/fa';
 import { Toaster, toast } from 'react-hot-toast';
 import StoryBar from './social/StoryBar';
@@ -1467,6 +1467,38 @@ const ChatPage = ({ user, setUser }) => {
         setEditText('');
     };
 
+    const handleSendLocation = () => {
+        if (!navigator.geolocation) {
+            toast.error("Trình duyệt của bạn không hỗ trợ định vị!");
+            return;
+        }
+        
+        const toastId = toast.loading("Đang lấy vị trí...");
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                const { latitude, longitude } = position.coords;
+                const locationUrl = `https://www.google.com/maps?q=${latitude},${longitude}`;
+                
+                socket.emit('send_message', { 
+                    sender: user.displayName, 
+                    senderUsername: user.username, 
+                    msgType: 'location',
+                    locationData: { lat: latitude, lng: longitude },
+                    text: `📍 Đã chia sẻ vị trí hiện tại`, 
+                    roomId: activeRoom.id, 
+                    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+                });
+                
+                toast.success("Đã chia sẻ vị trí!", { id: toastId });
+            },
+            (error) => {
+                console.error("Lỗi lấy vị trí:", error);
+                toast.error("Không thể lấy vị trí. Vui lòng cấp quyền!", { id: toastId });
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+    };
+
     const handleCreatePoll = () => {
         if (!pollQuestion.trim() || pollOptions.some(o => !o.trim())) return alert("Vui lòng điền đủ câu hỏi và các lựa chọn!");
         socket.emit('send_message', { 
@@ -2605,6 +2637,24 @@ const ChatPage = ({ user, setUser }) => {
                                                                         </div>
                                                                     </div>
                                                                 </div>
+                                                            ) : msg.msgType === 'location' ? (
+                                                                <div className="min-w-[200px] flex flex-col gap-2">
+                                                                    <div className="font-bold text-sm flex items-center gap-2"><FaMapMarkerAlt className="text-red-500"/> Vị trí đã chia sẻ</div>
+                                                                    <div className="w-full h-40 rounded-xl overflow-hidden bg-black/10 border border-white/10 relative">
+                                                                        <iframe 
+                                                                            width="100%" 
+                                                                            height="100%" 
+                                                                            frameBorder="0" 
+                                                                            scrolling="no" 
+                                                                            marginHeight="0" 
+                                                                            marginWidth="0" 
+                                                                            src={`https://www.openstreetmap.org/export/embed.html?bbox=${msg.locationData.lng-0.01},${msg.locationData.lat-0.01},${msg.locationData.lng+0.01},${msg.locationData.lat+0.01}&layer=mapnik&marker=${msg.locationData.lat},${msg.locationData.lng}`}>
+                                                                        </iframe>
+                                                                    </div>
+                                                                    <a href={`https://www.google.com/maps?q=${msg.locationData.lat},${msg.locationData.lng}`} target="_blank" rel="noopener noreferrer" className={`w-full py-2 rounded-lg font-bold text-xs text-center flex items-center justify-center gap-2 mt-1 transition-all ${isMe ? 'bg-white/20 hover:bg-white/30 text-white' : 'bg-indigo-500 hover:bg-indigo-600 text-white'}`}>
+                                                                        Mở Google Maps
+                                                                    </a>
+                                                                </div>
                                                             ) : (
                                                                 <>
                                                                     {editingMessage?.messageId === msg.messageId ? (
@@ -2755,6 +2805,7 @@ const ChatPage = ({ user, setUser }) => {
                                                         <FaPoll onClick={()=>setShowPollModal(true)} className="cursor-pointer hover:text-emerald-500 transition-all hover:scale-110" size={18} title="Tạo bình chọn"/>
                                                         <FaCalendarAlt onClick={()=>setShowEventModal(true)} className="cursor-pointer hover:text-purple-500 transition-all hover:scale-110" size={18} title="Tạo lịch nhóm"/>
                                                          <FaPalette onClick={()=>setShowPaintPad(true)} className="cursor-pointer hover:text-pink-500 transition-all hover:scale-110" size={18} title="Vẽ phác thảo"/>
+                                                         <FaMapMarkerAlt onClick={handleSendLocation} className="cursor-pointer hover:text-red-500 transition-all hover:scale-110" size={18} title="Chia sẻ vị trí"/>
                                                     </div>
                                                 )}
                                                 
