@@ -1,7 +1,12 @@
+import { useEffect } from 'react';
 import { FaCircleNotch, FaPhoneSlash, FaTimes } from 'react-icons/fa';
 
+const CALL_DEBUG_ENABLED =
+    import.meta.env.VITE_CALL_DEBUG === 'true' ||
+    (import.meta.env.DEV && import.meta.env.VITE_CALL_DEBUG !== 'false');
+
 const statusTextMap = {
-    outgoing_ringing: 'Dang goi video...',
+    outgoing: 'Dang goi video...',
     rejected: 'Nguoi nhan da tu choi cuoc goi',
     busy: 'Nguoi nhan dang ban',
     missed: 'Ban da bo lo cuoc goi',
@@ -22,10 +27,41 @@ const directionTitleMap = {
 };
 
 const OutgoingCallModal = ({ visible, status, direction, peer, message, countdownSec, onCancel, onClose }) => {
+    useEffect(() => {
+        if (!visible || !CALL_DEBUG_ENABLED) return;
+        console.debug('[CALL][FRONTEND]', 'OutgoingCallModal visible.', {
+            status,
+            direction,
+            peerUsername: peer?.username || null,
+            message,
+            countdownSec,
+        });
+    }, [visible, status, direction, peer?.username, message, countdownSec]);
+
     if (!visible) return null;
 
-    const isRinging = status === 'outgoing_ringing';
+    const isRinging = status === 'outgoing';
     const description = message || statusTextMap[status] || 'Dang xu ly cuoc goi';
+    const handleCancel = () => {
+        if (CALL_DEBUG_ENABLED) {
+            console.debug('[CALL][FRONTEND]', 'OutgoingCallModal cancel clicked.', {
+                status,
+                direction,
+                peerUsername: peer?.username || null,
+            });
+        }
+        onCancel();
+    };
+    const handleClose = () => {
+        if (CALL_DEBUG_ENABLED) {
+            console.debug('[CALL][FRONTEND]', 'OutgoingCallModal close clicked.', {
+                status,
+                direction,
+                peerUsername: peer?.username || null,
+            });
+        }
+        onClose();
+    };
 
     return (
         <div className="fixed inset-0 z-[1150] flex items-center justify-center bg-black/55 backdrop-blur-sm p-4">
@@ -59,7 +95,7 @@ const OutgoingCallModal = ({ visible, status, direction, peer, message, countdow
                             </div>
                             <button
                                 type="button"
-                                onClick={onCancel}
+                                onClick={handleCancel}
                                 className="w-14 h-14 rounded-full bg-red-500 text-white flex items-center justify-center shadow-lg active:scale-95"
                                 title="Huy cuoc goi"
                             >
@@ -69,7 +105,7 @@ const OutgoingCallModal = ({ visible, status, direction, peer, message, countdow
                     ) : (
                         <button
                             type="button"
-                            onClick={onClose}
+                            onClick={handleClose}
                             className="w-14 h-14 rounded-full bg-white/10 text-white flex items-center justify-center shadow-lg active:scale-95"
                             title="Dong"
                         >

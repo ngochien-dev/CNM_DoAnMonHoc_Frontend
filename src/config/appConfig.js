@@ -35,11 +35,11 @@ const turnUrls = parseUrlList(rawTurnUrls);
 const rawApiOrigin =
     import.meta.env.VITE_API_URL ||
     import.meta.env.VITE_API_BASE_URL ||
-    'http://localhost:3001';
+    'http://192.168.1.13:3001';
 
 export const API_BASE_URL = buildApiBaseUrl(rawApiOrigin);
 export const SOCKET_URL = trimTrailingSlash(
-    import.meta.env.VITE_SOCKET_URL || rawApiOrigin || 'http://localhost:3001',
+    import.meta.env.VITE_SOCKET_URL || rawApiOrigin || 'http://192.168.1.13:3001',
 );
 
 export const DEFAULT_WEBRTC_ICE_SERVERS = [

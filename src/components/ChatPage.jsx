@@ -1204,6 +1204,7 @@ const ChatPage = ({ user, setUser }) => {
     };
 
     const clearChatHistory = async () => {
+        if (!user?.username || !activeRoom?.id) return;
         if (window.confirm(`Xóa lịch sử tại đây?`)) {
             await api.post('/v1/messages/clear-history', { username: user.username, roomId: activeRoom.id });
             setMessages(prev => prev.filter(m => m.roomId !== activeRoom.id));
@@ -1212,6 +1213,7 @@ const ChatPage = ({ user, setUser }) => {
     };
 
     const handleSendText = async () => {
+        if (!user?.username || !activeRoom?.id) return;
         const currentG = allGroups.find(g => g.groupId === activeRoom.id);
         if (currentG?.isDisabled) return alert("Kênh đã phong tỏa!");
         if (!msgInput.trim()) return;
@@ -1279,8 +1281,9 @@ const ChatPage = ({ user, setUser }) => {
     };
 
     const handleFileUpload = (e) => {
-        const file = e.target.files[0];
-        if (!file || file.size > 5000000) return alert("File quá nặng!");
+        const file = e.target.files?.[0];
+        if (!file || !user?.username || !activeRoom?.id) return;
+        if (file.size > 5000000) return alert("File quá nặng!");
         const reader = new FileReader();
         reader.onloadend = () => {
             const payload = { 
@@ -1970,6 +1973,10 @@ const ChatPage = ({ user, setUser }) => {
         const timer = setTimeout(() => markMessagesAsRead(roomMsgs), 1000);
         return () => clearTimeout(timer);
     }, [activeRoom?.id, messages.length, markMessagesAsRead, markMessagesAsDelivered]);
+
+    if (!user?.username) {
+        return <div className="p-6 text-sm font-bold text-gray-500">Dang tai thong tin nguoi dung...</div>;
+    }
 
     const currentGroup = allGroups.find(g => g.groupId === activeRoom?.id);
     const isAdminOfGroup = currentGroup?.owner === user.username; 
