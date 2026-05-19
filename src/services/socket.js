@@ -1,6 +1,6 @@
 import { io } from 'socket.io-client';
 import { SOCKET_URL } from '../config/appConfig';
-import { getStoredToken } from './api';
+import { getStoredSession, getStoredToken } from './api';
 
 let socketInstance = null;
 const SOCKET_DEBUG_FLAG = '__videoCallDebugBound';
@@ -88,6 +88,7 @@ function buildSocket() {
         transports: ['websocket'],
         auth: {
             token: getStoredToken(),
+            sessionId: getStoredSession()?.sessionId || null,
         },
     });
 
@@ -102,6 +103,7 @@ export function getSocket() {
 
     socketInstance.auth = {
         token: getStoredToken(),
+        sessionId: getStoredSession()?.sessionId || null,
     };
 
     return socketInstance;

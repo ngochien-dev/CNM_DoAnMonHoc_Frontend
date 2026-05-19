@@ -19,9 +19,12 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-    const token = getStoredToken();
-    if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
+    const session = getStoredSession();
+    if (session?.token) {
+        config.headers.Authorization = `Bearer ${session.token}`;
+    }
+    if (session?.sessionId) {
+        config.headers['x-session-id'] = session.sessionId;
     }
     return config;
 });
