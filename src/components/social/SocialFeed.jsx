@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
     FaImage, FaPaperPlane, FaHeart, FaComment, FaShare, FaHistory, 
-    FaTrash, FaSmile, FaRegHeart, FaChevronRight, FaTimes, FaGlobe, FaLock, FaEdit
+    FaTrash, FaSmile, FaRegHeart, FaChevronRight, FaTimes, FaGlobe, FaLock, FaEdit,
+    FaUserFriends
 } from 'react-icons/fa';
 import api from '../../services/api';
 import { getSocket } from '../../services/socket';
@@ -12,6 +13,7 @@ const SocialFeed = ({ user, darkMode }) => {
     const [posts, setPosts] = useState([]);
     const [postText, setPostText] = useState("");
     const [postImage, setPostImage] = useState(null);
+    const [postPrivacy, setPostPrivacy] = useState("friends"); // 'public' | 'friends' | 'private'
     const [loading, setLoading] = useState(false);
     const [showArchive, setShowArchive] = useState(false);
     const [archivedStories, setArchivedStories] = useState([]);
@@ -116,10 +118,12 @@ const SocialFeed = ({ user, darkMode }) => {
             await api.post('/posts/create', {
                 text: postText,
                 mediaData: postImage,
-                username: user.username
+                username: user.username,
+                privacy: postPrivacy
             });
             setPostText("");
             setPostImage(null);
+            setPostPrivacy("friends");
             fetchPosts();
             toast.success("Đã đăng bài viết mới!");
         } catch (err) {
@@ -484,6 +488,20 @@ const SocialFeed = ({ user, darkMode }) => {
                         >
                             <FaImage size={20}/> <span>Ảnh/Video</span>
                         </div>
+
+                        <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider hidden sm:inline">Quyền riêng tư:</span>
+                            <select
+                                value={postPrivacy}
+                                onChange={e => setPostPrivacy(e.target.value)}
+                                className={`text-xs font-bold rounded-xl px-2.5 py-1.5 outline-none cursor-pointer border transition-all ${darkMode ? 'bg-slate-800 border-white/10 text-indigo-400 focus:border-indigo-500' : 'bg-white border-gray-200 text-indigo-600 focus:border-indigo-500'}`}
+                            >
+                                <option value="friends">👥 Bạn bè</option>
+                                <option value="public">🌐 Công khai</option>
+                                <option value="private">🔒 Chỉ mình tôi</option>
+                            </select>
+                        </div>
+
                         <button 
                             onClick={handleCreatePost}
                             disabled={loading}
@@ -526,9 +544,14 @@ const SocialFeed = ({ user, darkMode }) => {
                                             <img src={`https://ui-avatars.com/api/?name=${post.username}`} className="w-10 h-10 rounded-xl border border-indigo-500/20" alt=""/>
                                             <div>
                                                 <div className="font-black text-sm uppercase italic tracking-tight">@{post.username}</div>
-                                                <div className="text-[10px] text-gray-500 font-bold uppercase">
-                                                    {new Date(post.createdAt).toLocaleString()}
-                                                    {post.isEdited && <span className="ml-1.5 text-[8px] bg-indigo-500/10 text-indigo-500 px-1 py-0.5 rounded font-black">Đã sửa</span>}
+                                                <div className="text-[10px] text-gray-500 font-bold uppercase flex items-center gap-1.5 mt-0.5">
+                                                    <span>{new Date(post.createdAt).toLocaleString()}</span>
+                                                    {post.isEdited && <span className="text-[8px] bg-indigo-500/10 text-indigo-500 px-1 py-0.5 rounded font-black">Đã sửa</span>}
+                                                    <span className="opacity-70 flex items-center" title={post.privacy === 'public' ? 'Công khai' : post.privacy === 'private' ? 'Chỉ mình tôi' : 'Bạn bè'}>
+                                                        {post.privacy === 'public' && <FaGlobe size={10} className="text-indigo-500" />}
+                                                        {post.privacy === 'private' && <FaLock size={10} className="text-red-500" />}
+                                                        {(post.privacy === 'friends' || !post.privacy) && <FaUserFriends size={10} className="text-green-500" />}
+                                                    </span>
                                                 </div>
                                             </div>
                                         </div>

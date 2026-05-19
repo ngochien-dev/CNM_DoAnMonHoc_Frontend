@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { FaTimes, FaHeart, FaChevronLeft, FaChevronRight, FaTrash } from 'react-icons/fa';
+import { FaTimes, FaHeart, FaChevronLeft, FaChevronRight, FaTrash, FaEye } from 'react-icons/fa';
+import api from '../../services/api';
 
 const StoryViewer = ({ stories, username, currentUser, onClose, onReact, onDelete, onNext, darkMode }) => {
     const [index, setIndex] = useState(0);
     const [progress, setProgress] = useState(0);
+    const [showViewersModal, setShowViewersModal] = useState(false);
 
     const current = stories[index];
     const isOwner = currentUser?.username === username;
@@ -34,6 +36,13 @@ const StoryViewer = ({ stories, username, currentUser, onClose, onReact, onDelet
             else onClose();
         }
     }, [current, index, progress, stories.length, onClose, onNext]);
+
+    useEffect(() => {
+        if (current && currentUser && currentUser.username !== username) {
+            api.post('/stories/view', { storyId: current.storyId })
+                .catch(err => console.error("Error recording story view:", err));
+        }
+    }, [current?.storyId, currentUser, username]);
 
     if (!current) return null;
 
@@ -99,7 +108,7 @@ const StoryViewer = ({ stories, username, currentUser, onClose, onReact, onDelet
                 </button>
             </div>
 
-            {/* Reactions */}
+            {/* Reactions & Viewers Area */}
             <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-6 z-50 w-full px-10">
                 {/* Reactions Count */}
                 {current.reactions && current.reactions.length > 0 && (
@@ -113,18 +122,59 @@ const StoryViewer = ({ stories, username, currentUser, onClose, onReact, onDelet
                     </div>
                 )}
 
-                <div className="flex gap-4">
-                    {['❤️', '🔥', '😂', '😮', '😢'].map(emoji => (
-                        <button 
-                            key={emoji} 
-                            onClick={() => onReact(current.storyId, emoji)}
-                            className="text-3xl hover:scale-125 transition-transform drop-shadow-lg"
-                        >
-                            {emoji}
-                        </button>
-                    ))}
-                </div>
+                {isOwner ? (
+                    <button 
+                        onClick={() => setShowViewersModal(true)}
+                        className="flex items-center gap-2 px-6 py-3 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white transition-all shadow-lg text-xs font-black uppercase tracking-wider active:scale-95"
+                    >
+                        <FaEye size={14}/>
+                        <span>{current.viewers?.length || 0} người đã xem</span>
+                    </button>
+                ) : (
+                    <div className="flex gap-4">
+                        {['❤️', '🔥', '😂', '😮', '😢'].map(emoji => (
+                            <button 
+                                key={emoji} 
+                                onClick={() => onReact(current.storyId, emoji)}
+                                className="text-3xl hover:scale-125 transition-transform drop-shadow-lg"
+                            >
+                                {emoji}
+                            </button>
+                        ))}
+                    </div>
+                )}
             </div>
+
+            {/* Story Viewers Modal */}
+            {showViewersModal && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[2100] backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                    <div className="w-full max-w-sm bg-slate-900/90 border border-white/10 rounded-[32px] p-6 shadow-2xl relative">
+                        <button 
+                            onClick={() => setShowViewersModal(false)} 
+                            className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white transition-all"
+                        >
+                            <FaTimes />
+                        </button>
+                        <h3 className="text-lg font-black text-white uppercase italic tracking-tight mb-4 flex items-center gap-2">
+                            <FaEye className="text-indigo-400" /> Người đã xem ({current.viewers?.length || 0})
+                        </h3>
+                        <div className="max-h-60 overflow-y-auto space-y-2 pr-1 scrollbar-hide">
+                            {current.viewers && current.viewers.length > 0 ? (
+                                current.viewers.map((viewer, i) => (
+                                    <div key={i} className="flex items-center gap-3 p-2 hover:bg-white/5 rounded-xl transition-all">
+                                        <img src={`https://ui-avatars.com/api/?name=${viewer}`} className="w-8 h-8 rounded-lg" alt=""/>
+                                        <span className="text-white text-sm font-bold">@{viewer}</span>
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="text-center py-8 text-white/40 text-xs font-semibold uppercase tracking-wider">
+                                    Chưa có lượt xem nào
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
