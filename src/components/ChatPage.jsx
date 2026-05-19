@@ -20,6 +20,7 @@ import GroupDiscovery from './modals/GroupDiscovery';
 import Home from './chat/Home';
 import SocialFeed from './social/SocialFeed';
 import RightSidebar from './chat/RightSidebar';
+import ThreadSidebar from './chat/ThreadSidebar';
 import CreateChat from './function/CreateChat';
 import MessageSearch from './chat/MessageSearch';
 import GlobalSearch from './chat/GlobalSearch';
@@ -314,6 +315,7 @@ const ChatPage = ({ user, setUser }) => {
     const [darkMode, setDarkMode] = useState(localStorage.getItem('theme') === 'dark');
     const [isSidebarVisible, setIsSidebarVisible] = useState(true);
     const [isRightSidebarVisible, setIsRightSidebarVisible] = useState(true);
+    const [activeThread, setActiveThread] = useState(null);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [showGroupCreator, setShowGroupCreator] = useState(false);
     const [showGroupSettings, setShowGroupSettings] = useState(false);
@@ -2521,6 +2523,7 @@ const ChatPage = ({ user, setUser }) => {
                                                         {!msg.isRevoked && (
                                                             <div className={`absolute top-0 flex gap-2 p-1 bg-[#0f172a] border border-white/10 shadow-2xl rounded-xl opacity-0 group-hover/bubble:opacity-100 transition-all z-10 ${isMe ? 'right-full mr-3' : 'left-full ml-3'}`}>
                                                                 <button onClick={() => setReplyingToMessage(msg)} className="p-1 text-gray-400 hover:text-blue-400" title="Trả lời"><FaReply size={12}/></button>
+                                                                <button onClick={() => { setActiveThread(msg); setIsRightSidebarVisible(true); }} className="p-1 text-gray-400 hover:text-pink-400" title="Thảo luận (Thread)"><FaCommentDots size={12}/></button>
                                                                 <button onClick={() => setForwardMessageData(msg)} className="p-1 text-gray-400 hover:text-green-400" title="Chuyển tiếp"><FaShare size={12}/></button>
                                                                 {msg.text && !msg.msgType && (
                                                                      <button 
@@ -2867,6 +2870,17 @@ const ChatPage = ({ user, setUser }) => {
             </div>
 
             {/* Cột 4 Right Sidebar */}
+            {activeThread ? (
+                <ThreadSidebar 
+                    activeThread={activeThread} 
+                    setActiveThread={setActiveThread} 
+                    messages={messages} 
+                    user={user} 
+                    activeRoom={activeRoom} 
+                    darkMode={darkMode} 
+                    socket={socket} 
+                />
+            ) : (
             <RightSidebar 
                 user={user} 
                 onlineUsers={onlineUsers} 
@@ -2904,6 +2918,7 @@ const ChatPage = ({ user, setUser }) => {
                 setFilterType={setFilterType}
                 scrollToMessage={scrollToMessage}
             />
+            )}
 
             {/* Modals & Components phụ */}
             {showGlobalSearch && <GlobalSearch darkMode={darkMode} onClose={() => setShowGlobalSearch(false)} onSelectResult={handleSelectSearchResult} />}
