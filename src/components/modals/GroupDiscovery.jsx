@@ -93,8 +93,15 @@ const GroupDiscovery = ({ allGroups, user, handleRequestJoin, darkMode, onJoinSu
                                         className={`relative h-full flex flex-col p-8 rounded-[40px] border transition-all duration-500 ${isJoined ? 'cursor-pointer' : ''} ${darkMode ? 'bg-white/5 border-white/5 hover:bg-white/10 hover:border-indigo-500/50' : 'bg-gray-50 border-gray-200 hover:bg-white hover:shadow-xl'}`}
                                     >
                                         <div className="flex justify-between items-start mb-8">
-                                            <div className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-[2px] flex items-center gap-2 ${g.isPublic ? 'bg-emerald-500/10 text-emerald-500' : 'bg-orange-500/10 text-orange-500'}`}>
-                                                {g.isPublic ? <FaGlobe/> : <FaLock/>} {g.isPublic ? 'Public' : 'Private'}
+                                            <div className="flex items-center gap-2">
+                                                <div className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-[2px] flex items-center gap-2 ${g.isPublic ? 'bg-emerald-500/10 text-emerald-500' : 'bg-orange-500/10 text-orange-500'}`}>
+                                                    {g.isPublic ? <FaGlobe/> : <FaLock/>} {g.isPublic ? 'Public' : 'Private'}
+                                                </div>
+                                                {g.isChannel && (
+                                                    <div className="px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-[2px] bg-purple-500/10 text-purple-400 flex items-center gap-1.5">
+                                                        📢 Kênh
+                                                    </div>
+                                                )}
                                             </div>
                                             <div className={`px-3 py-1.5 rounded-xl flex items-center gap-2 text-[10px] font-black text-indigo-500 ${darkMode ? 'bg-white/10' : 'bg-indigo-50'}`}>
                                                 <FaUsers /> {g.members?.length || 0}
