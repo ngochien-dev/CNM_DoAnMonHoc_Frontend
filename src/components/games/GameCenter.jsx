@@ -122,7 +122,7 @@ const SnakeGame = ({ user, onScoreUpdate }) => {
         setIsPlaying(false);
         if (finalScore > 0) {
             try {
-                const res = await api.post('/users/update-score', { username: user.username, score: finalScore });
+                const res = await api.post('/users/update-score', { username: user.username, score: finalScore, gameId: 'snake' });
                 if (res.data.isNewHigh) {
                     toast.success(`Kỷ lục mới của bạn: ${finalScore} điểm! 🎉`);
                     onScoreUpdate();
@@ -172,29 +172,216 @@ const SnakeGame = ({ user, onScoreUpdate }) => {
     );
 };
 
+const FlappyBird = ({ user, onScoreUpdate }) => {
+    const canvasRef = useRef(null);
+    const [score, setScore] = useState(0);
+    const [gameOver, setGameOver] = useState(false);
+    const [isPlaying, setIsPlaying] = useState(false);
+
+    // Game state
+    const bird = useRef({ y: 200, velocity: 0, gravity: 0.6, jump: -8, size: 20 });
+    const pipes = useRef([]);
+    const frame = useRef(0);
+    const pipeWidth = 50;
+    const gap = 120;
+
+    const resetGame = useCallback(() => {
+        bird.current = { y: 200, velocity: 0, gravity: 0.6, jump: -8, size: 20 };
+        pipes.current = [];
+        frame.current = 0;
+        setScore(0);
+        setGameOver(false);
+        setIsPlaying(true);
+    }, []);
+
+    const startGame = () => {
+        resetGame();
+    };
+
+    const handleJump = useCallback((e) => {
+        if (!isPlaying || gameOver) return;
+        if (e.type === 'keydown' && e.code !== 'Space' && e.key !== 'ArrowUp') return;
+        bird.current.velocity = bird.current.jump;
+    }, [isPlaying, gameOver]);
+
+    useEffect(() => {
+        window.addEventListener('keydown', handleJump);
+        return () => window.removeEventListener('keydown', handleJump);
+    }, [handleJump]);
+
+    useEffect(() => {
+        if (!isPlaying || gameOver) return;
+        const ctx = canvasRef.current.getContext('2d');
+        let animationId;
+
+        const loop = () => {
+            frame.current++;
+            const b = bird.current;
+
+            // Physics
+            b.velocity += b.gravity;
+            b.y += b.velocity;
+
+            // Collision with floor/ceiling
+            if (b.y + b.size >= 400 || b.y <= 0) {
+                handleGameOver(score);
+                return;
+            }
+
+            // Pipes generating
+            if (frame.current % 90 === 0) {
+                const pipeY = Math.random() * (400 - gap - 40) + 20; // 20 to 240
+                pipes.current.push({ x: 400, y: pipeY, passed: false });
+            }
+
+            // Move pipes & Collision
+            let isDead = false;
+            pipes.current.forEach(p => {
+                p.x -= 3;
+                
+                // Collision
+                if (
+                    50 < p.x + pipeWidth && 
+                    50 + b.size > p.x && 
+                    (b.y < p.y || b.y + b.size > p.y + gap)
+                ) {
+                    isDead = true;
+                }
+
+                // Score (Bird X is 50)
+                if (p.x + pipeWidth < 50 && !p.passed) {
+                    setScore(s => s + 10);
+                    p.passed = true;
+                }
+            });
+
+            if (isDead) {
+                handleGameOver(score);
+                return;
+            }
+
+            // Clean off-screen pipes
+            pipes.current = pipes.current.filter(p => p.x + pipeWidth > 0);
+
+            // Draw
+            ctx.fillStyle = '#38bdf8'; // Sky blue
+            ctx.fillRect(0, 0, 400, 400);
+
+            // Draw pipes
+            ctx.fillStyle = '#22c55e'; // Green
+            pipes.current.forEach(p => {
+                ctx.fillRect(p.x, 0, pipeWidth, p.y); // top pipe
+                ctx.fillRect(p.x, p.y + gap, pipeWidth, 400 - (p.y + gap)); // bottom pipe
+                // borders
+                ctx.fillStyle = '#166534';
+                ctx.fillRect(p.x - 2, p.y - 20, pipeWidth + 4, 20); // top cap
+                ctx.fillRect(p.x - 2, p.y + gap, pipeWidth + 4, 20); // bottom cap
+                ctx.fillStyle = '#22c55e';
+            });
+
+            // Draw Bird
+            ctx.fillStyle = '#facc15'; // Yellow
+            ctx.beginPath();
+            ctx.arc(50 + b.size/2, b.y + b.size/2, b.size/2, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Bird Eye
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(50 + b.size/2 + 4, b.y + b.size/2 - 4, 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = 'black';
+            ctx.beginPath();
+            ctx.arc(50 + b.size/2 + 5, b.y + b.size/2 - 4, 2, 0, Math.PI * 2);
+            ctx.fill();
+
+            animationId = requestAnimationFrame(loop);
+        };
+
+        animationId = requestAnimationFrame(loop);
+        return () => cancelAnimationFrame(animationId);
+    }, [isPlaying, gameOver, score]);
+
+    const handleGameOver = async (finalScore) => {
+        setGameOver(true);
+        setIsPlaying(false);
+        if (finalScore > 0) {
+            try {
+                const res = await api.post('/users/update-score', { username: user.username, score: finalScore, gameId: 'flappy' });
+                if (res.data.isNewHigh) {
+                    toast.success(`Kỷ lục mới của bạn: ${finalScore} điểm! 🎉`);
+                    onScoreUpdate();
+                } else {
+                    toast.error(`Game Over! Điểm của bạn: ${finalScore}`);
+                }
+            } catch (err) {}
+        }
+    };
+
+    return (
+        <div className="flex flex-col items-center justify-center p-4">
+            <div className="mb-4 text-center">
+                <h3 className="text-2xl font-black text-sky-400 mb-1">Chim Bay (Flappy)</h3>
+                <p className="text-gray-400 font-bold">Điểm hiện tại: <span className="text-white">{score}</span></p>
+            </div>
+            <div className="relative border-4 border-slate-700 rounded-xl overflow-hidden shadow-2xl select-none" onClick={handleJump}>
+                <canvas ref={canvasRef} width={400} height={400} className="bg-sky-400 block cursor-pointer"></canvas>
+                {!isPlaying && (
+                    <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center backdrop-blur-sm z-10">
+                        {gameOver && (
+                            <div className="text-center mb-6">
+                                <h2 className="text-4xl font-black text-red-500 mb-2">GAME OVER</h2>
+                                <p className="text-xl text-white font-bold">Điểm: {score}</p>
+                            </div>
+                        )}
+                        <button onClick={startGame} className="flex items-center gap-2 bg-sky-500 hover:bg-sky-600 text-white px-6 py-3 rounded-xl font-bold transition-all hover:scale-105 active:scale-95 shadow-lg shadow-sky-500/30">
+                            {gameOver ? <><FaRedo /> Chơi Lại</> : <><FaPlay /> Bắt Đầu Chơi</>}
+                        </button>
+                        <p className="text-gray-300 mt-4 text-sm font-medium">Nhấn <kbd className="bg-slate-800 px-2 py-1 rounded border border-gray-600">Space</kbd> hoặc Click chuột để bay</p>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
 
 const GameCenter = ({ user, onClose }) => {
     const [leaderboard, setLeaderboard] = useState([]);
     const [activeGame, setActiveGame] = useState(null); // null means showing menu
+    const [lbTab, setLbTab] = useState('snake');
     const socket = getSocket();
 
-    const fetchLeaderboard = useCallback(async () => {
+    const fetchLeaderboard = useCallback(async (gameId = lbTab) => {
         try {
-            const res = await api.get('/users/leaderboard/top');
+            const res = await api.get(`/users/leaderboard/top?gameId=${gameId}`);
             setLeaderboard(res.data);
         } catch (error) {
             console.error("Lỗi tải bảng xếp hạng:", error);
         }
-    }, []);
+    }, [lbTab]);
 
     useEffect(() => {
-        fetchLeaderboard();
+        if (activeGame) {
+            setLbTab(activeGame);
+        }
+    }, [activeGame]);
+
+    useEffect(() => {
+        fetchLeaderboard(lbTab);
 
         if (socket) {
-            socket.on('leaderboard_updated', fetchLeaderboard);
-            return () => socket.off('leaderboard_updated', fetchLeaderboard);
+            const handler = (data) => {
+                if (data && data.gameId === lbTab) {
+                    fetchLeaderboard(lbTab);
+                } else if (!data) { // fallback
+                    fetchLeaderboard(lbTab);
+                }
+            };
+            socket.on('leaderboard_updated', handler);
+            return () => socket.off('leaderboard_updated', handler);
         }
-    }, [socket, fetchLeaderboard]);
+    }, [socket, fetchLeaderboard, lbTab]);
 
     return (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 sm:p-8 animate-fade-in">
@@ -210,7 +397,7 @@ const GameCenter = ({ user, onClose }) => {
 
                 {/* Phần Game Play */}
                 <div className="flex-1 bg-slate-900 border-r border-slate-700 flex flex-col relative">
-                    {activeGame === 'snake' ? (
+                    {activeGame !== null ? (
                         <>
                             <div className="p-4 border-b border-slate-800 flex items-center gap-3">
                                 <button 
@@ -224,7 +411,8 @@ const GameCenter = ({ user, onClose }) => {
                                 </h2>
                             </div>
                             <div className="flex-1 flex items-center justify-center overflow-auto p-4">
-                                <SnakeGame user={user} onScoreUpdate={fetchLeaderboard} />
+                                {activeGame === 'snake' && <SnakeGame user={user} onScoreUpdate={fetchLeaderboard} />}
+                                {activeGame === 'flappy' && <FlappyBird user={user} onScoreUpdate={fetchLeaderboard} />}
                             </div>
                         </>
                     ) : (
@@ -245,14 +433,13 @@ const GameCenter = ({ user, onClose }) => {
                                     <button className="mt-4 w-full py-2.5 bg-indigo-500/10 hover:bg-indigo-500 text-indigo-400 hover:text-white rounded-xl font-bold transition-colors">Chơi Ngay</button>
                                 </div>
 
-                                {/* Placeholder cho game 2 */}
-                                <div className="bg-slate-800/50 border border-slate-700/50 rounded-2xl p-5 opacity-60 cursor-not-allowed">
-                                    <div className="w-16 h-16 bg-gradient-to-br from-blue-400 to-cyan-600 rounded-2xl flex items-center justify-center shadow-lg mb-4 grayscale">
-                                        <span className="text-3xl">❌</span>
+                                <div className="bg-slate-800 border border-slate-700 rounded-2xl p-5 hover:border-sky-500 transition-all group cursor-pointer" onClick={() => setActiveGame('flappy')}>
+                                    <div className="w-16 h-16 bg-gradient-to-br from-sky-400 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg mb-4 group-hover:scale-110 transition-transform">
+                                        <span className="text-3xl">🦅</span>
                                     </div>
-                                    <h3 className="text-xl font-bold text-gray-300 mb-2">Cờ Caro 1vs1</h3>
-                                    <p className="text-sm text-gray-500 font-medium">Đang phát triển. Sắp ra mắt!</p>
-                                    <button className="mt-4 w-full py-2.5 bg-slate-700 text-gray-400 rounded-xl font-bold" disabled>Sắp Mở</button>
+                                    <h3 className="text-xl font-bold text-white mb-2 group-hover:text-sky-400 transition-colors">Chim Bay (Flappy)</h3>
+                                    <p className="text-sm text-gray-400 font-medium">Nhấn Space để bay qua các ống nước. Cực kỳ ức chế và dễ nghiện!</p>
+                                    <button className="mt-4 w-full py-2.5 bg-sky-500/10 hover:bg-sky-500 text-sky-400 hover:text-white rounded-xl font-bold transition-colors">Chơi Ngay</button>
                                 </div>
                             </div>
                         </div>
@@ -261,15 +448,33 @@ const GameCenter = ({ user, onClose }) => {
 
                 {/* Bảng xếp hạng (Leaderboard) */}
                 <div className="w-full md:w-80 bg-slate-800 flex flex-col h-full shrink-0">
-                    <div className="p-5 border-b border-slate-700 bg-slate-800/80 sticky top-0 z-10">
-                        <h3 className="text-lg font-black text-white flex items-center gap-2">
-                            <FaTrophy className="text-yellow-400 text-xl"/> Bảng Xếp Hạng
-                        </h3>
-                        <p className="text-xs text-gray-400 mt-1 font-medium">Vinh danh cao thủ (Top 10)</p>
+                    <div className="p-5 border-b border-slate-700 bg-slate-800/80 sticky top-0 z-10 flex flex-col gap-3">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-lg font-black text-white flex items-center gap-2">
+                                <FaTrophy className="text-yellow-400 text-xl"/> {lbTab === 'snake' ? 'BXH Cờ Rắn' : 'BXH Chim Bay'}
+                            </h3>
+                            <p className="text-xs text-gray-400 font-medium">(Top 10)</p>
+                        </div>
+                        {activeGame === null && (
+                            <div className="flex bg-slate-900 rounded-lg p-1 animate-fade-in">
+                                <button 
+                                    onClick={() => setLbTab('snake')}
+                                    className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${lbTab === 'snake' ? 'bg-indigo-500 text-white shadow' : 'text-gray-400 hover:text-white'}`}
+                                >
+                                    🐍 Rắn Săn Mồi
+                                </button>
+                                <button 
+                                    onClick={() => setLbTab('flappy')}
+                                    className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${lbTab === 'flappy' ? 'bg-sky-500 text-white shadow' : 'text-gray-400 hover:text-white'}`}
+                                >
+                                    🦅 Chim Bay
+                                </button>
+                            </div>
+                        )}
                     </div>
                     <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
                         {leaderboard.length === 0 ? (
-                            <div className="text-center text-gray-500 mt-10 font-medium">Chưa có ai ghi điểm. Hãy là người đầu tiên!</div>
+                            <div className="text-center text-gray-500 mt-10 font-medium">Chưa có ai ghi điểm ở game này!</div>
                         ) : (
                             <div className="flex flex-col gap-3">
                                 {leaderboard.map((lb, idx) => (
@@ -283,7 +488,7 @@ const GameCenter = ({ user, onClose }) => {
                                             </div>
                                             <div className="text-xs text-gray-400 truncate">@{lb.username}</div>
                                         </div>
-                                        <div className="font-black text-indigo-400">{lb.highScore}</div>
+                                        <div className="font-black text-indigo-400">{lb.score}</div>
                                     </div>
                                 ))}
                             </div>
