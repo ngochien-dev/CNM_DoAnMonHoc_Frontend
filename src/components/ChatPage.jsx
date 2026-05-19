@@ -1114,6 +1114,82 @@ const ChatPage = ({ user, setUser }) => {
         loadData();
     };
 
+    const handleExportChat = () => {
+        if (!activeRoom) return;
+        const roomMessages = messages.filter(m => m.roomId === activeRoom.id);
+        if (roomMessages.length === 0) return alert('Không có tin nhắn nào để tải xuống!');
+        
+        const exportFormat = window.prompt("Nhập 'pdf' để xuất định dạng PDF, hoặc 'json' để xuất JSON:", "pdf");
+        if (!exportFormat) return; // Hủy bỏ
+        
+        const format = exportFormat.toLowerCase().trim();
+        
+        if (format === 'json') {
+            const dataStr = JSON.stringify(roomMessages, null, 2);
+            const blob = new Blob([dataStr], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `chat_backup_${activeRoom.id}_${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } else if (format === 'pdf') {
+            const toastId = toast.loading("Đang tạo file PDF...");
+            const script = document.createElement('script');
+            script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
+            script.onload = () => {
+                const container = document.createElement('div');
+                container.style.padding = '20px';
+                container.style.fontFamily = 'Arial, sans-serif';
+                container.style.color = '#333';
+                
+                let html = `<h2 style="text-align:center; font-family: sans-serif;">Lịch sử trò chuyện: ${activeRoom.name}</h2><hr/>`;
+                roomMessages.forEach(msg => {
+                    let timeStr = "";
+                    if (msg.createdAt) {
+                        timeStr = new Date(msg.createdAt).toLocaleString('vi-VN');
+                    } else if (msg.time) {
+                        timeStr = msg.time;
+                    } else {
+                        timeStr = "[Không rõ thời gian]";
+                    }
+                    
+                    const content = msg.isRevoked ? '<i style="color:red">Tin nhắn này đã bị thu hồi</i>' : (msg.text || '[Nội dung đa phương tiện / Tin nhắn hệ thống]');
+                    
+                    html += `
+                        <div style="margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid #eee; font-family: sans-serif;">
+                            <div style="font-size: 12px; color: #888; margin-bottom: 5px;">
+                                <strong>@${msg.senderUsername}</strong> • ${timeStr}
+                            </div>
+                            <div style="font-size: 14px; line-height: 1.5;">
+                                ${content}
+                            </div>
+                        </div>
+                    `;
+                });
+                container.innerHTML = html;
+                
+                const opt = {
+                  margin:       15,
+                  filename:     `chat_backup_${activeRoom.id}_${new Date().toISOString().split('T')[0]}.pdf`,
+                  image:        { type: 'jpeg', quality: 0.98 },
+                  html2canvas:  { scale: 2 },
+                  jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                };
+
+                window.html2pdf().set(opt).from(container).save().then(() => {
+                    toast.success("Xuất PDF thành công!", { id: toastId });
+                }).catch(err => {
+                    toast.error("Lỗi tạo PDF", { id: toastId });
+                    console.error(err);
+                });
+            };
+            document.body.appendChild(script);
+        } else {
+            alert("Lựa chọn không hợp lệ. Vui lòng nhập 'pdf' hoặc 'json'.");
+        }
+    };
+
     const clearChatHistory = async () => {
         if (window.confirm(`Xóa lịch sử tại đây?`)) {
             await api.post('/v1/messages/clear-history', { username: user.username, roomId: activeRoom.id });
@@ -2896,6 +2972,7 @@ const ChatPage = ({ user, setUser }) => {
                 mutedRooms={mutedRooms}
                 toggleMuteRoom={toggleMuteRoom}
                 clearChatHistory={clearChatHistory}
+                handleExportChat={handleExportChat}
                 handleLeaveGroup={handleLeaveGroup}
                 setShowGroupSettings={setShowGroupSettings}
                 setShowInviteModal={setShowInviteModal}

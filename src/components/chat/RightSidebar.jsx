@@ -32,7 +32,8 @@ import {
   FaEdit,
   FaVolumeMute,
   FaInfoCircle,
-  FaPaperclip
+  FaPaperclip,
+  FaDownload
 } from "react-icons/fa";
 
 const RightSidebar = ({
@@ -74,7 +75,8 @@ const RightSidebar = ({
   setFilterDate,
   filterType,
   setFilterType,
-  scrollToMessage
+  scrollToMessage,
+  handleExportChat
 }) => {
   const [expandedSections, setExpandedSections] = useState({
     chatInfo: true,
@@ -840,6 +842,20 @@ const RightSidebar = ({
                   <div className="flex-1 min-w-0 leading-tight">
                     <p className={`text-[12.5px] ${darkMode ? 'text-gray-200' : 'text-slate-700'}`}>Báo cáo vi phạm</p>
                     <p className="text-[10px] text-slate-500">Báo cáo nội dung hoặc quấy rối</p>
+                  </div>
+                </div>
+
+                {/* Export chat option */}
+                <div 
+                  onClick={handleExportChat}
+                  className={`flex items-center gap-3.5 py-2.5 px-2.5 rounded-xl cursor-pointer transition-colors ${
+                    darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-100'
+                  }`}
+                >
+                  <FaDownload size={12} className="text-slate-400 shrink-0" />
+                  <div className="flex-1 min-w-0 leading-tight">
+                    <p className={`text-[12.5px] ${darkMode ? 'text-gray-200' : 'text-slate-700'}`}>Tải xuống lịch sử</p>
+                    <p className="text-[10px] text-slate-500">Xuất file JSON hoặc PDF sao lưu</p>
                   </div>
                 </div>
 
