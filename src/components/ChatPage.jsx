@@ -7,7 +7,7 @@ import {
     FaChartBar, FaImage, FaSmile, FaMoon, FaSun, FaPalette,
     FaGlobe, FaCog, FaUserMinus, FaPauseCircle, FaPlayCircle, 
     FaUserFriends, FaCommentDots, FaUserPlus, FaTimes, FaUserCheck, FaLock, FaUsers, FaSearch,
-    FaVideo, FaShare, FaThumbtack, FaPoll, FaCalendarAlt, FaReply, FaMicrophone, FaStopCircle, FaSmileBeam, FaEdit, FaExchangeAlt, FaTh, FaPlus, FaCamera, FaFolderPlus, FaLanguage, FaCloud, FaMapMarkerAlt
+    FaVideo, FaShare, FaThumbtack, FaPoll, FaCalendarAlt, FaReply, FaMicrophone, FaStopCircle, FaSmileBeam, FaEdit, FaExchangeAlt, FaTh, FaPlus, FaCamera, FaFolderPlus, FaLanguage, FaCloud, FaMapMarkerAlt, FaGamepad
 } from 'react-icons/fa';
 import { Toaster, toast } from 'react-hot-toast';
 import StoryBar from './social/StoryBar';
@@ -27,6 +27,7 @@ import GlobalSearch from './chat/GlobalSearch';
 import LinkPreview from './chat/LinkPreview';
 import StickerPicker from './chat/StickerPicker';
 import MediaGallery from './chat/MediaGallery';
+import GameCenter from './games/GameCenter';
 
 import useCall from '../context/useCall'; 
 import { getSocket, connectSocket, disconnectSocket } from '../services/socket';
@@ -304,6 +305,7 @@ const ChatPage = ({ user, setUser }) => {
 
     const [showFriendsTab, setShowFriendsTab] = useState(false);
     const [showDiscoveryTab, setShowDiscoveryTab] = useState(false);
+    const [showGameCenter, setShowGameCenter] = useState(false);
     const [showSocialFeed, setShowSocialFeed] = useState(false);
     const [isAdminMode, setIsAdminMode] = useState(false);
     const [showSearch, setShowSearch] = useState(false);
@@ -1981,8 +1983,9 @@ const ChatPage = ({ user, setUser }) => {
             <div className={`w-[72px] hidden sm:flex flex-col items-center py-3 space-y-4 shrink-0 shadow-inner z-20 ${darkMode ? 'bg-[#020617]' : 'bg-white border-r border-gray-200 shadow-sm'}`}>
                 <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white font-black cursor-pointer hover:rounded-xl transition-all shadow-md ${(!activeRoom && !showFriendsTab && !showDiscoveryTab && !isAdminMode) ? 'bg-indigo-600 scale-110 shadow-indigo-500/50' : 'bg-gradient-to-tr from-indigo-500 to-purple-600 opacity-60 hover:opacity-100'}`} onClick={() => handleSwitchRoom(null)}>OTT</div>
                 <div onClick={() => {setShowFriendsTab(true); setShowDiscoveryTab(false); setIsAdminMode(false); setActiveRoom(null);}} className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all relative ${showFriendsTab ? 'bg-[#5865f2] text-white shadow-lg' : 'bg-white/5 text-gray-500 hover:bg-[#5865f2] hover:text-white'}`}><FaUserFriends size={22}/>{user.friendRequests?.length > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center border-2 border-[#1e1f22] font-black animate-bounce">{user.friendRequests.length}</span>}</div>
-                <div onClick={() => {setShowDiscoveryTab(true); setShowFriendsTab(false); setShowSocialFeed(false); setIsAdminMode(false); setActiveRoom(null);}} className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all relative ${showDiscoveryTab ? 'bg-emerald-500 text-white shadow-lg' : 'bg-white/5 text-emerald-500 hover:bg-emerald-500 hover:text-white'}`}><FaGlobe size={22}/></div>
-                <div onClick={() => {setShowSocialFeed(true); setShowFriendsTab(false); setShowDiscoveryTab(false); setIsAdminMode(false); setActiveRoom(null);}} className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all relative ${showSocialFeed ? 'bg-purple-500 text-white shadow-lg' : 'bg-white/5 text-purple-500 hover:bg-purple-500 hover:text-white'}`} title="Bảng tin"><FaSmileBeam size={22}/></div>
+                <div onClick={() => {setShowDiscoveryTab(true); setShowFriendsTab(false); setShowSocialFeed(false); setShowGameCenter(false); setIsAdminMode(false); setActiveRoom(null);}} className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all relative ${showDiscoveryTab ? 'bg-emerald-500 text-white shadow-lg' : 'bg-white/5 text-emerald-500 hover:bg-emerald-500 hover:text-white'}`}><FaGlobe size={22}/></div>
+                <div onClick={() => {setShowSocialFeed(true); setShowFriendsTab(false); setShowDiscoveryTab(false); setShowGameCenter(false); setIsAdminMode(false); setActiveRoom(null);}} className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all relative ${showSocialFeed ? 'bg-purple-500 text-white shadow-lg' : 'bg-white/5 text-purple-500 hover:bg-purple-500 hover:text-white'}`} title="Bảng tin"><FaSmileBeam size={22}/></div>
+                <div onClick={() => {setShowGameCenter(true); setShowSocialFeed(false); setShowFriendsTab(false); setShowDiscoveryTab(false); setIsAdminMode(false); setActiveRoom(null);}} className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all relative ${showGameCenter ? 'bg-pink-500 text-white shadow-lg' : 'bg-white/5 text-pink-500 hover:bg-pink-500 hover:text-white'}`} title="Game Center"><FaGamepad size={22}/></div>
                 <div className="w-8 h-[2px] bg-gray-600 rounded-full opacity-20"></div>
                 <div onClick={() => { localStorage.setItem('theme', !darkMode ? 'dark' : 'light'); setDarkMode(!darkMode); }} className="w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer bg-white/10 hover:bg-white/20 transition-all">{darkMode ? <FaSun className="text-yellow-400"/> : <FaMoon/>}</div>
                 <div onClick={() => setShowSoundSettings(true)} className="w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer bg-white/10 hover:bg-white/20 transition-all text-indigo-400 hover:text-white" title="Cài đặt nhạc chuông"><FaCog size={20}/></div>
@@ -4046,6 +4049,11 @@ const ChatPage = ({ user, setUser }) => {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Game Center Modal */}
+            {showGameCenter && (
+                <GameCenter user={user} onClose={() => setShowGameCenter(false)} />
             )}
         </div>
     );

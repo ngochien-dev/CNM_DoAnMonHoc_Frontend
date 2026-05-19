@@ -1,5 +1,5 @@
 import React from 'react';
-import { FaUserFriends, FaGlobe, FaSun, FaMoon, FaShieldAlt, FaPlusCircle } from 'react-icons/fa';
+import { FaUserFriends, FaGlobe, FaSun, FaMoon, FaShieldAlt, FaPlusCircle, FaGamepad } from 'react-icons/fa';
 
 const ServerSidebar = ({ 
     activeRoom, showFriendsTab, showDiscoveryTab, isAdminMode, user, 
@@ -35,6 +35,14 @@ const ServerSidebar = ({
                 className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all relative ${showDiscoveryTab ? 'bg-emerald-500 text-white shadow-lg' : 'bg-white/5 text-emerald-500 hover:bg-emerald-500 hover:text-white'}`}
             >
                 <FaGlobe size={22}/>
+            </div>
+
+            {/* Games Icon */}
+            <div 
+                onClick={() => onNavigate('games')} 
+                className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all relative bg-white/5 text-pink-500 hover:bg-pink-500 hover:text-white`}
+            >
+                <FaGamepad size={24}/>
             </div>
 
             <div className="w-8 h-[2px] bg-gray-600 rounded-full opacity-20"></div>
