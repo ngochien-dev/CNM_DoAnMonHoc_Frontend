@@ -7,7 +7,7 @@ import {
     FaChartBar, FaImage, FaSmile, FaMoon, FaSun, FaPalette,
     FaGlobe, FaCog, FaUserMinus, FaPauseCircle, FaPlayCircle, 
     FaUserFriends, FaCommentDots, FaUserPlus, FaTimes, FaUserCheck, FaLock, FaUsers, FaSearch,
-    FaVideo, FaShare, FaThumbtack, FaPoll, FaCalendarAlt, FaReply, FaMicrophone, FaStopCircle, FaSmileBeam, FaEdit, FaExchangeAlt, FaTh, FaPlus, FaCamera, FaFolderPlus, FaLanguage, FaCloud, FaMapMarkerAlt, FaGamepad, FaCalendarCheck, FaPhoneAlt, FaArchive, FaRobot, FaFolderOpen, FaBullhorn
+    FaVideo, FaShare, FaThumbtack, FaPoll, FaCalendarAlt, FaReply, FaMicrophone, FaStopCircle, FaSmileBeam, FaEdit, FaExchangeAlt, FaTh, FaPlus, FaCamera, FaFolderPlus, FaLanguage, FaCloud, FaMapMarkerAlt, FaGamepad, FaCalendarCheck, FaPhoneAlt, FaArchive, FaRobot, FaFolderOpen
 } from 'react-icons/fa';
 import { Toaster, toast } from 'react-hot-toast';
 import StoryBar from './social/StoryBar';
@@ -317,7 +317,6 @@ const ChatPage = ({ user, setUser }) => {
     const [showCloudDriveTab, setShowCloudDriveTab] = useState(false);
     const [showGameCenter, setShowGameCenter] = useState(false);
     const [showSocialFeed, setShowSocialFeed] = useState(false);
-    const [showBroadcastChannels, setShowBroadcastChannels] = useState(false);
     const [isAdminMode, setIsAdminMode] = useState(false);
     const [showSearch, setShowSearch] = useState(false);
     const [showGlobalSearch, setShowGlobalSearch] = useState(false);
@@ -1045,7 +1044,6 @@ const ChatPage = ({ user, setUser }) => {
         setShowAITab(false);
         setShowCloudDriveTab(false);
         setShowGameCenter(false);
-        setShowBroadcastChannels(false);
         setIsAdminMode(false); 
         setShowSearch(false);
         setShowGlobalSearch(false);
@@ -2045,40 +2043,37 @@ const ChatPage = ({ user, setUser }) => {
             {/* Cột 1 & 2 giữ nguyên theo style File A của bạn */}
             <div className={`w-[72px] hidden sm:flex flex-col items-center py-3 space-y-4 shrink-0 shadow-inner z-20 ${darkMode ? 'bg-[#020617]' : 'bg-white border-r border-gray-200 shadow-sm'}`}>
                 {/* 1. OTT Trang chủ */}
-                <div onClick={() => { handleSwitchRoom(null); setShowTodoTab(false); setShowCallHistoryTab(false); setShowArchivedTab(false); setShowAITab(false); setShowCloudDriveTab(false); setShowBroadcastChannels(false); }} className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white font-black cursor-pointer hover:rounded-xl transition-all shadow-md ${(!activeRoom && !showFriendsTab && !showDiscoveryTab && !showSocialFeed && !showTodoTab && !showCallHistoryTab && !showArchivedTab && !showAITab && !showCloudDriveTab && !showBroadcastChannels && !isAdminMode) ? 'bg-indigo-600 scale-110 shadow-indigo-500/50' : 'bg-gradient-to-tr from-indigo-500 to-purple-600 opacity-60 hover:opacity-100'}`} title="Trang chủ / Hội thoại">OTT</div>
+                <div onClick={() => { handleSwitchRoom(null); setShowTodoTab(false); setShowCallHistoryTab(false); setShowArchivedTab(false); setShowAITab(false); setShowCloudDriveTab(false); }} className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white font-black cursor-pointer hover:rounded-xl transition-all shadow-md ${(!activeRoom && !showFriendsTab && !showDiscoveryTab && !showSocialFeed && !showTodoTab && !showCallHistoryTab && !showArchivedTab && !showAITab && !showCloudDriveTab && !isAdminMode) ? 'bg-indigo-600 scale-110 shadow-indigo-500/50' : 'bg-gradient-to-tr from-indigo-500 to-purple-600 opacity-60 hover:opacity-100'}`} title="Trang chủ / Hội thoại">OTT</div>
                 
                 {/* 2. Bạn bè */}
-                <div onClick={() => {setShowFriendsTab(true); setShowDiscoveryTab(false); setIsAdminMode(false); setActiveRoom(null); setShowSocialFeed(false); setShowTodoTab(false); setShowCallHistoryTab(false); setShowArchivedTab(false); setShowAITab(false); setShowCloudDriveTab(false); setShowBroadcastChannels(false);}} className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all relative ${showFriendsTab ? 'bg-[#5865f2] text-white shadow-lg' : 'bg-white/5 text-gray-500 hover:bg-[#5865f2] hover:text-white'}`} title="Danh sách bạn bè"><FaUserFriends size={22}/>{user.friendRequests?.length > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center border-2 border-[#1e1f22] font-black animate-bounce">{user.friendRequests.length}</span>}</div>
+                <div onClick={() => {setShowFriendsTab(true); setShowDiscoveryTab(false); setIsAdminMode(false); setActiveRoom(null); setShowSocialFeed(false); setShowTodoTab(false); setShowCallHistoryTab(false); setShowArchivedTab(false); setShowAITab(false); setShowCloudDriveTab(false);}} className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all relative ${showFriendsTab ? 'bg-[#5865f2] text-white shadow-lg' : 'bg-white/5 text-gray-500 hover:bg-[#5865f2] hover:text-white'}`} title="Danh sách bạn bè"><FaUserFriends size={22}/>{user.friendRequests?.length > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center border-2 border-[#1e1f22] font-black animate-bounce">{user.friendRequests.length}</span>}</div>
                 
                 {/* 3. Khám phá */}
-                <div onClick={() => {setShowDiscoveryTab(true); setShowFriendsTab(false); setShowSocialFeed(false); setShowGameCenter(false); setIsAdminMode(false); setActiveRoom(null); setShowTodoTab(false); setShowCallHistoryTab(false); setShowArchivedTab(false); setShowAITab(false); setShowCloudDriveTab(false); setShowBroadcastChannels(false);}} className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all relative ${showDiscoveryTab ? 'bg-emerald-500 text-white shadow-lg' : 'bg-white/5 text-emerald-500 hover:bg-emerald-500 hover:text-white'}`} title="Khám phá nhóm & kênh"><FaGlobe size={22}/></div>
+                <div onClick={() => {setShowDiscoveryTab(true); setShowFriendsTab(false); setShowSocialFeed(false); setShowGameCenter(false); setIsAdminMode(false); setActiveRoom(null); setShowTodoTab(false); setShowCallHistoryTab(false); setShowArchivedTab(false); setShowAITab(false); setShowCloudDriveTab(false);}} className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all relative ${showDiscoveryTab ? 'bg-emerald-500 text-white shadow-lg' : 'bg-white/5 text-emerald-500 hover:bg-emerald-500 hover:text-white'}`} title="Khám phá nhóm & kênh"><FaGlobe size={22}/></div>
                 
-                {/* 3.5 Kênh truyền thông */}
-                <div onClick={() => {setShowBroadcastChannels(true); setShowFriendsTab(false); setShowDiscoveryTab(false); setShowSocialFeed(false); setShowGameCenter(false); setIsAdminMode(false); setActiveRoom(null); setShowTodoTab(false); setShowCallHistoryTab(false); setShowArchivedTab(false); setShowAITab(false); setShowCloudDriveTab(false);}} className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all relative ${showBroadcastChannels ? 'bg-purple-600 text-white shadow-lg shadow-purple-550/20' : 'bg-white/5 text-purple-400 hover:bg-purple-650 hover:text-white'}`} title="Kênh truyền thông / Broadcast Channels"><FaBullhorn size={20}/></div>
-
                 {/* 4. Cloud của tôi */}
-                <div onClick={() => {handleStartDM(user.username); setShowFriendsTab(false); setShowDiscoveryTab(false); setShowSocialFeed(false); setShowGameCenter(false); setIsAdminMode(false); setShowTodoTab(false); setShowCallHistoryTab(false); setShowArchivedTab(false); setShowAITab(false); setShowCloudDriveTab(false); setShowBroadcastChannels(false);}} className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all relative ${isCloudActive ? 'bg-cyan-500 text-white shadow-lg' : 'bg-white/5 text-cyan-400 hover:bg-cyan-500 hover:text-white'}`} title="Cloud của tôi (Lưu trữ cá nhân)"><FaCloud size={22}/></div>
+                <div onClick={() => {handleStartDM(user.username); setShowFriendsTab(false); setShowDiscoveryTab(false); setShowSocialFeed(false); setShowGameCenter(false); setIsAdminMode(false); setShowTodoTab(false); setShowCallHistoryTab(false); setShowArchivedTab(false); setShowAITab(false); setShowCloudDriveTab(false);}} className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all relative ${isCloudActive ? 'bg-cyan-500 text-white shadow-lg' : 'bg-white/5 text-cyan-400 hover:bg-cyan-500 hover:text-white'}`} title="Cloud của tôi (Lưu trữ cá nhân)"><FaCloud size={22}/></div>
                 
                 {/* 5. Kho tài liệu & Quản lý File */}
-                <div onClick={() => {setShowCloudDriveTab(true); setShowAITab(false); setShowArchivedTab(false); setShowCallHistoryTab(false); setShowTodoTab(false); setShowFriendsTab(false); setShowDiscoveryTab(false); setShowSocialFeed(false); setShowGameCenter(false); setIsAdminMode(false); setActiveRoom(null); setShowBroadcastChannels(false);}} className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all relative ${showCloudDriveTab ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/20' : 'bg-white/5 text-cyan-400 hover:bg-cyan-500 hover:text-white'}`} title="Kho tài liệu & Quản lý File"><FaFolderOpen size={20}/></div>
+                <div onClick={() => {setShowCloudDriveTab(true); setShowAITab(false); setShowArchivedTab(false); setShowCallHistoryTab(false); setShowTodoTab(false); setShowFriendsTab(false); setShowDiscoveryTab(false); setShowSocialFeed(false); setShowGameCenter(false); setIsAdminMode(false); setActiveRoom(null);}} className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all relative ${showCloudDriveTab ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/20' : 'bg-white/5 text-cyan-400 hover:bg-cyan-500 hover:text-white'}`} title="Kho tài liệu & Quản lý File"><FaFolderOpen size={20}/></div>
                 
                 {/* 6. Lịch nhắc việc */}
-                <div onClick={() => {setShowTodoTab(true); setShowFriendsTab(false); setShowDiscoveryTab(false); setShowSocialFeed(false); setShowGameCenter(false); setIsAdminMode(false); setActiveRoom(null); setShowCallHistoryTab(false); setShowArchivedTab(false); setShowAITab(false); setShowCloudDriveTab(false); setShowBroadcastChannels(false);}} className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all relative ${showTodoTab ? 'bg-indigo-500 text-white shadow-lg' : 'bg-white/5 text-indigo-400 hover:bg-indigo-500 hover:text-white'}`} title="Lịch nhắc việc (To-Do)"><FaCalendarCheck size={22}/></div>
+                <div onClick={() => {setShowTodoTab(true); setShowFriendsTab(false); setShowDiscoveryTab(false); setShowSocialFeed(false); setShowGameCenter(false); setIsAdminMode(false); setActiveRoom(null); setShowCallHistoryTab(false); setShowArchivedTab(false); setShowAITab(false); setShowCloudDriveTab(false);}} className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all relative ${showTodoTab ? 'bg-indigo-500 text-white shadow-lg' : 'bg-white/5 text-indigo-400 hover:bg-indigo-500 hover:text-white'}`} title="Lịch nhắc việc (To-Do)"><FaCalendarCheck size={22}/></div>
                 
                 {/* 7. Nhật ký cuộc gọi */}
-                <div onClick={() => {setShowCallHistoryTab(true); setShowTodoTab(false); setShowFriendsTab(false); setShowDiscoveryTab(false); setShowSocialFeed(false); setShowGameCenter(false); setIsAdminMode(false); setActiveRoom(null); setShowArchivedTab(false); setShowAITab(false); setShowCloudDriveTab(false); setShowBroadcastChannels(false);}} className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all relative ${showCallHistoryTab ? 'bg-cyan-500 text-white shadow-lg' : 'bg-white/5 text-cyan-400 hover:bg-cyan-500 hover:text-white'}`} title="Nhật ký cuộc gọi"><FaPhoneAlt size={22}/></div>
+                <div onClick={() => {setShowCallHistoryTab(true); setShowTodoTab(false); setShowFriendsTab(false); setShowDiscoveryTab(false); setShowSocialFeed(false); setShowGameCenter(false); setIsAdminMode(false); setActiveRoom(null); setShowArchivedTab(false); setShowAITab(false); setShowCloudDriveTab(false);}} className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all relative ${showCallHistoryTab ? 'bg-cyan-500 text-white shadow-lg' : 'bg-white/5 text-cyan-400 hover:bg-cyan-500 hover:text-white'}`} title="Nhật ký cuộc gọi"><FaPhoneAlt size={22}/></div>
                 
                 {/* 8. Bảng tin */}
-                <div onClick={() => {setShowSocialFeed(true); setShowFriendsTab(false); setShowDiscoveryTab(false); setShowGameCenter(false); setIsAdminMode(false); setActiveRoom(null); setShowTodoTab(false); setShowCallHistoryTab(false); setShowArchivedTab(false); setShowAITab(false); setShowCloudDriveTab(false); setShowBroadcastChannels(false);}} className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all relative ${showSocialFeed ? 'bg-purple-500 text-white shadow-lg' : 'bg-white/5 text-purple-500 hover:bg-purple-500 hover:text-white'}`} title="Bảng tin Khoảnh khắc (Social Feed)"><FaSmileBeam size={22}/></div>
+                <div onClick={() => {setShowSocialFeed(true); setShowFriendsTab(false); setShowDiscoveryTab(false); setShowGameCenter(false); setIsAdminMode(false); setActiveRoom(null); setShowTodoTab(false); setShowCallHistoryTab(false); setShowArchivedTab(false); setShowAITab(false); setShowCloudDriveTab(false);}} className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all relative ${showSocialFeed ? 'bg-purple-500 text-white shadow-lg' : 'bg-white/5 text-purple-500 hover:bg-purple-500 hover:text-white'}`} title="Bảng tin Khoảnh khắc (Social Feed)"><FaSmileBeam size={22}/></div>
                 
                 {/* 9. Game Center */}
-                <div onClick={() => {setShowGameCenter(true); setShowSocialFeed(false); setShowFriendsTab(false); setShowDiscoveryTab(false); setIsAdminMode(false); setActiveRoom(null); setShowCallHistoryTab(false); setShowArchivedTab(false); setShowAITab(false); setShowCloudDriveTab(false); setShowBroadcastChannels(false);}} className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all relative ${showGameCenter ? 'bg-pink-500 text-white shadow-lg' : 'bg-white/5 text-pink-500 hover:bg-pink-500 hover:text-white'}`} title="Trung tâm Trò chơi (Game Center)"><FaGamepad size={22}/></div>
+                <div onClick={() => {setShowGameCenter(true); setShowSocialFeed(false); setShowFriendsTab(false); setShowDiscoveryTab(false); setIsAdminMode(false); setActiveRoom(null); setShowCallHistoryTab(false); setShowArchivedTab(false); setShowAITab(false); setShowCloudDriveTab(false);}} className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all relative ${showGameCenter ? 'bg-pink-500 text-white shadow-lg' : 'bg-white/5 text-pink-500 hover:bg-pink-500 hover:text-white'}`} title="Trung tâm Trò chơi (Game Center)"><FaGamepad size={22}/></div>
                 
                 {/* 10. Trợ lý ảo AI */}
-                <div onClick={() => {setShowAITab(true); setShowArchivedTab(false); setShowCallHistoryTab(false); setShowTodoTab(false); setShowFriendsTab(false); setShowDiscoveryTab(false); setShowSocialFeed(false); setShowGameCenter(false); setIsAdminMode(false); setActiveRoom(null); setShowCloudDriveTab(false); setShowBroadcastChannels(false);}} className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all relative ${showAITab ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'bg-white/5 text-indigo-400 hover:bg-indigo-600 hover:text-white'}`} title="Trợ lý ảo AI (Gemini)"><FaRobot size={22}/></div>
+                <div onClick={() => {setShowAITab(true); setShowArchivedTab(false); setShowCallHistoryTab(false); setShowTodoTab(false); setShowFriendsTab(false); setShowDiscoveryTab(false); setShowSocialFeed(false); setShowGameCenter(false); setIsAdminMode(false); setActiveRoom(null); setShowCloudDriveTab(false);}} className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all relative ${showAITab ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'bg-white/5 text-indigo-400 hover:bg-indigo-600 hover:text-white'}`} title="Trợ lý ảo AI (Gemini)"><FaRobot size={22}/></div>
                 
                 {/* 11. Hội thoại lưu trữ */}
-                <div onClick={() => {setShowArchivedTab(true); setShowCallHistoryTab(false); setShowTodoTab(false); setShowFriendsTab(false); setShowDiscoveryTab(false); setShowSocialFeed(false); setShowGameCenter(false); setIsAdminMode(false); setActiveRoom(null); setShowAITab(false); setShowCloudDriveTab(false); setShowBroadcastChannels(false);}} className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all relative ${showArchivedTab ? 'bg-amber-500 text-white shadow-lg' : 'bg-white/5 text-amber-500 hover:bg-amber-500 hover:text-white'}`} title="Hội thoại lưu trữ (Archived Chats)"><FaArchive size={20}/></div>
+                <div onClick={() => {setShowArchivedTab(true); setShowCallHistoryTab(false); setShowTodoTab(false); setShowFriendsTab(false); setShowDiscoveryTab(false); setShowSocialFeed(false); setShowGameCenter(false); setIsAdminMode(false); setActiveRoom(null); setShowAITab(false); setShowCloudDriveTab(false);}} className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all relative ${showArchivedTab ? 'bg-amber-500 text-white shadow-lg' : 'bg-white/5 text-amber-500 hover:bg-amber-500 hover:text-white'}`} title="Hội thoại lưu trữ (Archived Chats)"><FaArchive size={20}/></div>
                 
                 <div className="w-8 h-[2px] bg-gray-600 rounded-full opacity-20"></div>
                 
@@ -2089,16 +2084,14 @@ const ChatPage = ({ user, setUser }) => {
                 <div onClick={() => setShowSoundSettings(true)} className="w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer bg-white/10 hover:bg-white/20 transition-all text-indigo-400 hover:text-white" title="Cài đặt nhạc chuông"><FaCog size={20}/></div>
                 
                 {/* 14. Admin Panel */}
-                {user.role === 'admin' && (<div onClick={() => { setIsAdminMode(!isAdminMode); setShowFriendsTab(false); setShowDiscoveryTab(false); setShowTodoTab(false); setShowCallHistoryTab(false); setShowArchivedTab(false); setShowAITab(false); setShowCloudDriveTab(false); setShowSocialFeed(false); setActiveRoom(null); setShowBroadcastChannels(false); if(!isAdminMode) api.get('/admin/stats').then(res => setStats(res.data)); }} className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all ${isAdminMode ? 'bg-red-500 text-white animate-pulse' : 'bg-white text-red-500 shadow-lg'}`} title="Bảng quản trị Admin"><FaShieldAlt size={22} /></div>)}
+                {user.role === 'admin' && (<div onClick={() => { setIsAdminMode(!isAdminMode); setShowFriendsTab(false); setShowDiscoveryTab(false); setShowTodoTab(false); setShowCallHistoryTab(false); setShowArchivedTab(false); setShowAITab(false); setShowCloudDriveTab(false); setShowSocialFeed(false); setActiveRoom(null); if(!isAdminMode) api.get('/admin/stats').then(res => setStats(res.data)); }} className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all ${isAdminMode ? 'bg-red-500 text-white animate-pulse' : 'bg-white text-red-500 shadow-lg'}`} title="Bảng quản trị Admin"><FaShieldAlt size={22} /></div>)}
                 
                 {/* 15. Tạo nhóm */}
                 <div onClick={() => setShowGroupCreator(true)} className="w-12 h-12 bg-[#23a559] text-white rounded-2xl flex items-center justify-center cursor-pointer hover:rounded-xl transition-all shadow-md group relative" title="Tạo nhóm chat mới"><FaPlusCircle size={22}/></div>
             </div>
 
             <div className={`flex flex-col border-r transition-all duration-300 ${isSidebarVisible ? 'w-60 md:w-72' : 'w-0 overflow-hidden'} ${darkMode ? 'bg-[#1e293b]/50 backdrop-blur-xl border-white/5' : 'bg-slate-50 border-gray-200'}`}>
-                <div className={`h-12 px-4 flex items-center border-b font-black uppercase text-[11px] tracking-widest opacity-60 italic ${darkMode ? 'border-white/5 text-indigo-400' : 'border-gray-200 text-indigo-600'}`}>
-                    {showBroadcastChannels ? 'Kênh truyền thông' : 'OTT Community'}
-                </div>
+                <div className={`h-12 px-4 flex items-center border-b font-black uppercase text-[11px] tracking-widest opacity-60 italic ${darkMode ? 'border-white/5 text-indigo-400' : 'border-gray-200 text-indigo-600'}`}>OTT Community</div>
                 
                 {/* Active Folder/Filter Selector Dropdown */}
                 <div className={`relative px-4 py-2.5 border-b shrink-0 flex items-center justify-between z-30 ${darkMode ? 'border-white/5 bg-white/2' : 'border-gray-200 bg-gray-50'}`}>
@@ -2237,54 +2230,6 @@ const ChatPage = ({ user, setUser }) => {
                     {(() => {
                         const pinnedRooms = user.pinnedRooms || [];
                         const archivedRooms = user.archivedRooms || [];
-
-                        if (showBroadcastChannels) {
-                            const myChannels = allGroups.filter(g => g.isChannel && (g.members?.includes(user.username) || g.owner === user.username));
-                            const pinned = myChannels.filter(r => pinnedRooms.includes(r.groupId));
-                            const unpinned = myChannels.filter(r => !pinnedRooms.includes(r.groupId));
-                            
-                            const renderChannelItem = (g) => {
-                                const isActive = activeRoom?.id === g.groupId;
-                                const isOwner = g.owner === user.username;
-                                return (
-                                    <div key={g.groupId} onClick={() => handleSwitchRoom({id: g.groupId, name: g.groupName})} className={`group p-2.5 rounded-lg flex items-center justify-between cursor-pointer mb-1 relative transition-all ${isActive ? 'bg-[#5865f2] text-white shadow-lg' : (darkMode ? 'hover:bg-white/5 text-gray-400' : 'hover:bg-slate-100 text-slate-600')}`}>
-                                        <div className="flex items-center gap-3 truncate">
-                                            <div className="w-8 h-8 rounded-lg bg-purple-650/20 flex items-center justify-center text-purple-400 text-xs font-black overflow-hidden border border-purple-500/10 shrink-0 shadow-inner">
-                                                {g.avatar ? <img src={g.avatar} className="w-full h-full object-cover" alt="" /> : g.groupName.substring(0, 2).toUpperCase()}
-                                            </div>
-                                            <div className="truncate">
-                                                <div className="text-xs font-black flex items-center gap-1.5 truncate">
-                                                    📢 {g.groupName}
-                                                </div>
-                                                <div className="text-[9px] opacity-60 truncate">
-                                                    {isOwner ? 'Chủ kênh' : 'Thành viên'} • {g.members?.length || 0} người
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            };
-
-                            return (
-                                <>
-                                    {pinned.length > 0 && (
-                                        <div className="mb-4">
-                                            <p className={`text-[9px] font-black uppercase tracking-widest px-2 mb-2 italic ${darkMode ? 'text-purple-400' : 'text-purple-600'}`}>Đã ghim</p>
-                                            {pinned.map(renderChannelItem)}
-                                        </div>
-                                    )}
-                                    <div>
-                                        <p className={`text-[9px] font-black uppercase tracking-widest px-2 mb-2 italic ${darkMode ? 'text-gray-500' : 'text-slate-400'}`}>Kênh truyền thông của tôi</p>
-                                        {unpinned.length > 0 ? (
-                                            unpinned.map(renderChannelItem)
-                                        ) : (
-                                            <div className="p-4 text-center text-xs text-gray-500 italic">Chưa đăng ký hoặc tạo kênh nào.</div>
-                                        )}
-                                    </div>
-                                </>
-                            );
-                        }
-
                         const dms = getRecentChatUsers();
                         const publicGroups = allGroups.filter(g => g.isPublic && (g.members?.includes(user.username) || g.owner === user.username));
                         const privateGroups = allGroups.filter(g => !g.isPublic && (g.members?.includes(user.username) || g.owner === user.username));
@@ -2407,38 +2352,6 @@ const ChatPage = ({ user, setUser }) => {
                         isCallBusy={isCallBusy}
                         darkMode={darkMode}
                     />
-                ) : (showBroadcastChannels && !activeRoom) ? (
-                    <div className="flex-1 flex flex-col items-center justify-center p-8 text-center overflow-y-auto bg-transparent">
-                        <div className="max-w-md w-full p-8 rounded-[30px] border shadow-xl transition-all duration-300 transform hover:scale-[1.01] bg-opacity-40 backdrop-blur-md relative overflow-hidden flex flex-col items-center justify-center animate-in zoom-in-95" style={{
-                            backgroundColor: darkMode ? 'rgba(15, 23, 42, 0.4)' : 'rgba(255, 255, 255, 0.6)',
-                            borderColor: darkMode ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)'
-                        }}>
-                            <div className="w-20 h-20 bg-gradient-to-tr from-purple-500 to-indigo-650 rounded-3xl flex items-center justify-center text-white shadow-2xl mb-6 transform -rotate-6 hover:rotate-0 transition-transform">
-                                <FaBullhorn className="text-4xl animate-pulse"/>
-                            </div>
-                            <h2 className={`text-2xl font-black mb-3 tracking-tight ${darkMode ? 'text-white' : 'text-slate-800'}`}>KÊNH TRUYỀN THÔNG</h2>
-                            <p className={`text-xs font-semibold leading-relaxed mb-8 ${darkMode ? 'text-gray-400' : 'text-slate-555'}`}>
-                                Không gian chia sẻ thông tin một chiều chuyên nghiệp. Phù hợp cho thông báo lớp học, doanh nghiệp hoặc cập nhật tin tức. Chỉ quản trị viên mới được gửi tin nhắn, người theo dõi có thể đọc và thả biểu cảm cảm xúc.
-                            </p>
-                            
-                            <div className="w-full flex flex-col gap-3">
-                                <button 
-                                    onClick={() => setShowGroupCreator(true)}
-                                    className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-purple-500/20"
-                                >
-                                    Khởi tạo Kênh mới 📢
-                                </button>
-                                <button 
-                                    onClick={() => { setShowDiscoveryTab(true); setShowBroadcastChannels(false); }}
-                                    className={`w-full py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all active:scale-95 border ${
-                                        darkMode ? 'bg-slate-800 border-white/5 text-gray-300 hover:bg-slate-700' : 'bg-slate-105 border-gray-200 text-slate-600 hover:bg-slate-200'
-                                    }`}
-                                >
-                                    Khám phá Kênh công cộng 🌐
-                                </button>
-                            </div>
-                        </div>
-                    </div>
                 ) : showSocialFeed ? (
                     <SocialFeed user={user} darkMode={darkMode} />
                 ) : showGameCenter ? (
@@ -3102,9 +3015,9 @@ const ChatPage = ({ user, setUser }) => {
                                 )}
 
                                 <div className="p-6 shrink-0 relative bg-transparent">
-                                    {(currentGroup?.isChannel && user.username !== currentGroup.owner && user.role !== 'admin' && !currentGroup.mods?.includes(user.username)) ? (
+                                    {(currentGroup?.isChannel && user.username !== currentGroup.owner) ? (
                                         <div className="flex items-center justify-center p-4 bg-indigo-500/10 rounded-2xl text-indigo-400 font-black uppercase tracking-[3px] text-[10px] border border-indigo-500/20 animate-pulse">
-                                            <FaLock className="mr-2"/> Chỉ quản trị viên hoặc chủ kênh mới có thể truyền tín hiệu trong kênh này
+                                            <FaLock className="mr-2"/> Chỉ quản trị viên mới có thể truyền tín hiệu trong kênh này
                                         </div>
                                     ) : (
                                         <>
