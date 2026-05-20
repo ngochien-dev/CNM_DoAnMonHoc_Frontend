@@ -19,7 +19,11 @@ import AdminStats from './statistics/AdminStats';
 import FriendsTab from './friends/FriendsTab';
 import GroupDiscovery from './modals/GroupDiscovery'; 
 import AddFriendModal from './modals/AddFriendModal';
+import WallpaperModal from './modals/WallpaperModal';
+import ForwardMessageModal from './modals/ForwardMessageModal';
 import Home from './chat/Home';
+import PollModal from './modals/PollModal';
+import EventModal from './modals/EventModal';
 import SocialFeed from './social/SocialFeed';
 import RightSidebar from './chat/RightSidebar';
 import ThreadSidebar from './chat/ThreadSidebar';
@@ -91,7 +95,6 @@ const ChatPage = ({ user, setUser }) => {
     const [showStickerPicker, setShowStickerPicker] = useState(false);
     const [profileModal, setProfileModal] = useState({ isOpen: false, username: '' });
     const [forwardMessageData, setForwardMessageData] = useState(null); // Lưu tin nhắn cần forward
-    const [forwardSearchQuery, setForwardSearchQuery] = useState('');
     const [showPollModal, setShowPollModal] = useState(false);
     const [showEventModal, setShowEventModal] = useState(false);
     const [stats, setStats] = useState(null);
@@ -258,12 +261,7 @@ const ChatPage = ({ user, setUser }) => {
     // Tích hợp hook cuộc gọi
     const { startCall, isCallBusy, callHistoryVersion } = useCall();
 
-    const [pollQuestion, setPollQuestion] = useState("");
-    const [pollOptions, setPollOptions] = useState(["", ""]);
     
-    const [eventTitle, setEventTitle] = useState("");
-    const [eventDate, setEventDate] = useState("");
-    const [eventTime, setEventTime] = useState("");
 
     const [replyingToMessage, setReplyingToMessage] = useState(null);
     const [showReactionMenu, setShowReactionMenu] = useState(null);
@@ -1517,38 +1515,7 @@ const ChatPage = ({ user, setUser }) => {
         );
     };
 
-    const handleCreatePoll = () => {
-        if (!pollQuestion.trim() || pollOptions.some(o => !o.trim())) return alert("Vui lòng điền đủ câu hỏi và các lựa chọn!");
-        socket.emit('send_message', { 
-            sender: user.displayName, 
-            senderUsername: user.username, 
-            msgType: 'poll',
-            text: 'Bình chọn mới: ' + pollQuestion,
-            pollData: { question: pollQuestion, options: pollOptions.map(opt => ({ text: opt, votes: [] })) },
-            roomId: activeRoom.id, 
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
-        });
-        setShowPollModal(false);
-        setPollQuestion("");
-        setPollOptions(["", ""]);
-    };
 
-    const handleCreateEvent = () => {
-        if (!eventTitle.trim() || !eventDate || !eventTime) return alert("Vui lòng điền đủ thông tin sự kiện!");
-        socket.emit('send_message', { 
-            sender: user.displayName, 
-            senderUsername: user.username, 
-            msgType: 'event',
-            text: 'Lịch nhóm mới: ' + eventTitle,
-            eventData: { title: eventTitle, date: eventDate, time: eventTime, attendees: [] },
-            roomId: activeRoom.id, 
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
-        });
-        setShowEventModal(false);
-        setEventTitle("");
-        setEventDate("");
-        setEventTime("");
-    };
 
     const deleteForMe = async (id) => {
         if (window.confirm("Xóa phía bạn?")) {
@@ -3815,265 +3782,45 @@ const ChatPage = ({ user, setUser }) => {
             )}
 
             {/* Modal Chọn Hình Nền Phòng Chat */}
-            {showWallpaperModal && activeRoom && (
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[500] backdrop-blur-sm animate-in fade-in duration-200 p-4">
-                    <div className={`w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border transition-all duration-300 ${darkMode ? 'bg-[#0f172a] border-white/10 text-white' : 'bg-white border-gray-200 text-slate-800'}`}>
-                        <div className="p-5 border-b border-white/5 flex justify-between items-center bg-gradient-to-r from-pink-500 to-indigo-600 text-white">
-                            <h3 className="font-black uppercase tracking-widest text-[10px] flex items-center gap-2"><FaPalette size={14}/> Hình nền phòng chat</h3>
-                            <button onClick={() => setShowWallpaperModal(false)} className="p-1 rounded-full hover:bg-white/10 text-white/80 hover:text-white transition-colors"><FaTimes size={14}/></button>
-                        </div>
-                        <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto scrollbar-hide">
-                            {/* Khung xem trước nhỏ (Mini Preview) */}
-                            <div>
-                                <p className="text-[9px] font-black uppercase tracking-widest opacity-40 mb-3 italic">Xem trước (Preview)</p>
-                                <div 
-                                    className="h-28 rounded-2xl border border-white/10 shadow-inner flex items-end p-4 relative overflow-hidden bg-black/10"
-                                    style={currentWallpaper ? (
-                                        currentWallpaper.startsWith('http') || currentWallpaper.startsWith('data:image') || currentWallpaper.startsWith('/assets') || currentWallpaper.startsWith('blob:')
-                                        ? { backgroundImage: `url(${currentWallpaper})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }
-                                        : { background: currentWallpaper }
-                                    ) : undefined}
-                                >
-                                    <div className="absolute inset-0 bg-black/10"></div>
-                                    <div className="bg-indigo-600 text-white text-[10px] px-3 py-1.5 rounded-xl font-bold max-w-[75%] shadow-lg relative z-10 leading-tight">
-                                        Hình nền phòng chat này sẽ được lưu riêng cho phòng này! ✨
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Màu sắc tối giản */}
-                            <div>
-                                <p className="text-[9px] font-black uppercase tracking-widest opacity-40 mb-3 italic">Màu sắc tinh tế (Solid Colors)</p>
-                                <div className="grid grid-cols-5 gap-2">
-                                    {[
-                                        { name: 'Slate Gray', value: '#1e293b' },
-                                        { name: 'Midnight Blue', value: '#0f172a' },
-                                        { name: 'Dark Teal', value: '#064e3b' },
-                                        { name: 'Deep Burgundy', value: '#4c0519' },
-                                        { name: 'Plum Purple', value: '#2e1065' },
-                                    ].map(color => (
-                                        <button 
-                                            key={color.value}
-                                            onClick={() => {
-                                                setCurrentWallpaper(color.value);
-                                                localStorage.setItem(`chat_wallpaper_${user.username}_${activeRoom.id}`, color.value);
-                                                toast.success("Đã áp dụng màu nền!");
-                                            }}
-                                            className="w-full aspect-square rounded-xl border border-white/10 hover:scale-105 active:scale-95 transition-all shadow-md"
-                                            style={{ backgroundColor: color.value }}
-                                            title={color.name}
-                                        />
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Hiệu ứng Gradients */}
-                            <div>
-                                <p className="text-[9px] font-black uppercase tracking-widest opacity-40 mb-3 italic">Gradients Thời Thượng</p>
-                                <div className="grid grid-cols-3 gap-3">
-                                    {[
-                                        { name: 'Nordic Aurora', value: 'linear-gradient(135deg, #0f172a 0%, #115e59 100%)' },
-                                        { name: 'Sunset Velvet', value: 'linear-gradient(135deg, #31103f 0%, #742a2a 100%)' },
-                                        { name: 'Cyberpunk Dusk', value: 'linear-gradient(135deg, #1e1b4b 0%, #3b0764 100%)' },
-                                        { name: 'Deep Ocean', value: 'linear-gradient(135deg, #0f172a 0%, #0369a1 100%)' },
-                                        { name: 'Velvet Forest', value: 'linear-gradient(135deg, #022c22 0%, #047857 100%)' },
-                                        { name: 'Lavender Dusk', value: 'linear-gradient(135deg, #2d1b4e 0%, #581c87 100%)' },
-                                    ].map(grad => (
-                                        <button 
-                                            key={grad.name}
-                                            onClick={() => {
-                                                setCurrentWallpaper(grad.value);
-                                                localStorage.setItem(`chat_wallpaper_${user.username}_${activeRoom.id}`, grad.value);
-                                                toast.success("Đã áp dụng hình nền Gradient!");
-                                            }}
-                                            className="w-full h-12 rounded-xl border border-white/10 hover:scale-105 active:scale-95 transition-all shadow-md"
-                                            style={{ background: grad.value }}
-                                            title={grad.name}
-                                        />
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Link ảnh tùy chỉnh */}
-                            <div>
-                                <p className="text-[9px] font-black uppercase tracking-widest opacity-40 mb-3 italic">Link ảnh tùy chọn (Custom Image URL)</p>
-                                <div className="flex gap-2">
-                                    <input 
-                                        type="text"
-                                        placeholder="Dán URL hình ảnh từ Unsplash/Google..."
-                                        value={customWallpaperUrl}
-                                        onChange={(e) => setCustomWallpaperUrl(e.target.value)}
-                                        className={`flex-1 p-2.5 rounded-xl border text-xs font-bold outline-none transition-all ${darkMode ? 'bg-white/5 border-white/10 focus:border-indigo-500 text-white' : 'bg-slate-50 border-gray-200 focus:border-indigo-500'}`}
-                                    />
-                                    <button 
-                                        onClick={() => {
-                                            if (customWallpaperUrl.trim()) {
-                                                setCurrentWallpaper(customWallpaperUrl);
-                                                localStorage.setItem(`chat_wallpaper_${user.username}_${activeRoom.id}`, customWallpaperUrl);
-                                                toast.success("Đã áp dụng ảnh nền tùy chỉnh!");
-                                            } else {
-                                                toast.error("Vui lòng nhập URL hợp lệ");
-                                            }
-                                        }}
-                                        className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black uppercase tracking-wider px-4 py-2.5 rounded-xl transition-all shadow-md active:scale-95 shrink-0"
-                                    >
-                                        Áp dụng
-                                    </button>
-                                </div>
-                                <span className="text-[8px] text-gray-500 block mt-1.5">Gợi ý: Tìm ảnh đẹp trên Unsplash và copy link ảnh dán vào đây!</span>
-                            </div>
-
-                            {/* Reset Wallpaper */}
-                            <div className="flex gap-3 border-t border-white/5 pt-4">
-                                <button 
-                                    onClick={() => {
-                                        setCurrentWallpaper('');
-                                        setCustomWallpaperUrl('');
-                                        localStorage.removeItem(`chat_wallpaper_${user.username}_${activeRoom.id}`);
-                                        toast.success("Đã gỡ bỏ hình nền phòng chat!");
-                                    }}
-                                    className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-500 text-xs font-black uppercase tracking-wider py-3 rounded-xl transition-all active:scale-95"
-                                >
-                                    Gỡ bỏ hình nền
-                                </button>
-                                <button 
-                                    onClick={() => setShowWallpaperModal(false)}
-                                    className={`flex-1 text-xs font-black uppercase tracking-wider py-3 rounded-xl transition-all active:scale-95 border ${darkMode ? 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10' : 'bg-slate-50 border-gray-200 text-slate-700 hover:bg-slate-100'}`}
-                                >
-                                    Đóng
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
+            <WallpaperModal
+                isOpen={showWallpaperModal}
+                onClose={() => setShowWallpaperModal(false)}
+                activeRoom={activeRoom}
+                user={user}
+                darkMode={darkMode}
+                currentWallpaper={currentWallpaper}
+                setCurrentWallpaper={setCurrentWallpaper}
+                customWallpaperUrl={customWallpaperUrl}
+                setCustomWallpaperUrl={setCustomWallpaperUrl}
+            />
             
             {/* Modal Chuyển tiếp tin nhắn */}
-            {forwardMessageData && (
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[500] backdrop-blur-sm animate-in zoom-in-95 p-4">
-                    <div className={`w-full max-w-md rounded-2xl shadow-2xl overflow-hidden ${darkMode ? 'bg-slate-900 border border-white/10' : 'bg-white'}`}>
-                        <div className="p-4 border-b border-white/5 flex justify-between items-center bg-indigo-600 text-white">
-                            <h3 className="font-bold uppercase text-sm">Chuyển tiếp tin nhắn</h3>
-                            <button onClick={() => { setForwardMessageData(null); setForwardSearchQuery(''); }} className="hover:text-red-300 transition-colors"><FaTimes /></button>
-                        </div>
-                        <div className="p-4 max-h-[60vh] overflow-y-auto space-y-4">
-                            {/* Premium Search Filter inside Modal */}
-                            <div className="relative mb-2">
-                                <input
-                                    type="text"
-                                    value={forwardSearchQuery}
-                                    onChange={e => setForwardSearchQuery(e.target.value)}
-                                    placeholder="Tìm bạn bè hoặc nhóm để chuyển tiếp..."
-                                    className={`w-full p-3 pl-10 rounded-xl text-xs font-bold border transition-colors outline-none focus:border-indigo-500 ${
-                                        darkMode ? 'bg-black/20 border-white/10 text-white placeholder:text-gray-500' : 'bg-gray-50 border-gray-200 text-slate-800 placeholder:text-slate-400'
-                                    }`}
-                                />
-                                <FaSearch className={`absolute left-3.5 top-1/2 -translate-y-1/2 text-xs ${darkMode ? 'text-gray-500' : 'text-slate-400'}`} />
-                            </div>
-
-                            <p className="text-xs text-gray-500 font-bold uppercase mb-2">Chọn nơi chuyển đến</p>
-                            
-                            {/* Lưu trữ cá nhân (Cloud) */}
-                            {("cloud của tôi".includes(forwardSearchQuery.toLowerCase()) || "luu tru".includes(forwardSearchQuery.toLowerCase()) || "cloud".includes(forwardSearchQuery.toLowerCase())) && (
-                                <div className="space-y-2 mb-4">
-                                    <div className="text-[10px] uppercase font-black text-cyan-400">Không gian cá nhân</div>
-                                    <button onClick={() => handleForwardMessage(`dm_${user.username}_${user.username}`)} className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all text-left ${darkMode ? 'border-white/5 hover:bg-white/5 text-gray-300 hover:border-indigo-500/40' : 'border-gray-200 hover:bg-gray-50 text-gray-700 hover:border-indigo-500'}`}>
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 bg-gradient-to-tr from-cyan-400 to-indigo-500 rounded-full flex items-center justify-center text-white font-bold text-xs"><FaCloud/></div>
-                                            <span className="font-semibold text-sm">Cloud của tôi</span>
-                                        </div>
-                                        <span className="text-[10px] font-black uppercase text-cyan-400 tracking-wider">Chọn ➔</span>
-                                    </button>
-                                </div>
-                            )}
-                            
-                            {/* Danh sách bạn bè */}
-                            {user.friends?.filter(f => f.toLowerCase().includes(forwardSearchQuery.toLowerCase())).length > 0 && (
-                                <div className="space-y-2">
-                                    <div className="text-[10px] uppercase font-black text-indigo-400">Bạn bè</div>
-                                    {user.friends.filter(f => f.toLowerCase().includes(forwardSearchQuery.toLowerCase())).map(f => (
-                                        <button key={f} onClick={() => handleForwardMessage(`dm_${[user.username, f].sort().join("_")}`)} className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all text-left ${darkMode ? 'border-white/5 hover:bg-white/5 text-gray-300 hover:border-indigo-500/40' : 'border-gray-200 hover:bg-gray-50 text-gray-700 hover:border-indigo-500'}`}>
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 bg-indigo-500 rounded-full flex items-center justify-center text-white font-bold text-xs">{f[0].toUpperCase()}</div>
-                                                <span className="font-semibold text-sm">@{f}</span>
-                                            </div>
-                                            <span className="text-[10px] font-black uppercase text-indigo-400 tracking-wider">Chọn ➔</span>
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-
-                            {/* Danh sách nhóm */}
-                            {allGroups.filter(g => (g.members?.includes(user.username) || g.owner === user.username) && g.groupName.toLowerCase().includes(forwardSearchQuery.toLowerCase())).length > 0 && (
-                                <div className="space-y-2 mt-4">
-                                    <div className="text-[10px] uppercase font-black text-orange-400">Nhóm</div>
-                                    {allGroups.filter(g => (g.members?.includes(user.username) || g.owner === user.username) && g.groupName.toLowerCase().includes(forwardSearchQuery.toLowerCase())).map(g => (
-                                        <button key={g.groupId} onClick={() => handleForwardMessage(g.groupId)} className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all text-left ${darkMode ? 'border-white/5 hover:bg-white/5 text-gray-300 hover:border-indigo-500/40' : 'border-gray-200 hover:bg-gray-50 text-gray-700 hover:border-indigo-500'}`}>
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center text-white font-bold text-xs"><FaGlobe/></div>
-                                                <span className="font-semibold text-sm truncate">{g.groupName}</span>
-                                            </div>
-                                            <span className="text-[10px] font-black uppercase text-orange-400 tracking-wider">Chọn ➔</span>
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-
-                            {/* No results notice */}
-                            {user.friends?.filter(f => f.toLowerCase().includes(forwardSearchQuery.toLowerCase())).length === 0 &&
-                             allGroups.filter(g => (g.members?.includes(user.username) || g.owner === user.username) && g.groupName.toLowerCase().includes(forwardSearchQuery.toLowerCase())).length === 0 && (
-                                <div className="text-center py-6 text-xs text-gray-500 font-bold uppercase">Không tìm thấy kết quả chuyển tiếp nào trùng khớp</div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
-
+            <ForwardMessageModal
+                isOpen={!!forwardMessageData}
+                onClose={() => { setForwardMessageData(null); }}
+                darkMode={darkMode}
+                user={user}
+                allGroups={allGroups}
+                handleForwardMessage={handleForwardMessage}
+            />
             {/* Modal Tạo Bình Chọn */}
-            {showPollModal && (
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[500] backdrop-blur-sm animate-in zoom-in-95 p-4">
-                    <div className={`w-full max-w-md rounded-2xl shadow-2xl overflow-hidden ${darkMode ? 'bg-slate-900 border border-white/10' : 'bg-white'}`}>
-                        <div className="p-4 border-b border-white/5 flex justify-between items-center bg-emerald-600 text-white">
-                            <h3 className="font-bold uppercase text-sm flex items-center gap-2"><FaPoll/> Tạo Bình Chọn</h3>
-                            <button onClick={() => setShowPollModal(false)} className="hover:text-red-300 transition-colors"><FaTimes /></button>
-                        </div>
-                        <div className="p-6 space-y-4">
-                            <input value={pollQuestion} onChange={e => setPollQuestion(e.target.value)} placeholder="Câu hỏi bình chọn..." className={`w-full p-3 rounded-xl border font-bold ${darkMode ? 'bg-black/20 border-white/10 text-white' : 'bg-gray-50 border-gray-200 text-slate-800'}`} />
-                            {pollOptions.map((opt, i) => (
-                                <div key={i} className="flex gap-2">
-                                    <input value={opt} onChange={e => { const newOpts = [...pollOptions]; newOpts[i] = e.target.value; setPollOptions(newOpts); }} placeholder={`Lựa chọn ${i + 1}`} className={`w-full p-3 rounded-xl border text-sm ${darkMode ? 'bg-black/20 border-white/10 text-white' : 'bg-gray-50 border-gray-200 text-slate-800'}`} />
-                                    {pollOptions.length > 2 && (
-                                        <button onClick={() => setPollOptions(pollOptions.filter((_, idx) => idx !== i))} className="p-3 text-red-500 hover:bg-red-500/10 rounded-xl"><FaTimes/></button>
-                                    )}
-                                </div>
-                            ))}
-                            <button onClick={() => setPollOptions([...pollOptions, ""])} className="text-emerald-500 text-sm font-bold uppercase hover:underline">+ Thêm lựa chọn</button>
-                            <button onClick={handleCreatePoll} className="w-full py-3 bg-emerald-600 text-white font-black uppercase tracking-widest rounded-xl shadow-lg mt-4 hover:bg-emerald-500 transition-all">Tạo bình chọn</button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
+            <PollModal
+                isOpen={showPollModal}
+                onClose={() => setShowPollModal(false)}
+                socket={socket}
+                user={user}
+                activeRoom={activeRoom}
+                darkMode={darkMode}
+            />
             {/* Modal Tạo Sự Kiện / Lịch */}
-            {showEventModal && (
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[500] backdrop-blur-sm animate-in zoom-in-95 p-4">
-                    <div className={`w-full max-w-md rounded-2xl shadow-2xl overflow-hidden ${darkMode ? 'bg-slate-900 border border-white/10' : 'bg-white'}`}>
-                        <div className="p-4 border-b border-white/5 flex justify-between items-center bg-purple-600 text-white">
-                            <h3 className="font-bold uppercase text-sm flex items-center gap-2"><FaCalendarAlt/> Tạo Lịch Nhóm</h3>
-                            <button onClick={() => setShowEventModal(false)} className="hover:text-red-300 transition-colors"><FaTimes /></button>
-                        </div>
-                        <div className="p-6 space-y-4">
-                            <input value={eventTitle} onChange={e => setEventTitle(e.target.value)} placeholder="Tên sự kiện..." className={`w-full p-3 rounded-xl border font-bold ${darkMode ? 'bg-black/20 border-white/10 text-white' : 'bg-gray-50 border-gray-200 text-slate-800'}`} />
-                            <div className="flex gap-4">
-                                <input type="date" value={eventDate} onChange={e => setEventDate(e.target.value)} className={`w-full p-3 rounded-xl border text-sm ${darkMode ? 'bg-black/20 border-white/10 text-white' : 'bg-gray-50 border-gray-200 text-slate-800'}`} />
-                                <input type="time" value={eventTime} onChange={e => setEventTime(e.target.value)} className={`w-full p-3 rounded-xl border text-sm ${darkMode ? 'bg-black/20 border-white/10 text-white' : 'bg-gray-50 border-gray-200 text-slate-800'}`} />
-                            </div>
-                            <button onClick={handleCreateEvent} className="w-full py-3 bg-purple-600 text-white font-black uppercase tracking-widest rounded-xl shadow-lg mt-4 hover:bg-purple-500 transition-all">Tạo Lịch Nhóm</button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
+            <EventModal
+                isOpen={showEventModal}
+                onClose={() => setShowEventModal(false)}
+                socket={socket}
+                user={user}
+                activeRoom={activeRoom}
+                darkMode={darkMode}
+            />
             {/* Group Settings Modal */}
             {showGroupSettings && (
                 <div className="fixed inset-0 bg-[#020617]/90 flex items-center justify-center z-[300] backdrop-blur-md p-4 animate-in zoom-in-95">
