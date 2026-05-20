@@ -25,8 +25,11 @@ import Home from './chat/Home';
 import PollModal from './modals/PollModal';
 import EventModal from './modals/EventModal';
 import SocialFeed from './social/SocialFeed';
+import GroupSettingsModal from './modals/GroupSettingsModal';
 import RightSidebar from './chat/RightSidebar';
+import FolderModal from './modals/FolderModal';
 import ThreadSidebar from './chat/ThreadSidebar';
+import ImageLightbox from './modals/ImageLightbox';
 import CreateChat from './function/CreateChat';
 import MessageSearch from './chat/MessageSearch';
 import GlobalSearch from './chat/GlobalSearch';
@@ -100,9 +103,6 @@ const ChatPage = ({ user, setUser }) => {
     const [stats, setStats] = useState(null);
     const [previewImage, setPreviewImage] = useState(null);
     const [lightboxImage, setLightboxImage] = useState(null); // { url, sender, time }
-    const [lightboxZoom, setLightboxZoom] = useState(1);
-    const [lightboxRotation, setLightboxRotation] = useState(0);
-    const [lightboxFilter, setLightboxFilter] = useState('none');
     const [translatedMessages, setTranslatedMessages] = useState({});
     const [translatingMessageId, setTranslatingMessageId] = useState(null);
     
@@ -224,39 +224,7 @@ const ChatPage = ({ user, setUser }) => {
     const readObserverRef = useRef(null); // P0: IntersectionObserver for read receipts
     const mutedRoomsRef = useRef(mutedRooms); // P1: Ref to access current muted state in socket closure
 
-    const groupFileRef = useRef(null);
 
-    const handleGroupAvatarChange = (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = (event) => {
-            const img = new Image();
-            img.src = event.target.result;
-            img.onload = async () => {
-                const canvas = document.createElement('canvas');
-                const MAX_WIDTH = 200;
-                const scaleSize = MAX_WIDTH / img.width;
-                canvas.width = MAX_WIDTH;
-                canvas.height = img.height * scaleSize;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                const base64Avatar = canvas.toDataURL('image/jpeg', 0.8);
-                
-                try {
-                    await api.post('/groups/update-avatar', { 
-                        groupId: activeRoom.id, 
-                        avatar: base64Avatar 
-                    });
-                    toast.success("Cập nhật ảnh nhóm thành công!");
-                    loadData(); // Tải lại toàn bộ nhóm để đồng bộ giao diện
-                } catch (err) {
-                    toast.error(err.response?.data?.error || "Lỗi cập nhật ảnh nhóm!");
-                }
-            };
-        };
-    };
 
     // Tích hợp hook cuộc gọi
     const { startCall, isCallBusy, callHistoryVersion } = useCall();
@@ -269,7 +237,6 @@ const ChatPage = ({ user, setUser }) => {
     const [recordingTime, setRecordingTime] = useState(0);
     const [editingMessage, setEditingMessage] = useState(null);
     const [editText, setEditText] = useState('');
-    const [renameGroupValue, setRenameGroupValue] = useState('');
     
     // Telegram-style Custom Folders State & Handlers
     const [customFolders, setCustomFolders] = useState(() => {
@@ -3626,161 +3593,30 @@ const ChatPage = ({ user, setUser }) => {
             )}
             
             {/* Modal Tạo/Sửa Thư Mục Chat (Telegram Style) */}
-            {showFolderModal && (
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[500] backdrop-blur-sm animate-in fade-in duration-200 p-4">
-                    <div className={`w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border transition-all duration-300 ${
-                        darkMode ? 'bg-[#0f172a] border-white/10 text-white' : 'bg-white border-gray-200 text-slate-800'
-                    }`}>
-                        <div className="p-5 border-b border-white/5 flex justify-between items-center bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
-                            <h3 className="font-black uppercase tracking-widest text-[10px] flex items-center gap-2">
-                                <FaFolderPlus size={14}/> {editingFolder ? "Chỉnh sửa thư mục chat" : "Tạo thư mục chat mới"}
-                            </h3>
-                            <button 
-                                onClick={() => {
-                                    setShowFolderModal(false);
-                                    setEditingFolder(null);
-                                    setFolderName('');
-                                    setFolderRooms([]);
-                                    setModalSearch('');
-                                }} 
-                                className="p-1 rounded-full hover:bg-white/10 text-white/80 hover:text-white transition-colors"
-                            >
-                                <FaTimes size={14}/>
-                            </button>
-                        </div>
-
-                        <div className="p-6 space-y-5">
-                            {/* Input Tên Thư Mục */}
-                            <div className="space-y-1.5">
-                                <label className="text-[10px] font-black uppercase tracking-wider opacity-50 pl-1">Tên thư mục</label>
-                                <input 
-                                    type="text" 
-                                    placeholder="Nhập tên thư mục (VD: Công việc, Gia đình...)" 
-                                    value={folderName} 
-                                    onChange={(e) => setFolderName(e.target.value)} 
-                                    className={`w-full px-4 py-3 rounded-2xl border outline-none text-xs font-bold transition-all ${
-                                        darkMode 
-                                            ? 'bg-black/30 border-white/10 text-white focus:border-indigo-500' 
-                                            : 'bg-slate-50 border-gray-200 text-slate-800 focus:border-indigo-600 focus:bg-white'
-                                    }`} 
-                                />
-                            </div>
-
-                            {/* Danh sách chọn cuộc trò chuyện */}
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase tracking-wider opacity-50 pl-1">Chọn cuộc trò chuyện</label>
-                                
-                                {/* Thanh tìm kiếm nhanh */}
-                                <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${
-                                    darkMode ? 'bg-white/5 border-white/10 text-white' : 'bg-slate-50 border-gray-200 text-slate-800'
-                                }`}>
-                                    <FaSearch size={11} className="text-slate-400 shrink-0" />
-                                    <input
-                                        type="text"
-                                        placeholder="Tìm nhanh cuộc trò chuyện..."
-                                        value={modalSearch}
-                                        onChange={(e) => setModalSearch(e.target.value)}
-                                        className="flex-1 bg-transparent outline-none text-[11px] placeholder:text-slate-500"
-                                    />
-                                    {modalSearch && (
-                                        <FaTimes 
-                                            size={10} 
-                                            onClick={() => setModalSearch('')} 
-                                            className="cursor-pointer text-slate-400 hover:text-white" 
-                                        />
-                                    )}
-                                </div>
-
-                                {/* List rooms checkboxes */}
-                                <div className={`max-h-60 overflow-y-auto pr-1 space-y-1.5 scrollbar-hide rounded-2xl p-2 border ${
-                                    darkMode ? 'bg-black/20 border-white/5' : 'bg-slate-50/50 border-gray-100'
-                                }`}>
-                                    {(() => {
-                                        const dms = getRecentChatUsers();
-                                        const publicGroups = allGroups.filter(g => g.isPublic && (g.members?.includes(user.username) || g.owner === user.username));
-                                        const privateGroups = allGroups.filter(g => !g.isPublic && (g.members?.includes(user.username) || g.owner === user.username));
-                                        
-                                        const allRoomItems = [
-                                            ...dms.map(name => ({ id: `dm_${[user.username, name].sort().join("_")}`, name, isDM: true, type: 'personal' })),
-                                            ...publicGroups.map(g => ({ id: g.groupId, name: g.groupName, type: 'groups' })),
-                                            ...privateGroups.map(g => ({ id: g.groupId, name: g.groupName, type: 'groups' }))
-                                        ];
-
-                                        const filteredRooms = allRoomItems.filter(r => r.name.toLowerCase().includes(modalSearch.toLowerCase()));
-
-                                        if (filteredRooms.length === 0) {
-                                            return <p className="text-[10px] text-center text-slate-500 py-6">Không tìm thấy cuộc trò chuyện nào</p>;
-                                        }
-
-                                        return filteredRooms.map(r => {
-                                            const isChecked = folderRooms.includes(r.id);
-                                            return (
-                                                <div 
-                                                    key={r.id}
-                                                    onClick={() => toggleRoomInFolder(r.id)}
-                                                    className={`flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-colors ${
-                                                        darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-100'
-                                                    }`}
-                                                >
-                                                    <div className="flex items-center gap-2.5 min-w-0">
-                                                        <div className={`w-7 h-7 rounded-full bg-slate-700 flex items-center justify-center text-white text-xs font-bold uppercase overflow-hidden shrink-0 border border-white/10`}>
-                                                            {r.isDM && onlineUsers[r.name]?.avatar ? (
-                                                                <img src={onlineUsers[r.name].avatar} className="w-full h-full object-cover" alt="" />
-                                                            ) : r.name[0]}
-                                                        </div>
-                                                        <span className="text-[11.5px] font-bold truncate">
-                                                            {r.isDM ? (onlineUsers[r.name]?.displayName || r.name) : r.name}
-                                                        </span>
-                                                    </div>
-                                                    <input 
-                                                        type="checkbox" 
-                                                        checked={isChecked}
-                                                        readOnly
-                                                        className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer pointer-events-none accent-indigo-600"
-                                                    />
-                                                </div>
-                                            );
-                                        });
-                                    })()}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Footer buttons */}
-                        <div className={`p-5 border-t flex justify-end gap-3 ${darkMode ? 'border-white/5 bg-slate-950/20' : 'bg-slate-50 border-gray-100'}`}>
-                            {editingFolder && (
-                                <button 
-                                    onClick={() => handleDeleteFolder(editingFolder.id)}
-                                    className="px-4 py-2.5 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white rounded-2xl text-[10px] font-black uppercase tracking-wider transition-colors mr-auto"
-                                >
-                                    Xóa thư mục
-                                </button>
-                            )}
-                            <button 
-                                onClick={() => {
-                                    setShowFolderModal(false);
-                                    setEditingFolder(null);
-                                    setFolderName('');
-                                    setFolderRooms([]);
-                                    setModalSearch('');
-                                }}
-                                className={`px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-colors border ${
-                                    darkMode ? 'hover:bg-white/5 border-white/5 text-gray-300' : 'hover:bg-slate-200 border-slate-200 text-slate-600'
-                                }`}
-                            >
-                                Hủy
-                            </button>
-                            <button 
-                                onClick={handleSaveFolder}
-                                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-wider transition-colors shadow-lg shadow-indigo-600/10 active:scale-95"
-                            >
-                                Lưu lại
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
+            <FolderModal
+                isOpen={showFolderModal}
+                onClose={() => {
+                    setShowFolderModal(false);
+                    setEditingFolder(null);
+                    setFolderName('');
+                    setFolderRooms([]);
+                    setModalSearch('');
+                }}
+                darkMode={darkMode}
+                editingFolder={editingFolder}
+                folderName={folderName}
+                setFolderName={setFolderName}
+                folderRooms={folderRooms}
+                modalSearch={modalSearch}
+                setModalSearch={setModalSearch}
+                getRecentChatUsers={getRecentChatUsers}
+                allGroups={allGroups}
+                user={user}
+                onlineUsers={onlineUsers}
+                toggleRoomInFolder={toggleRoomInFolder}
+                handleDeleteFolder={handleDeleteFolder}
+                handleSaveFolder={handleSaveFolder}
+            />
             {/* Modal Chọn Hình Nền Phòng Chat */}
             <WallpaperModal
                 isOpen={showWallpaperModal}
@@ -3822,276 +3658,28 @@ const ChatPage = ({ user, setUser }) => {
                 darkMode={darkMode}
             />
             {/* Group Settings Modal */}
-            {showGroupSettings && (
-                <div className="fixed inset-0 bg-[#020617]/90 flex items-center justify-center z-[300] backdrop-blur-md p-4 animate-in zoom-in-95">
-                    <div className={`w-full max-w-[500px] rounded-[40px] overflow-hidden shadow-2xl border border-white/10 ${darkMode ? 'bg-slate-900' : 'bg-white'}`}>
-                        <div className="p-8 border-b border-white/5 flex justify-between items-center bg-gradient-to-r from-slate-900 to-indigo-900 text-white shadow-xl">
-                            <div>
-                                <h2 className="text-xl font-black uppercase italic tracking-tighter">Cấu hình #{activeRoom.name}</h2>
-                                <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest opacity-60 italic uppercase">Admin Control Center</p>
-                            </div>
-                            <button onClick={()=>setShowGroupSettings(false)} className="w-10 h-10 flex items-center justify-center bg-white/5 hover:bg-red-500 rounded-full transition-all"><FaTimes/></button>
-                        </div>
-                        
-                        <div className="p-8 space-y-8 font-bold">
-                            {/* Rename Group */}
-                            {(isAdminOfGroup || isModOfGroup) && (
-                                <div className="space-y-3">
-                                    <p className="text-[9px] font-black uppercase text-gray-500 tracking-[2px] italic border-l-2 border-purple-500 pl-3">Đổi tên nhóm</p>
-                                    <div className="flex gap-2">
-                                        <input 
-                                            value={renameGroupValue} 
-                                            onChange={e => setRenameGroupValue(e.target.value)} 
-                                            placeholder={activeRoom.name} 
-                                            className={`flex-1 p-3 rounded-xl border text-sm outline-none focus:border-purple-500 ${darkMode ? 'bg-black/20 border-white/10 text-white' : 'bg-gray-50 border-gray-200 text-slate-800'}`} 
-                                        />
-                                        <button 
-                                            onClick={async () => { 
-                                                if (!renameGroupValue.trim()) return; 
-                                                await api.post('/groups/rename', { groupId: activeRoom.id, newName: renameGroupValue.trim() }); 
-                                                setRenameGroupValue(''); 
-                                                setShowGroupSettings(false);
-                                                loadData(); 
-                                                handleSwitchRoom({ id: activeRoom.id, name: renameGroupValue.trim() });
-                                            }} 
-                                            className="px-4 py-3 bg-purple-600 text-white rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-purple-500 transition-all shadow-lg"
-                                        >
-                                            Lưu
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Group Avatar Uploader */}
-                            {(isAdminOfGroup || isModOfGroup) && (
-                                <div className="flex flex-col items-center justify-center space-y-4 pb-2">
-                                    <p className="text-[9px] font-black uppercase text-gray-500 tracking-[2px] italic border-l-2 border-indigo-500 pl-3 self-start">Ảnh đại diện nhóm</p>
-                                    <div className="relative group shrink-0">
-                                        <div className="absolute inset-0 bg-gradient-to-tr from-orange-500 to-indigo-500 rounded-[30px] blur-md opacity-40 group-hover:opacity-80 transition-opacity"></div>
-                                        <img 
-                                            src={currentGroup?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(activeRoom.name)}&background=f97316&color=fff`} 
-                                            className="w-24 h-24 rounded-[28px] border-4 border-slate-900 object-cover relative z-10 shadow-xl bg-slate-800 transition-all group-hover:scale-105 animate-in fade-in" 
-                                            alt="group-avt" 
-                                        />
-                                        <div 
-                                            onClick={() => groupFileRef.current?.click()} 
-                                            className="absolute inset-0 z-20 bg-black/60 rounded-[28px] flex flex-col items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100 transition-all border-2 border-white/20"
-                                        >
-                                            <FaCamera size={20} className="text-white animate-bounce" />
-                                            <span className="text-[8px] text-white/90 font-black uppercase tracking-wider mt-1">Thay ảnh</span>
-                                        </div>
-                                    </div>
-                                    <input 
-                                        type="file" 
-                                        ref={groupFileRef} 
-                                        className="hidden" 
-                                        onChange={handleGroupAvatarChange} 
-                                        accept="image/*" 
-                                    />
-                                </div>
-                            )}
-
-                            {isAdminOfGroup && (
-                                <div className="grid grid-cols-2 gap-4">
-                                    <button onClick={() => handleManageGroup('disable')} className={`p-4 rounded-2xl border-2 flex items-center justify-center gap-2 uppercase text-[10px] font-black transition-all ${currentGroup?.isDisabled ? 'border-emerald-500 text-emerald-500 bg-emerald-500/5 shadow-inner' : 'border-red-500 text-red-500 bg-red-500/5 shadow-inner'}`}>
-                                        {currentGroup?.isDisabled ? <><FaPlayCircle size={14}/> Mở cửa</> : <><FaPauseCircle size={14}/> Khóa chat</>}
-                                    </button>
-                                    <button onClick={() => handleManageGroup('delete')} className="p-4 rounded-2xl border-2 border-gray-600 text-gray-400 flex items-center justify-center gap-2 uppercase text-[10px] font-black hover:bg-red-600 hover:text-white transition-all shadow-md">
-                                        <FaTrash size={14}/> Giải tán
-                                    </button>
-                                </div>
-                            )}
-
-                            {!currentGroup?.isPublic && (
-                                <div className="space-y-3 max-h-[300px] overflow-y-auto scrollbar-hide">
-                                    <p className="text-[9px] font-black uppercase text-gray-500 tracking-[2px] italic mb-4 border-l-2 border-indigo-500 pl-3">Đội ngũ thám hiểm ({currentGroup?.members?.length})</p>
-                                    {currentGroup?.members?.map(u => {
-                                        const isHost = u === currentGroup.owner;
-                                        const isMod = currentGroup.mods?.includes(u);
-                                        const myRoleIsHost = currentGroup.owner === user.username;
-                                        const myRoleIsMod = currentGroup.mods?.includes(user.username);
-                                        
-                                        // MOD không thể đuổi Host hoặc MOD khác
-                                        const canKick = myRoleIsHost ? !isHost : (myRoleIsMod && !isHost && !isMod);
-
-                                        return (
-                                            <div key={u} className="flex items-center justify-between p-3 rounded-2xl bg-white/5 border border-white/5 group/user hover:border-indigo-500/30 transition-all shadow-sm">
-                                                <span className="text-sm font-bold italic text-indigo-100 truncate flex-1 uppercase tracking-tighter">
-                                                    @{u} 
-                                                    {isHost && <span className="text-[8px] bg-indigo-500 text-white px-2 py-0.5 rounded-full uppercase ml-2 shadow-md">Host</span>}
-                                                    {isMod && <span className="text-[8px] bg-emerald-500 text-white px-2 py-0.5 rounded-full uppercase ml-2 shadow-md">Mod</span>}
-                                                </span>
-                                                <div className="flex gap-2 opacity-0 group-hover/user:opacity-100 transition-all">
-                                                    {myRoleIsHost && !isHost && (
-                                                        <>
-                                                            <button 
-                                                                onClick={() => handleUpdateRole(u, isMod ? 'revoke' : 'grant')} 
-                                                                className={`text-[9px] px-2 py-1 uppercase rounded-lg font-black transition-all ${isMod ? 'bg-orange-500 text-white' : 'bg-emerald-500 text-white'}`}
-                                                            >
-                                                                {isMod ? 'Hủy Mod' : 'Phong Mod'}
-                                                            </button>
-                                                            <button 
-                                                                onClick={async () => { 
-                                                                    if (!window.confirm(`Chuyển quyền chủ nhóm cho @${u}?`)) return; 
-                                                                    await api.post('/groups/transfer-ownership', { groupId: activeRoom.id, newOwner: u }); 
-                                                                    loadData(); 
-                                                                    setShowGroupSettings(false);
-                                                                }} 
-                                                                className="text-[9px] px-2 py-1 uppercase rounded-lg font-black bg-cyan-500 text-white transition-all hover:bg-cyan-400"
-                                                                title="Chuyển quyền chủ nhóm"
-                                                            >
-                                                                <FaExchangeAlt size={10} className="inline mr-1"/> Chuyển
-                                                            </button>
-                                                        </>
-                                                    )}
-                                                    {canKick && (
-                                                        <button onClick={() => handleKick(u)} className="text-red-400 hover:scale-110 active:text-red-600 bg-red-500/10 p-1.5 rounded-lg">
-                                                            <FaUserMinus size={14}/>
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Modal Xem Ảnh */}
-            {previewImage && (
-                <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[1000] p-4 animate-in zoom-in-95 backdrop-blur-sm" onClick={() => setPreviewImage(null)}>
-                    <button onClick={() => setPreviewImage(null)} className="absolute top-6 right-6 text-white bg-white/10 p-2 rounded-full hover:bg-white/20 transition-all">
-                        <FaTimes size={24}/>
-                    </button>
-                    <img src={previewImage} className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl" alt="Preview" onClick={(e) => e.stopPropagation()} />
-                </div>
-            )}
-
-            {/* Immersive Image Lightbox & Studio */}
-            {lightboxImage && (() => {
-                const filterStyles = {
-                    none: 'none',
-                    grayscale: 'grayscale(100%)',
-                    sepia: 'sepia(80%) contrast(90%)',
-                    cinematic: 'contrast(125%) brightness(95%) saturate(120%)',
-                    retroInvert: 'invert(100%) hue-rotate(180deg)',
-                    warmDream: 'saturate(150%) sepia(20%) brightness(105%)',
-                    softBlur: 'blur(2px) saturate(130%)'
-                };
-                return (
-                    <div 
-                        className="fixed inset-0 bg-black/95 z-[999] flex flex-col justify-between p-6 backdrop-blur-md font-sans select-none animate-in fade-in duration-300"
-                        onClick={() => setLightboxImage(null)}
-                    >
-                        {/* Header bar */}
-                        <div className="flex justify-between items-center bg-black/40 backdrop-blur-md p-4 rounded-2xl border border-white/5 shadow-2xl z-[1001]" onClick={e => e.stopPropagation()}>
-                            <div className="flex flex-col text-left">
-                                <span className="text-xs font-black uppercase text-indigo-400 tracking-wider">Trình xem ảnh & Studio</span>
-                                <span className="text-[10px] text-gray-400 font-medium">Gửi bởi @{lightboxImage.sender} vào {lightboxImage.time}</span>
-                            </div>
-                            
-                            {/* Control actions */}
-                            <div className="flex items-center gap-3">
-                                <button 
-                                    onClick={() => setLightboxZoom(prev => Math.max(1, prev - 0.25))}
-                                    className="p-2 bg-white/5 hover:bg-white/10 text-gray-300 rounded-xl transition-all"
-                                    title="Thu nhỏ"
-                                >
-                                    <FaChevronLeft size={16}/>
-                                </button>
-                                <span className="text-xs font-black text-white w-10 text-center">{Math.round(lightboxZoom * 100)}%</span>
-                                <button 
-                                    onClick={() => setLightboxZoom(prev => Math.min(3, prev + 0.25))}
-                                    className="p-2 bg-white/5 hover:bg-white/10 text-gray-300 rounded-xl transition-all"
-                                    title="Phóng to"
-                                >
-                                    <FaChevronRight size={16}/>
-                                </button>
-                                <div className="h-6 w-px bg-white/10"></div>
-                                <button 
-                                    onClick={() => setLightboxRotation(prev => (prev + 90) % 360)}
-                                    className="p-2 bg-white/5 hover:bg-white/10 text-gray-300 rounded-xl transition-all"
-                                    title="Xoay ảnh 90°"
-                                >
-                                    <FaPalette size={16} className="animate-spin" style={{ animationDuration: '6s' }} />
-                                </button>
-                                <a 
-                                    href={lightboxImage.url} 
-                                    download={`ott_attachment_${Date.now()}.png`}
-                                    className="p-2 bg-white/5 hover:bg-white/10 text-gray-300 rounded-xl transition-all"
-                                    title="Tải xuống ảnh gốc"
-                                    onClick={e => e.stopPropagation()}
-                                >
-                                    <FaPaperPlane size={16} className="rotate-45" />
-                                </a>
-                                <div className="h-6 w-px bg-white/10"></div>
-                                <button 
-                                    onClick={() => setLightboxImage(null)} 
-                                    className="p-2 bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white rounded-xl transition-all"
-                                    title="Đóng"
-                                >
-                                    <FaTimes size={16}/>
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Main Image Viewport */}
-                        <div className="flex-1 flex items-center justify-center overflow-hidden py-4">
-                            <div 
-                                className="relative transition-all duration-300 ease-out max-w-full max-h-[70vh] flex items-center justify-center"
-                                style={{
-                                    transform: `scale(${lightboxZoom}) rotate(${lightboxRotation}deg)`,
-                                }}
-                                onClick={e => e.stopPropagation()}
-                            >
-                                <img 
-                                    src={lightboxImage.url} 
-                                    className="max-w-full max-h-[70vh] object-contain rounded-2xl shadow-[0_0_80px_rgba(99,102,241,0.25)] border border-white/10 transition-all duration-300" 
-                                    style={{
-                                        filter: filterStyles[lightboxFilter] || 'none'
-                                    }}
-                                    alt="Studio Preview" 
-                                />
-                            </div>
-                        </div>
-
-                        {/* Bottom Studio Filter Selector */}
-                        <div 
-                            className="bg-black/60 backdrop-blur-xl p-4 rounded-3xl border border-white/5 shadow-2xl flex flex-col items-center gap-3 z-[1001] max-w-xl mx-auto w-full"
-                            onClick={e => e.stopPropagation()}
-                        >
-                            <span className="text-[10px] font-black uppercase text-indigo-400 tracking-[3px]">Bộ lọc màu Studio nghệ thuật</span>
-                            <div className="flex items-center gap-2 overflow-x-auto w-full justify-center py-1 scrollbar-hide">
-                                {[
-                                    { id: 'none', label: 'Bản gốc' },
-                                    { id: 'grayscale', label: 'Cổ điển B&W' },
-                                    { id: 'sepia', label: 'Hoài niệm' },
-                                    { id: 'cinematic', label: 'Điện ảnh' },
-                                    { id: 'retroInvert', label: 'Âm bản Retro' },
-                                    { id: 'warmDream', label: 'Mơ mộng' },
-                                    { id: 'softBlur', label: 'Ảo ảnh' }
-                                ].map(filter => (
-                                    <button
-                                        key={filter.id}
-                                        onClick={() => setLightboxFilter(filter.id)}
-                                        className={`px-3 py-1.5 rounded-xl text-[10px] font-bold tracking-wider uppercase border transition-all shrink-0 ${
-                                            lightboxFilter === filter.id 
-                                                ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-500/25 scale-105 font-black' 
-                                                : 'bg-white/5 border-white/5 hover:border-white/20 text-gray-400 hover:text-white'
-                                        }`}
-                                    >
-                                        {filter.label}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                );
-            })()}
-
+            <GroupSettingsModal
+                isOpen={showGroupSettings}
+                onClose={() => setShowGroupSettings(false)}
+                activeRoom={activeRoom}
+                darkMode={darkMode}
+                user={user}
+                currentGroup={currentGroup}
+                isAdminOfGroup={isAdminOfGroup}
+                isModOfGroup={isModOfGroup}
+                handleManageGroup={handleManageGroup}
+                handleUpdateRole={handleUpdateRole}
+                handleKick={handleKick}
+                handleSwitchRoom={handleSwitchRoom}
+                loadData={loadData}
+            />
+            {/* Image Lightbox & Studio */}
+            <ImageLightbox
+                previewImage={previewImage}
+                setPreviewImage={setPreviewImage}
+                lightboxImage={lightboxImage}
+                setLightboxImage={setLightboxImage}
+            />
             {/* P1: Invite to Group Modal */}
             {showInviteModal && activeRoom && (
                 <div className="fixed inset-0 bg-[#020617]/80 flex items-center justify-center z-[300] backdrop-blur-md p-4 animate-in zoom-in-95">
