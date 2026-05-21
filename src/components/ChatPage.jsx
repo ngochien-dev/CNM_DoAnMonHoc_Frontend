@@ -49,6 +49,9 @@ import SoundSettingsModal from './modals/SoundSettingsModal';
 import StoryUploadModal from './modals/StoryUploadModal';
 import MessageItem from './chat/MessageItem';
 import RoomContextMenu from './chat/RoomContextMenu';
+import useAudioRecorder from '../hooks/useAudioRecorder';
+import ReportMessageModal from './modals/ReportMessageModal';
+import InviteMemberModal from './modals/InviteMemberModal';
 
 import useCall from '../context/useCall';
 import { getSocket, connectSocket, disconnectSocket } from '../services/socket';
@@ -196,7 +199,6 @@ const ChatPage = ({ user, setUser }) => {
     // Message Moderation states
     const [showReportModal, setShowReportModal] = useState(false);
     const [reportingMessage, setReportingMessage] = useState(null);
-    const [reportReason, setReportReason] = useState('Abuse');
 
     // Rich Chat, Mention, and Audio states
     const [activePinIndex, setActivePinIndex] = useState(0);
@@ -231,8 +233,6 @@ const ChatPage = ({ user, setUser }) => {
 
     const [replyingToMessage, setReplyingToMessage] = useState(null);
     const [showReactionMenu, setShowReactionMenu] = useState(null);
-    const [isRecording, setIsRecording] = useState(false);
-    const [recordingTime, setRecordingTime] = useState(0);
     const [editingMessage, setEditingMessage] = useState(null);
     const [editText, setEditText] = useState('');
 
@@ -318,11 +318,21 @@ const ChatPage = ({ user, setUser }) => {
         setEditingFolder(null);
         setShowFolderModal(false);
     };
+    // Khởi tạo Hook ghi âm
+    const handleSendAudio = (audioDataUrl) => {
+        if (!user?.username || !activeRoom?.id) return;
+        socket.emit('send_message', {
+            sender: user.displayName,
+            senderUsername: user.username,
+            fileData: audioDataUrl,
+            fileType: 'audio',
+            fileName: 'voice_message.webm',
+            roomId: activeRoom.id,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        });
+    };
 
-    const mediaRecorderRef = useRef(null);
-    const audioChunksRef = useRef([]);
-    const recordingTimerRef = useRef(null);
-
+    const { isRecording, recordingTime, startRecording, stopRecording, formatTime } = useAudioRecorder(handleSendAudio);
     const [sharedE2EEKey, setSharedE2EEKey] = useState(null);
 
     // Initialize E2EE Keys for the logged-in user
@@ -686,26 +696,7 @@ const ChatPage = ({ user, setUser }) => {
 
     const handleOpenReportModal = (msg) => {
         setReportingMessage(msg);
-        setReportReason('Abuse');
         setShowReportModal(true);
-    };
-
-    const handleSubmitReport = async () => {
-        if (!reportingMessage) return;
-        try {
-            await api.post('/v1/messages/report', {
-                messageId: reportingMessage.messageId,
-                reason: reportReason
-            });
-            toast.success('Báo cáo tin nhắn thành công! Đang chờ Admin xử lý.', {
-                icon: '🛡️',
-                style: { borderRadius: '12px', background: '#333', color: '#fff' }
-            });
-            setShowReportModal(false);
-            setReportingMessage(null);
-        } catch (err) {
-            toast.error(err.response?.data?.error || 'Không thể gửi báo cáo tin nhắn');
-        }
     };
 
     const scrollToMessage = (messageId) => {
@@ -1165,59 +1156,6 @@ const ChatPage = ({ user, setUser }) => {
             setViewingStories(null);
         }
     };
-
-    const startRecording = async () => {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const mediaRecorder = new MediaRecorder(stream);
-            mediaRecorderRef.current = mediaRecorder;
-            audioChunksRef.current = [];
-
-            mediaRecorder.ondataavailable = e => {
-                if (e.data.size > 0) audioChunksRef.current.push(e.data);
-            };
-
-            mediaRecorder.onstop = () => {
-                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-                const reader = new FileReader();
-                reader.readAsDataURL(audioBlob);
-                reader.onloadend = () => {
-                    socket.emit('send_message', {
-                        sender: user.displayName,
-                        senderUsername: user.username,
-                        fileData: reader.result,
-                        fileType: 'audio',
-                        fileName: 'voice_message.webm',
-                        roomId: activeRoom.id,
-                        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                    });
-                };
-                stream.getTracks().forEach(track => track.stop());
-            };
-
-            mediaRecorder.start();
-            setIsRecording(true);
-            setRecordingTime(0);
-            recordingTimerRef.current = setInterval(() => setRecordingTime(prev => prev + 1), 1000);
-        } catch (err) {
-            alert("Không thể truy cập microphone: " + err.message);
-        }
-    };
-
-    const stopRecording = () => {
-        if (mediaRecorderRef.current && isRecording) {
-            mediaRecorderRef.current.stop();
-            setIsRecording(false);
-            clearInterval(recordingTimerRef.current);
-        }
-    };
-
-    const formatTime = (seconds) => {
-        const m = Math.floor(seconds / 60).toString().padStart(2, '0');
-        const s = (seconds % 60).toString().padStart(2, '0');
-        return `${m}:${s}`;
-    };
-
     const handleTogglePin = async (roomId, isPinned) => {
         try {
             const action = isPinned ? 'unpin' : 'pin';
@@ -2798,66 +2736,12 @@ const ChatPage = ({ user, setUser }) => {
             <UserProfileModal isOpen={profileModal.isOpen} onClose={() => setProfileModal({ isOpen: false, username: '' })} targetUsername={profileModal.username} currentUser={user} onUpdateSuccess={handleUpdateSuccess} onStartDM={handleStartDM} />
 
             {/* Modal Báo Cáo Tin Nhắn Vi Phạm */}
-            {showReportModal && reportingMessage && (
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[600] backdrop-blur-md animate-in fade-in duration-200 p-4">
-                    <div className={`w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border transition-all duration-300 ${darkMode ? 'bg-[#0f172a] border-white/10 text-white' : 'bg-white border-gray-200 text-slate-800'
-                        }`}>
-                        <div className="p-6 bg-gradient-to-r from-red-500 to-rose-600 text-white flex justify-between items-center">
-                            <h3 className="font-black uppercase tracking-widest text-[11px] flex items-center gap-2">
-                                <FaShieldAlt size={16} /> Báo cáo tin nhắn vi phạm
-                            </h3>
-                            <button
-                                onClick={() => { setShowReportModal(false); setReportingMessage(null); }}
-                                className="p-1 rounded-full hover:bg-white/10 text-white transition-colors"
-                            >
-                                <FaTimes size={14} />
-                            </button>
-                        </div>
-                        <div className="p-6 space-y-6">
-                            <div className={`p-4 rounded-2xl border ${darkMode ? 'bg-white/5 border-white/5' : 'bg-slate-50 border-gray-100'}`}>
-                                <h4 className="text-[10px] uppercase font-black tracking-wider text-gray-400 mb-1">Nội dung bị báo cáo</h4>
-                                <p className={`text-sm italic font-medium leading-relaxed break-all ${darkMode ? 'text-slate-200' : 'text-slate-700'}`}>
-                                    "{reportingMessage.text || '[Tệp tin đính kèm]'}"
-                                </p>
-                                <span className="text-[9px] text-gray-500 mt-2 block">Gửi bởi: @{reportingMessage.senderUsername || reportingMessage.sender}</span>
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-black uppercase tracking-wider text-gray-400 mb-2">Lý do báo cáo</label>
-                                <select
-                                    value={reportReason}
-                                    onChange={(e) => setReportReason(e.target.value)}
-                                    className={`w-full px-4 py-3 rounded-2xl border font-bold text-sm outline-none transition-all ${darkMode
-                                        ? 'bg-slate-800 border-white/5 text-white focus:border-red-500'
-                                        : 'bg-slate-50 border-gray-200 text-slate-700 focus:border-red-500 focus:bg-white'
-                                        }`}
-                                >
-                                    <option value="Abuse">Quấy rối, công kích, xúc phạm cá nhân</option>
-                                    <option value="Spam">Quảng cáo rác, lừa đảo, Spam</option>
-                                    <option value="Dangerous">Nội dung đồi trụy, độc hại, bạo lực</option>
-                                    <option value="Other">Lý do vi phạm khác</option>
-                                </select>
-                            </div>
-
-                            <div className="flex gap-4">
-                                <button
-                                    onClick={() => { setShowReportModal(false); setReportingMessage(null); }}
-                                    className={`flex-1 py-3.5 rounded-2xl font-bold transition-all text-sm border ${darkMode ? 'bg-white/5 hover:bg-white/10 border-white/5 text-white' : 'bg-slate-100 hover:bg-slate-200 border-gray-200 text-slate-600'
-                                        }`}
-                                >
-                                    Hủy bỏ
-                                </button>
-                                <button
-                                    onClick={handleSubmitReport}
-                                    className="flex-1 py-3.5 rounded-2xl bg-gradient-to-r from-red-500 to-rose-600 text-white font-bold transition-all hover:opacity-90 shadow-lg shadow-rose-500/20 text-sm"
-                                >
-                                    Gửi báo cáo
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
+            <ReportMessageModal
+                isOpen={showReportModal}
+                onClose={() => { setShowReportModal(false); setReportingMessage(null); }}
+                reportingMessage={reportingMessage}
+                darkMode={darkMode}
+            />
 
             {/* Modal Tạo/Sửa Thư Mục Chat (Telegram Style) */}
             <FolderModal
@@ -2947,56 +2831,17 @@ const ChatPage = ({ user, setUser }) => {
                 lightboxImage={lightboxImage}
                 setLightboxImage={setLightboxImage}
             />
-            {/* P1: Invite to Group Modal */}
-            {showInviteModal && activeRoom && (
-                <div className="fixed inset-0 bg-[#020617]/80 flex items-center justify-center z-[300] backdrop-blur-md p-4 animate-in zoom-in-95">
-                    <div className={`w-[420px] rounded-[40px] p-8 shadow-2xl border ${darkMode ? 'bg-slate-900 border-white/10 text-white' : 'bg-white border-gray-100 text-slate-800'}`}>
-                        <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-xl font-black uppercase italic tracking-tighter text-indigo-500">Mời thành viên</h2>
-                            <button onClick={() => setShowInviteModal(false)} className="text-gray-500 hover:text-red-500 transition-colors"><FaTimes size={20} /></button>
-                        </div>
-                        <p className={`text-xs mb-6 ${darkMode ? 'text-gray-400' : 'text-slate-500'}`}>Chọn bạn bè để mời vào nhóm <b>{activeRoom.name}</b></p>
-                        <div className="max-h-[300px] overflow-y-auto space-y-2 scrollbar-hide">
-                            {(user.friends || []).filter(f => {
-                                const grp = allGroups.find(g => g.groupId === activeRoom.id);
-                                return grp && !(grp.members || []).includes(f);
-                            }).map(f => (
-                                <div key={f} className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${darkMode ? 'bg-white/2 border-white/5 hover:bg-white/5' : 'bg-slate-50 border-gray-100 hover:bg-slate-100'}`}>
-                                    <div className="flex items-center gap-3">
-                                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-white font-black text-sm uppercase overflow-hidden ${darkMode ? 'bg-slate-800' : 'bg-slate-300'}`}>
-                                            {onlineUsers[f]?.avatar ? <img src={onlineUsers[f].avatar} className="w-full h-full object-cover" alt="" /> : f[0]}
-                                        </div>
-                                        <div>
-                                            <p className={`text-sm font-bold ${darkMode ? 'text-white' : 'text-slate-800'}`}>{onlineUsers[f]?.displayName || f}</p>
-                                            <p className={`text-[9px] ${onlineUsers[f] ? 'text-emerald-400' : 'text-gray-500'}`}>{onlineUsers[f] ? 'Online' : 'Offline'}</p>
-                                        </div>
-                                    </div>
-                                    <button
-                                        onClick={async () => {
-                                            try {
-                                                await api.post('/groups/invite', { groupId: activeRoom.id, targetUsername: f });
-                                                toast(`Đã mời @${f} vào nhóm!`, { icon: '✅', style: { borderRadius: '10px', background: '#333', color: '#fff' } });
-                                                loadData();
-                                            } catch (err) {
-                                                toast(err.response?.data?.error || 'Lỗi mời thành viên!', { icon: '❌' });
-                                            }
-                                        }}
-                                        className="bg-emerald-500 hover:bg-emerald-400 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all active:scale-95 shadow-lg"
-                                    >
-                                        Mời
-                                    </button>
-                                </div>
-                            ))}
-                            {(user.friends || []).filter(f => {
-                                const grp = allGroups.find(g => g.groupId === activeRoom.id);
-                                return grp && !(grp.members || []).includes(f);
-                            }).length === 0 && (
-                                    <p className="text-center text-gray-500 py-8 text-sm italic">Tất cả bạn bè đã là thành viên</p>
-                                )}
-                        </div>
-                    </div>
-                </div>
-            )}
+            {/* Modal Mời thành viên */}
+            <InviteMemberModal
+                isOpen={showInviteModal}
+                onClose={() => setShowInviteModal(false)}
+                activeRoom={activeRoom}
+                user={user}
+                allGroups={allGroups}
+                onlineUsers={onlineUsers}
+                darkMode={darkMode}
+                loadData={loadData}
+            />
 
             {/* Modal Cài Đặt Nhạc Chuông Thông Báo */}
             <SoundSettingsModal
