@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { FaChartBar, FaUsers, FaComments, FaLayerGroup, FaSignal, FaBan, FaUnlock, FaKey, FaShieldAlt, FaTrash, FaCheck, FaInfoCircle } from 'react-icons/fa';
+import { FaChartBar, FaUsers, FaComments, FaLayerGroup, FaSignal, FaBan, FaUnlock, FaKey, FaShieldAlt, FaTrash, FaCheck, FaInfoCircle, FaTimes } from 'react-icons/fa';
 import api from '../../services/api';
 
 const COLORS = ['#5865F2', '#23A559', '#FEE75C', '#EB459E', '#ED4245'];
@@ -13,6 +13,7 @@ const AdminStats = ({ stats, darkMode }) => {
     // Reported messages states
     const [reports, setReports] = useState([]);
     const [loadingReports, setLoadingReports] = useState(false);
+    const [selectedImage, setSelectedImage] = useState(null);
 
     useEffect(() => {
         if (activeTab === 'users') {
@@ -73,14 +74,19 @@ const AdminStats = ({ stats, darkMode }) => {
         }
     };
 
-    const handleResolveReport = async (reportId, action, senderUsername) => {
+    const handleResolveReport = async (report, action) => {
+        const { reportId, messageSender, messageId, reportType } = report;
         let confirmMsg = '';
         if (action === 'dismiss') {
             confirmMsg = 'Bỏ qua báo cáo này?';
         } else if (action === 'delete_message') {
-            confirmMsg = 'Ẩn tin nhắn này trên hệ thống do vi phạm tiêu chuẩn cộng đồng?';
+            confirmMsg = messageId 
+                ? 'Ẩn tin nhắn này trên hệ thống do vi phạm tiêu chuẩn cộng đồng?' 
+                : 'Vô hiệu hóa (khóa) phòng chat này trên hệ thống?';
         } else if (action === 'ban_sender') {
-            confirmMsg = `Khóa tài khoản @${senderUsername} và ẩn tin nhắn này ngay lập tức?`;
+            confirmMsg = messageId
+                ? `Khóa tài khoản @${messageSender} và ẩn tin nhắn này ngay lập tức?`
+                : `Khóa tài khoản @${messageSender} và vô hiệu hóa phòng chat tương ứng?`;
         }
 
         if (window.confirm(confirmMsg)) {
@@ -296,7 +302,7 @@ const AdminStats = ({ stats, darkMode }) => {
                             <table className={`w-full text-left border-collapse ${darkMode ? 'text-white' : 'text-slate-800'}`}>
                                 <thead>
                                     <tr className={`border-b ${darkMode ? 'border-white/10' : 'border-gray-200'}`}>
-                                        <th className="py-3 px-4 text-xs font-black uppercase opacity-60">Người gửi</th>
+                                        <th className="py-3 px-4 text-xs font-black uppercase opacity-60">Người gửi / Đối tượng</th>
                                         <th className="py-3 px-4 text-xs font-black uppercase opacity-60">Nội dung vi phạm</th>
                                         <th className="py-3 px-4 text-xs font-black uppercase opacity-60">Lý do</th>
                                         <th className="py-3 px-4 text-xs font-black uppercase opacity-60">Người báo cáo</th>
@@ -307,12 +313,48 @@ const AdminStats = ({ stats, darkMode }) => {
                                 <tbody>
                                     {reports.map((r) => (
                                         <tr key={r.reportId} className={`border-b transition-colors ${darkMode ? 'border-white/5 hover:bg-white/5' : 'border-gray-100 hover:bg-slate-50'}`}>
-                                            <td className="py-3 px-4 font-bold text-rose-400">@{r.messageSender}</td>
+                                            <td className="py-3 px-4 font-bold text-rose-400">
+                                                {r.reportType === 'general' ? (
+                                                    <div>
+                                                        <span className="text-[9px] font-black uppercase tracking-wider block text-slate-500 mb-0.5">Bị báo cáo</span>
+                                                        @{r.messageSender || r.targetUsername}
+                                                    </div>
+                                                ) : (
+                                                    <div>
+                                                        <span className="text-[9px] font-black uppercase tracking-wider block text-slate-500 mb-0.5">Người gửi tin</span>
+                                                        @{r.messageSender}
+                                                    </div>
+                                                )}
+                                            </td>
                                             <td className="py-3 px-4 max-w-[280px]">
                                                 <div className={`p-3 rounded-xl text-sm ${darkMode ? 'bg-white/5 text-slate-200' : 'bg-slate-100 text-slate-700'} border ${darkMode ? 'border-white/5' : 'border-gray-200'} break-all`}>
                                                     {r.messageText}
                                                 </div>
-                                                <span className="text-[10px] text-gray-500 mt-1 block">ID: {r.messageId}</span>
+                                                {r.reportType === 'general' ? (
+                                                    <div className="mt-1 flex flex-wrap gap-2 items-center">
+                                                        <span className="px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-400 text-[9px] font-bold">Báo cáo chung</span>
+                                                        {r.targetRoomName && (
+                                                            <span className="text-[10px] text-gray-500 font-medium">Phòng: {r.targetRoomName}</span>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-[10px] text-gray-500 mt-1 block">Tin nhắn ID: {r.messageId}</span>
+                                                )}
+
+                                                {/* Render screenshot if available */}
+                                                {r.imageUrl && (
+                                                    <div className="mt-2">
+                                                        <span className="text-[9px] font-black uppercase tracking-wider text-gray-500 block mb-1">Hình ảnh minh chứng:</span>
+                                                        <div className="relative w-24 h-16 rounded-lg overflow-hidden border border-white/10 cursor-zoom-in group hover:border-indigo-500/50 transition-all bg-black/20">
+                                                            <img 
+                                                                src={r.imageUrl} 
+                                                                alt="proof screenshot" 
+                                                                className="w-full h-full object-cover group-hover:scale-105 transition-all"
+                                                                onClick={() => setSelectedImage(r.imageUrl)}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </td>
                                             <td className="py-3 px-4">
                                                 <span className="px-2.5 py-1 rounded bg-red-500/10 text-red-500 text-xs font-bold">
@@ -327,23 +369,23 @@ const AdminStats = ({ stats, darkMode }) => {
                                                 {r.status === 'pending' ? (
                                                     <div className="flex gap-2">
                                                         <button 
-                                                            onClick={() => handleResolveReport(r.reportId, 'dismiss', r.messageSender)}
+                                                            onClick={() => handleResolveReport(r, 'dismiss')}
                                                             className="p-2 rounded-lg bg-slate-500 text-white transition-all hover:scale-110 shadow-md flex items-center justify-center"
                                                             title="Bỏ qua báo cáo"
                                                         >
                                                             <FaCheck size={12} />
                                                         </button>
                                                         <button 
-                                                            onClick={() => handleResolveReport(r.reportId, 'delete_message', r.messageSender)}
+                                                            onClick={() => handleResolveReport(r, 'delete_message')}
                                                             className="p-2 rounded-lg bg-orange-500 text-white transition-all hover:scale-110 shadow-md flex items-center justify-center"
-                                                            title="Ẩn tin nhắn vi phạm"
+                                                            title={r.messageId ? "Ẩn tin nhắn vi phạm" : "Vô hiệu hóa phòng chat"}
                                                         >
                                                             <FaTrash size={12} />
                                                         </button>
                                                         <button 
-                                                            onClick={() => handleResolveReport(r.reportId, 'ban_sender', r.messageSender)}
+                                                            onClick={() => handleResolveReport(r, 'ban_sender')}
                                                             className="p-2 rounded-lg bg-red-600 text-white transition-all hover:scale-110 shadow-md flex items-center justify-center"
-                                                            title="Khóa tài khoản người gửi"
+                                                            title="Khóa tài khoản người vi phạm"
                                                         >
                                                             <FaBan size={12} />
                                                         </button>
@@ -358,6 +400,29 @@ const AdminStats = ({ stats, darkMode }) => {
                             </table>
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* Image Lightbox Modal */}
+            {selectedImage && (
+                <div 
+                    onClick={() => setSelectedImage(null)}
+                    className="fixed inset-0 bg-black/85 backdrop-blur-md z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-200"
+                >
+                    <div className="relative max-w-4xl max-h-[90vh] overflow-hidden rounded-2xl border border-white/10 shadow-2xl flex flex-col items-center">
+                        <button 
+                            onClick={() => setSelectedImage(null)}
+                            className="absolute top-4 right-4 p-2 bg-black/50 hover:bg-black/75 rounded-full text-white transition-colors z-10 border border-white/5"
+                        >
+                            <FaTimes size={16} />
+                        </button>
+                        <img 
+                            src={selectedImage} 
+                            alt="violation proof full" 
+                            className="max-w-full max-h-[85vh] object-contain rounded-xl"
+                            onClick={(e) => e.stopPropagation()}
+                        />
+                    </div>
                 </div>
             )}
         </div>

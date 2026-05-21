@@ -51,6 +51,7 @@ import MessageItem from './chat/MessageItem';
 import RoomContextMenu from './chat/RoomContextMenu';
 import useAudioRecorder from '../hooks/useAudioRecorder';
 import ReportMessageModal from './modals/ReportMessageModal';
+import ReportViolationModal from './modals/ReportViolationModal';
 import InviteMemberModal from './modals/InviteMemberModal';
 import ConversationSidebar from './chat/ConversationSidebar';
 import ChatInput from './chat/ChatInput';
@@ -207,6 +208,7 @@ const ChatPage = ({ user, setUser }) => {
     // Message Moderation states
     const [showReportModal, setShowReportModal] = useState(false);
     const [reportingMessage, setReportingMessage] = useState(null);
+    const [showReportViolationModal, setShowReportViolationModal] = useState(false);
 
     // Rich Chat, Mention, and Audio states
     const [activePinIndex, setActivePinIndex] = useState(0);
@@ -2036,6 +2038,7 @@ const ChatPage = ({ user, setUser }) => {
                     filterType={filterType}
                     setFilterType={setFilterType}
                     scrollToMessage={scrollToMessage}
+                    onOpenReportViolation={() => setShowReportViolationModal(true)}
                 />
             )}
 
@@ -2075,6 +2078,16 @@ const ChatPage = ({ user, setUser }) => {
                 isOpen={showReportModal}
                 onClose={() => { setShowReportModal(false); setReportingMessage(null); }}
                 reportingMessage={reportingMessage}
+                darkMode={darkMode}
+            />
+
+            {/* Modal Báo Cáo Vi Phạm Chung từ Sidebar */}
+            <ReportViolationModal
+                isOpen={showReportViolationModal}
+                onClose={() => setShowReportViolationModal(false)}
+                activeRoom={activeRoom}
+                allGroups={allGroups}
+                user={user}
                 darkMode={darkMode}
             />
 

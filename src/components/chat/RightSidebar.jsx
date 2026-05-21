@@ -77,7 +77,8 @@ const RightSidebar = ({
   filterType,
   setFilterType,
   scrollToMessage,
-  handleExportChat
+  handleExportChat,
+  onOpenReportViolation
 }) => {
   const [expandedSections, setExpandedSections] = useState({
     chatInfo: true,
@@ -835,7 +836,7 @@ const RightSidebar = ({
 
                 {/* Report Option */}
                 <div 
-                  onClick={() => alert("Đã ghi nhận báo cáo nội dung cuộc trò chuyện.")}
+                  onClick={() => onOpenReportViolation && onOpenReportViolation()}
                   className={`flex items-center gap-3.5 py-2.5 px-2.5 rounded-xl cursor-pointer transition-colors ${
                     darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-100'
                   }`}
