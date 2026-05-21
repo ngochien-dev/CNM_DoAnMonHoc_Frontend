@@ -1,8 +1,8 @@
 import React from 'react';
-import { 
-    FaChevronLeft, FaCloud, FaVideo, FaSearch, FaTh, FaPalette, FaStopCircle, 
-    FaLock, FaSignOutAlt, FaCog, FaUserPlus, FaPauseCircle, FaPlayCircle, 
-    FaBroom, FaChevronRight, FaUsers, FaUserCheck, FaTimes 
+import {
+    FaChevronLeft, FaCloud, FaVideo,
+    FaLock, FaSignOutAlt, FaCog, FaUserPlus,
+    FaChevronRight, FaUsers, FaUserCheck, FaTimes
 } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 
@@ -52,11 +52,11 @@ const ChatHeader = ({
         <>
             <div className={`h-12 flex items-center justify-between px-6 shrink-0 shadow-sm font-black backdrop-blur-md uppercase italic tracking-tighter border-b ${darkMode ? 'border-white/5 bg-white/2' : 'border-gray-200 bg-white/80'}`}>
                 <div className="flex items-center gap-3">
-                    <button onClick={() => setIsSidebarVisible(!isSidebarVisible)} className="p-1 hover:bg-black/5 rounded text-indigo-500 transition-all active:scale-90"><FaChevronLeft size={16} className={!isSidebarVisible ? 'rotate-180' : ''}/></button> 
+                    <button onClick={() => setIsSidebarVisible(!isSidebarVisible)} className="p-1 hover:bg-black/5 rounded text-indigo-500 transition-all active:scale-90"><FaChevronLeft size={16} className={!isSidebarVisible ? 'rotate-180' : ''} /></button>
                     {activeRoom.isDM ? (
                         isCloudActive ? (
                             <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-cyan-400 to-indigo-500 flex items-center justify-center text-white text-xs font-black overflow-hidden border border-cyan-400/20 shrink-0 shadow-inner">
-                                <FaCloud size={14} className="animate-pulse text-cyan-100"/>
+                                <FaCloud size={14} className="animate-pulse text-cyan-100" />
                             </div>
                         ) : (
                             <div className="w-7 h-7 rounded-full bg-indigo-600/20 flex items-center justify-center text-indigo-400 text-xs font-black overflow-hidden border border-indigo-500/10 shrink-0 shadow-inner">
@@ -83,57 +83,19 @@ const ChatHeader = ({
                 <div className="flex items-center gap-4">
                     {/* NÚT GỌI VIDEO - Chỉ hiện ở DM và không phải Cloud */}
                     {activeRoom.isDM && !isCloudActive && (
-                        <button 
-                            onClick={() => handleVideoCall()} 
+                        <button
+                            onClick={() => handleVideoCall()}
                             disabled={isCallBusy}
                             className={`p-1.5 rounded-lg transition-all ${isCallBusy ? 'text-gray-600' : 'text-cyan-400 hover:bg-cyan-500/10'}`}
                             title="Gọi Video"
                         >
-                            <FaVideo size={18}/>
+                            <FaVideo size={18} />
                         </button>
                     )}
-                    
-                    {/* Nút tìm kiếm toàn cầu tạm ẩn theo yêu cầu */}
-                    <button onClick={() => { setShowSearch(!showSearch); setShowGlobalSearch(false); }} className={`p-1.5 rounded-lg transition-all ${showSearch ? 'text-indigo-500 bg-indigo-500/10' : 'text-gray-500 hover:text-white bg-white/5'}`} title="Tìm trong phòng"><FaSearch size={18}/></button>
-                    <button onClick={() => setShowMediaGallery(true)} className="p-1.5 rounded-lg text-gray-500 hover:text-indigo-400 bg-white/5 transition-all" title="Kho Media"><FaTh size={18}/></button>
-                    <button onClick={() => setShowWallpaperModal(true)} className={`p-1.5 rounded-lg transition-all ${currentWallpaper ? 'text-pink-400 bg-pink-500/10' : 'text-gray-500 hover:text-pink-400 bg-white/5'}`} title="Hình nền phòng chat"><FaPalette size={18}/></button>
-                    
-                    {/* Self-destruct timer toggle */}
-                    <div className="relative">
-                        <button 
-                            onClick={() => setShowSelfDestructMenu(!showSelfDestructMenu)}
-                            className={`p-1.5 rounded-lg transition-all ${selfDestructTimer > 0 ? 'text-orange-500 bg-orange-500/10' : 'text-gray-500 hover:text-orange-400 bg-white/5'}`} 
-                            title="Hẹn giờ tự xóa"
-                        >
-                            <FaStopCircle size={18}/>
-                        </button>
-                        {showSelfDestructMenu && (
-                            <div className="absolute right-0 top-full mt-2 bg-[#1e1f22] border border-white/10 rounded-xl p-2 shadow-2xl z-[100] w-40 animate-in fade-in slide-in-from-top-2">
-                                <p className="text-[10px] font-black uppercase text-gray-500 px-2 py-1 mb-1 italic">Hẹn giờ tự xóa</p>
-                                {[
-                                    { label: 'Tắt', value: 0 },
-                                    { label: '1 phút', value: 60 },
-                                    { label: '1 giờ', value: 3600 },
-                                    { label: '1 ngày', value: 86400 }
-                                ].map(opt => (
-                                    <div 
-                                        key={opt.value} 
-                                        onClick={() => {
-                                            setSelfDestructTimer(opt.value);
-                                            setShowSelfDestructMenu(false);
-                                        }}
-                                        className={`p-2 text-xs rounded-lg cursor-pointer transition-colors ${selfDestructTimer === opt.value ? 'bg-orange-500 text-white' : 'hover:bg-white/5 text-gray-400'}`}
-                                    >
-                                        {opt.label}
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
 
                     {/* Secret Chat Toggle (DMs only) */}
                     {activeRoom.isDM && (
-                        <button 
+                        <button
                             onClick={() => {
                                 if (isSecretMode || secretChatStatus !== 'idle') {
                                     socket.emit('close_secret_chat', { roomId: activeRoom.id });
@@ -144,7 +106,7 @@ const ChatHeader = ({
                                     toast("Đã đóng cuộc trò chuyện bí mật.");
                                 } else {
                                     if (!sharedE2EEKey) {
-                                        alert("Đối phương chưa kích hoạt E2EE. Vui lòng chờ họ trực tuyến để thiết lập kết nối an toàn!");
+                                        alert("Đối phương chưa kích hoạt E2EE. Vui lòng chờ họ trực tuyến để thiết lập kết nối an sau!");
                                         return;
                                     }
                                     socket.emit('request_secret_chat', { roomId: activeRoom.id, senderUsername: user.username });
@@ -152,38 +114,34 @@ const ChatHeader = ({
                                     toast("Đã gửi lời mời Chat Bí Mật tới đối phương...");
                                 }
                             }}
-                            className={`p-1.5 rounded-lg transition-all ${
-                                secretChatStatus === 'established' ? 'text-red-500 bg-red-500/10 hover:bg-red-500/20' :
-                                secretChatStatus === 'waiting' ? 'text-yellow-500 bg-yellow-500/10 animate-pulse' :
-                                secretChatStatus === 'requested' ? 'text-blue-500 bg-blue-500/10 animate-bounce' :
-                                'text-gray-500 hover:text-red-400 bg-white/5'
-                            }`} 
+                            className={`p-1.5 rounded-lg transition-all ${secretChatStatus === 'established' ? 'text-red-500 bg-red-500/10 hover:bg-red-500/20' :
+                                    secretChatStatus === 'waiting' ? 'text-yellow-500 bg-yellow-500/10 animate-pulse' :
+                                        secretChatStatus === 'requested' ? 'text-blue-500 bg-blue-500/10 animate-bounce' :
+                                            'text-gray-500 hover:text-red-400 bg-white/5'
+                                }`}
                             title={
                                 secretChatStatus === 'established' ? "Thoát Chat bí mật" :
-                                secretChatStatus === 'waiting' ? "Đang đợi phản hồi..." :
-                                secretChatStatus === 'requested' ? "Lời mời chat bí mật mới!" :
-                                "Bật Chat bí mật (Không lưu Server)"
+                                    secretChatStatus === 'waiting' ? "Đang đợi phản hồi..." :
+                                        secretChatStatus === 'requested' ? "Lời mời chat bí mật mới!" :
+                                            "Bật Chat bí mật (Không lưu Server)"
                             }
                         >
-                            <FaLock size={18}/>
+                            <FaLock size={18} />
                         </button>
                     )}
-                    
+
                     {isMember && !activeRoom.isDM && currentGroup?.owner !== user.username && (
                         <button onClick={handleLeaveGroup} className="text-gray-500 hover:text-red-500 transition-all bg-white/5 hover:bg-red-500/10 p-1.5 rounded-lg" title="Rời nhóm">
-                            <FaSignOutAlt size={18}/>
+                            <FaSignOutAlt size={18} />
                         </button>
                     )}
-                    
-                    {(isAdminOfGroup || isModOfGroup) && !activeRoom.isDM && (<button onClick={() => setShowGroupSettings(true)} className="text-gray-500 hover:text-white transition-all bg-white/5 p-1.5 rounded-lg" title="Cài đặt"><FaCog size={18}/></button>)}
+
+                    {(isAdminOfGroup || isModOfGroup) && !activeRoom.isDM && (<button onClick={() => setShowGroupSettings(true)} className="text-gray-500 hover:text-white transition-all bg-white/5 p-1.5 rounded-lg" title="Cài đặt"><FaCog size={18} /></button>)}
                     {/* P1: Invite to group button */}
                     {(isAdminOfGroup || isModOfGroup) && !activeRoom.isDM && (
-                        <button onClick={() => setShowInviteModal(true)} className="text-gray-500 hover:text-emerald-400 transition-all bg-white/5 p-1.5 rounded-lg" title="Mời thành viên"><FaUserPlus size={18}/></button>
+                        <button onClick={() => setShowInviteModal(true)} className="text-gray-500 hover:text-emerald-400 transition-all bg-white/5 p-1.5 rounded-lg" title="Mời thành viên"><FaUserPlus size={18} /></button>
                     )}
-                    {/* P1: Mute toggle */}
-                    <button onClick={() => toggleMuteRoom(activeRoom.id)} className={`p-1.5 rounded-lg transition-all ${mutedRooms[activeRoom.id] ? 'text-orange-400 bg-orange-500/10' : 'text-gray-500 hover:text-white bg-white/5'}`} title={mutedRooms[activeRoom.id] ? 'Bỏ tắt thông báo' : 'Tắt thông báo'}>{mutedRooms[activeRoom.id] ? <FaPauseCircle size={18}/> : <FaPlayCircle size={18}/>}</button>
-                    <button onClick={clearChatHistory} className="text-gray-500 hover:text-red-500 transition-all bg-white/5 p-1.5 rounded-lg" title="Clear Chat History"><FaBroom/></button>
-                    <button onClick={() => setIsRightSidebarVisible(!isRightSidebarVisible)} className={`p-1.5 rounded-lg transition-all ${isRightSidebarVisible ? 'text-indigo-500 bg-indigo-500/10' : 'text-gray-500 hover:text-white bg-white/5'}`}>{isRightSidebarVisible ? <FaChevronRight size={18}/> : <FaUsers size={18}/>}</button>
+                    <button onClick={() => setIsRightSidebarVisible(!isRightSidebarVisible)} className={`p-1.5 rounded-lg transition-all ${isRightSidebarVisible ? 'text-indigo-500 bg-indigo-500/10' : 'text-gray-500 hover:text-white bg-white/5'}`}>{isRightSidebarVisible ? <FaChevronRight size={18} /> : <FaUsers size={18} />}</button>
                 </div>
             </div>
 
@@ -193,13 +151,13 @@ const ChatHeader = ({
                     <div className="flex items-center gap-3 font-black uppercase text-[10px] italic tracking-widest"><FaUserPlus className="animate-bounce" /> {currentGroup.pendingRequests.filter(un => un !== user.username).length} YÊU CẦU GIA NHẬP</div>
                     <div className="flex gap-2 overflow-x-auto py-1 max-w-[60%] scrollbar-hide">
                         {currentGroup.pendingRequests.map(uname => {
-                            if (uname === user.username) return null; 
+                            if (uname === user.username) return null;
                             return (
                                 <div key={uname} className="bg-black/40 px-3 py-1.5 rounded-full flex items-center gap-3 border border-white/10 shrink-0 shadow-inner group">
                                     <span className="text-[10px] font-black italic">@{uname}</span>
                                     <div className="flex gap-1">
-                                        <button onClick={() => handleApprove(currentGroup.groupId, uname, 'accept')} className="bg-emerald-500 p-1.5 rounded-lg hover:scale-110 shadow-lg transition-all"><FaUserCheck size={10}/></button>
-                                        <button onClick={() => handleApprove(currentGroup.groupId, uname, 'reject')} className="bg-red-500 p-1.5 rounded-lg hover:scale-110 shadow-lg transition-all"><FaTimes size={10}/></button>
+                                        <button onClick={() => handleApprove(currentGroup.groupId, uname, 'accept')} className="bg-emerald-500 p-1.5 rounded-lg hover:scale-110 shadow-lg transition-all"><FaUserCheck size={10} /></button>
+                                        <button onClick={() => handleApprove(currentGroup.groupId, uname, 'reject')} className="bg-red-500 p-1.5 rounded-lg hover:scale-110 shadow-lg transition-all"><FaTimes size={10} /></button>
                                     </div>
                                 </div>
                             )

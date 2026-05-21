@@ -664,9 +664,10 @@ const ChatPage = ({ user, setUser }) => {
             if (!navigator.onLine && !before) {
                 const cached = await getCachedRoomMessages(roomId);
                 if (cached.length > 0) {
+                    const activeCached = cached.filter(m => !m.expiresAt || m.expiresAt > Date.now());
                     setMessages(prev => {
                         const otherRoomMsgs = prev.filter(m => m.roomId !== roomId);
-                        return [...otherRoomMsgs, ...cached];
+                        return [...otherRoomMsgs, ...activeCached];
                     });
                 }
                 setLoadingMessages(false);
@@ -685,22 +686,25 @@ const ChatPage = ({ user, setUser }) => {
                     // Prepend older messages
                     setMessages(prev => {
                         const existingIds = new Set(prev.map(m => m.messageId));
-                        const unique = newMsgs.filter(m => !existingIds.has(m.messageId));
+                        const unique = newMsgs.filter(m => !existingIds.has(m.messageId) && (!m.expiresAt || m.expiresAt > Date.now()));
                         return [...unique, ...prev];
                     });
                 } else {
                     // Initial load for room — merge with existing
+                    const activeNewMsgs = newMsgs.filter(m => !m.expiresAt || m.expiresAt > Date.now());
                     setMessages(prev => {
                         const otherRoomMsgs = prev.filter(m => m.roomId !== roomId);
-                        return [...otherRoomMsgs, ...newMsgs];
+                        return [...otherRoomMsgs, ...activeNewMsgs];
                     });
                     // Cache lại vào IndexedDB sau khi fetch thành công
-                    cacheRoomMessages(roomId, newMsgs).catch(() => { });
+                    cacheRoomMessages(roomId, activeNewMsgs).catch(() => { });
                 }
                 setHasMoreMessages(prev => ({ ...prev, [roomId]: data.hasMore }));
             } else {
                 // Legacy non-paginated response (fallback)
-                const filtered = (Array.isArray(data) ? data : []).filter(msg => !(user.deletedMessages || []).includes(msg.messageId));
+                const filtered = (Array.isArray(data) ? data : [])
+                    .filter(msg => !(user.deletedMessages || []).includes(msg.messageId))
+                    .filter(msg => !msg.expiresAt || msg.expiresAt > Date.now());
                 setMessages(filtered);
                 cacheRoomMessages(roomId, filtered).catch(() => { });
             }
@@ -710,9 +714,10 @@ const ChatPage = ({ user, setUser }) => {
             if (!before) {
                 const cached = await getCachedRoomMessages(roomId);
                 if (cached.length > 0) {
+                    const activeCached = cached.filter(m => !m.expiresAt || m.expiresAt > Date.now());
                     setMessages(prev => {
                         const otherRoomMsgs = prev.filter(m => m.roomId !== roomId);
-                        return [...otherRoomMsgs, ...cached];
+                        return [...otherRoomMsgs, ...activeCached];
                     });
                 }
             }
@@ -738,9 +743,15 @@ const ChatPage = ({ user, setUser }) => {
             if (!localStorage.getItem('user_session')) return;
             const msgData = m.data;
             if (Array.isArray(msgData)) {
-                setMessages(msgData.filter(msg => !(u.data.deletedMessages || []).includes(msg.messageId)));
+                setMessages(msgData
+                    .filter(msg => !(u.data.deletedMessages || []).includes(msg.messageId))
+                    .filter(msg => !msg.expiresAt || msg.expiresAt > Date.now())
+                );
             } else if (msgData.messages) {
-                setMessages(msgData.messages.filter(msg => !(u.data.deletedMessages || []).includes(msg.messageId)));
+                setMessages(msgData.messages
+                    .filter(msg => !(u.data.deletedMessages || []).includes(msg.messageId))
+                    .filter(msg => !msg.expiresAt || msg.expiresAt > Date.now())
+                );
             }
             setAllGroups(g.data);
             setCallHistory(Array.isArray(c.data) ? c.data : c.data?.items || []);
@@ -1997,6 +2008,7 @@ const ChatPage = ({ user, setUser }) => {
                     lastSeenMap={lastSeenMap}
                     mutedRooms={mutedRooms}
                     toggleMuteRoom={toggleMuteRoom}
+                    handleTogglePin={handleTogglePin}
                     clearChatHistory={clearChatHistory}
                     handleExportChat={handleExportChat}
                     handleLeaveGroup={handleLeaveGroup}

@@ -50,6 +50,7 @@ const RightSidebar = ({
   lastSeenMap,
   
   // Handlers and states
+  handleTogglePin,
   mutedRooms = {},
   toggleMuteRoom,
   clearChatHistory,
@@ -436,6 +437,7 @@ const RightSidebar = ({
   // --- MESSENGER STRUCTURED VIEW ---
   const renderChatInfo = () => {
     const isMuted = activeRoom ? !!mutedRooms[activeRoom.id] : false;
+    const isPinned = user?.pinnedRooms?.includes(activeRoom?.id);
     const currentAvatar = isDM 
       ? (onlineUsers[activeRoom.name]?.avatar)
       : (currentGroup?.avatar);
@@ -465,7 +467,7 @@ const RightSidebar = ({
         </div>
 
         {/* Circular Messenger Buttons under Profile */}
-        <div className="flex items-center justify-center gap-6 py-2 border-b border-slate-700/20 pb-5">
+        <div className="flex items-center justify-center gap-4 py-2 border-b border-slate-700/20 pb-5">
           {/* Mute/Unmute */}
           <div className="flex flex-col items-center space-y-1">
             <button
@@ -479,67 +481,72 @@ const RightSidebar = ({
             >
               {isMuted ? <FaBellSlash size={14} /> : <FaBell size={14} />}
             </button>
-            <span className="text-[10px] font-medium text-slate-400">
+            <span className="text-[10px] font-medium text-slate-400 leading-tight text-center">
               {isMuted ? "Bật lại" : "Tắt âm"}
             </span>
           </div>
 
-          {/* Search */}
+          {/* Pin/Unpin Conversation */}
           <div className="flex flex-col items-center space-y-1">
             <button
-              onClick={() => setShowSearch(!showSearch)}
+              onClick={() => handleTogglePin(activeRoom.id, isPinned)}
               className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 ${
-                showSearch 
-                  ? 'bg-indigo-600 text-white' 
+                isPinned
+                  ? 'bg-indigo-600 text-white hover:bg-indigo-700'
                   : darkMode 
                     ? 'bg-white/10 hover:bg-white/20 text-gray-200' 
                     : 'bg-slate-200/80 hover:bg-slate-300/80 text-slate-700'
               }`}
-              title="Tìm kiếm cuộc hội thoại"
+              title={isPinned ? "Bỏ ghim hội thoại" : "Ghim hội thoại"}
             >
-              <FaSearch size={14} />
+              <FaThumbtack size={14} className={isPinned ? '' : 'text-slate-400'} />
             </button>
-            <span className="text-[10px] font-medium text-slate-400">Tìm kiếm</span>
+            <span className="text-[10px] font-medium text-slate-400 leading-tight text-center">
+              {isPinned ? "Bỏ ghim" : "Ghim"}
+            </span>
           </div>
 
-          {/* Video (DM) / Invite (Group) */}
-          {isDM ? (
-            <div className="flex flex-col items-center space-y-1">
-              <button
-                onClick={() => handleVideoCall()}
-                disabled={isCallBusy}
-                className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 ${
-                  isCallBusy
-                    ? 'bg-white/5 text-slate-600 cursor-not-allowed'
-                    : darkMode 
-                      ? 'bg-white/10 hover:bg-white/20 text-gray-200 hover:scale-105' 
-                      : 'bg-slate-200/80 hover:bg-slate-300/80 text-slate-700 hover:scale-105'
-                }`}
-                title="Gọi video"
-              >
-                <FaVideo size={14} />
-              </button>
-              <span className="text-[10px] font-medium text-slate-400">Video</span>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center space-y-1">
-              <button
-                onClick={() => setShowInviteModal(true)}
-                disabled={!canManage}
-                className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 ${
-                  !canManage
-                    ? 'bg-white/5 text-slate-600 cursor-not-allowed opacity-30'
-                    : darkMode 
-                      ? 'bg-white/10 hover:bg-white/20 text-gray-200 hover:scale-105' 
-                      : 'bg-slate-200/80 hover:bg-slate-300/80 text-slate-700 hover:scale-105'
-                }`}
-                title="Thêm thành viên"
-              >
-                <FaUserPlus size={14} />
-              </button>
-              <span className="text-[10px] font-medium text-slate-400">Mời người</span>
-            </div>
-          )}
+          {/* Add member (Groups only) */}
+          <div className="flex flex-col items-center space-y-1">
+            <button
+              onClick={() => !isDM && setShowInviteModal(true)}
+              disabled={isDM || !canManage}
+              className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 ${
+                isDM || !canManage
+                  ? 'bg-white/5 text-slate-600 cursor-not-allowed opacity-35'
+                  : darkMode 
+                    ? 'bg-white/10 hover:bg-white/20 text-gray-200 hover:scale-105' 
+                    : 'bg-slate-200/80 hover:bg-slate-300/80 text-slate-700 hover:scale-105'
+              }`}
+              title={isDM ? "Không thể thêm thành viên vào DM" : "Thêm thành viên"}
+            >
+              <FaUserPlus size={14} />
+            </button>
+            <span className="text-[10px] font-medium text-slate-400 leading-tight text-center">
+              Thêm bạn
+            </span>
+          </div>
+
+          {/* Group Settings (Groups only) */}
+          <div className="flex flex-col items-center space-y-1">
+            <button
+              onClick={() => !isDM && setShowGroupSettings(true)}
+              disabled={isDM || !canManage}
+              className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 ${
+                isDM || !canManage
+                  ? 'bg-white/5 text-slate-600 cursor-not-allowed opacity-35'
+                  : darkMode 
+                    ? 'bg-white/10 hover:bg-white/20 text-gray-200 hover:scale-105' 
+                    : 'bg-slate-200/80 hover:bg-slate-300/80 text-slate-700 hover:scale-105'
+              }`}
+              title={isDM ? "Cài đặt không khả dụng cho DM" : "Cài đặt nhóm"}
+            >
+              <FaCog size={14} />
+            </button>
+            <span className="text-[10px] font-medium text-slate-400 leading-tight text-center">
+              Cài đặt
+            </span>
+          </div>
         </div>
 
         {/* MESSENGER STYLE ACCORDION LIST */}
@@ -570,18 +577,7 @@ const RightSidebar = ({
                   <FaThumbtack size={12} className="text-slate-400" />
                   <span className={`text-[12.5px] ${darkMode ? 'text-gray-200' : 'text-slate-700'}`}>Xem tin nhắn đã ghim</span>
                 </div>
-                <div 
-                  onClick={handleCycleSelfDestruct}
-                  className={`flex items-center gap-3.5 py-2.5 px-2 rounded-xl cursor-pointer transition-colors ${
-                    darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-100'
-                  }`}
-                >
-                  <FaClock size={12} className="text-slate-400" />
-                  <div className="flex-1 flex justify-between items-center pr-2">
-                    <span className={`text-[12.5px] ${darkMode ? 'text-gray-200' : 'text-slate-700'}`}>Hẹn giờ tự hủy tin nhắn</span>
-                    <span className="text-[11px] font-black text-orange-400 uppercase tracking-widest">{getSelfDestructTimerLabel()}</span>
-                  </div>
-                </div>
+
               </div>
             )}
           </div>

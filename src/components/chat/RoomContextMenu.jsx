@@ -104,24 +104,7 @@ const RoomContextMenu = ({
                     <FaEyeSlash size={12} className="text-slate-400" /><span>Ẩn trò chuyện</span>
                 </button>
 
-                {/* 6. Tin nhắn tự xóa */}
-                <div className={`relative group/sub w-full flex items-center justify-between px-3 py-2 rounded-xl text-left text-xs font-semibold cursor-pointer transition-colors ${darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-100'}`}>
-                    <div className="flex items-center gap-2.5">
-                        <FaClock size={12} className="text-slate-400" /><span>Tin nhắn tự xóa</span>
-                    </div>
-                    <FaChevronRight size={8} className="text-slate-400" />
 
-                    {/* Submenu Tự xóa */}
-                    <div className={`absolute left-full top-0 ml-1.5 hidden group-hover/sub:block w-40 rounded-xl border p-1.5 flex flex-col shadow-xl ${darkMode ? 'bg-[#1e1f22] border-white/10 text-gray-200' : 'bg-white border-gray-200 text-slate-800'}`}>
-                        <p className="text-[9px] font-black uppercase text-gray-500 px-2 py-1 mb-1 tracking-wider">Thời gian tự hủy</p>
-                        {[{ label: 'Tắt', value: 0 }, { label: '1 ngày', value: 86400 }, { label: '7 ngày', value: 604800 }, { label: '30 ngày', value: 2592000 }].map(opt => (
-                            <button key={opt.value} onClick={() => { updateRoomSelfDestructTimer(menu.roomId, opt.value); onClose(); }} className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-[11px] font-medium transition-colors ${darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-50'}`}>
-                                <span>{opt.label}</span>
-                                {(selfDestructTimers[menu.roomId] || 0) === opt.value && <FaCheck size={8} className="text-orange-500" />}
-                            </button>
-                        ))}
-                    </div>
-                </div>
 
                 <div className={`my-1 border-t ${darkMode ? 'border-white/5' : 'border-gray-100'}`} />
 
