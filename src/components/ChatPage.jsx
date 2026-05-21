@@ -57,6 +57,7 @@ import ChatInput from './chat/ChatInput';
 import useChatSocket from '../hooks/useChatSocket';
 import useE2EE from '../hooks/useE2EE';
 import useDrafts from '../hooks/useDrafts';
+import useFCM from '../hooks/useFCM';
 
 import useCall from '../context/useCall';
 import { getSocket, connectSocket, disconnectSocket } from '../services/socket';
@@ -72,6 +73,7 @@ import useOfflineSync from '../hooks/useOfflineSync';
 
 const ChatPage = ({ user, setUser }) => {
     const socket = getSocket();
+    useFCM(user);
     const [msgInput, setMsgInput] = useState('');
     const [messages, setMessages] = useState([]);
     const [onlineUsers, setOnlineUsers] = useState({});
@@ -260,6 +262,67 @@ const ChatPage = ({ user, setUser }) => {
             }
         },
     });
+
+    // ─── Push Notification FCM & Badge Count Effects ─────────────────────────────
+    // Cập nhật số tin nhắn chưa đọc lên tiêu đề trang (badge count)
+    useEffect(() => {
+        const totalUnread = Object.values(unreadCounts).reduce((sum, count) => sum + (count || 0), 0);
+        if (totalUnread > 0) {
+            document.title = `(${totalUnread}) OTT Chat`;
+        } else {
+            document.title = 'OTT Chat';
+        }
+    }, [unreadCounts]);
+
+    // Xử lý chuyển phòng từ Service Worker background click (khi app đang chạy)
+    useEffect(() => {
+        const handleServiceWorkerMessage = (event) => {
+            if (event.data && event.data.type === 'NAVIGATE_ROOM' && event.data.roomId) {
+                const roomId = event.data.roomId;
+                const isDM = roomId.startsWith('dm_');
+                let roomName = '';
+                if (isDM) {
+                    const parts = roomId.replace('dm_', '').split('_');
+                    const other = parts.find(p => p !== user?.username);
+                    roomName = other || '';
+                } else {
+                    const group = allGroups.find(g => g.groupId === roomId);
+                    roomName = group ? group.groupName : 'Nhóm';
+                }
+                handleSwitchRoom({ id: roomId, name: roomName, isDM });
+            }
+        };
+
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
+        }
+
+        return () => {
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
+            }
+        };
+    }, [allGroups, user?.username]);
+
+    // Xử lý chuyển phòng từ Service Worker background click (khi app khởi chạy mới)
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const urlRoomId = params.get('roomId');
+        if (urlRoomId && allGroups.length > 0 && user?.username) {
+            const isDM = urlRoomId.startsWith('dm_');
+            let roomName = '';
+            if (isDM) {
+                const parts = urlRoomId.replace('dm_', '').split('_');
+                const other = parts.find(p => p !== user.username);
+                roomName = other || '';
+            } else {
+                const group = allGroups.find(g => g.groupId === urlRoomId);
+                roomName = group ? group.groupName : 'Nhóm';
+            }
+            handleSwitchRoom({ id: urlRoomId, name: roomName, isDM });
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+    }, [allGroups, user?.username]);
 
 
 
