@@ -218,6 +218,53 @@ const GroupSettingsModal = ({
                                     </div>
                                 )}
                             </div>
+
+                            {/* Member Approval Settings */}
+                            <div className="p-3 rounded-2xl bg-white/5 border border-white/5 space-y-3">
+                                <p className="text-xs font-bold text-slate-200">Chính sách phê duyệt thành viên</p>
+                                
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className="text-[11px] font-bold text-slate-300">Thành viên thường mời bạn</p>
+                                        <p className="text-[8px] text-gray-400 font-bold">Yêu cầu quản trị viên phê duyệt</p>
+                                    </div>
+                                    <button
+                                        onClick={async () => {
+                                            try {
+                                                await api.post('/groups/toggle-invite-approval', { groupId: activeRoom.id });
+                                                toast.success("Đã cập nhật chính sách phê duyệt lời mời!");
+                                                loadData();
+                                            } catch (err) {
+                                                toast.error(err.response?.data?.error || "Lỗi cập nhật!");
+                                            }
+                                        }}
+                                        className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all ${currentGroup?.inviteApprovalRequired ? 'bg-amber-600 text-white' : 'bg-slate-700 text-gray-300'}`}
+                                    >
+                                        {currentGroup?.inviteApprovalRequired ? 'Cần duyệt' : 'Vào thẳng'}
+                                    </button>
+                                </div>
+
+                                <div className="flex items-center justify-between border-t border-white/5 pt-3">
+                                    <div>
+                                        <p className="text-[11px] font-bold text-slate-300">Tham gia qua liên kết mời</p>
+                                        <p className="text-[8px] text-gray-400 font-bold">Yêu cầu phê duyệt khi người ngoài click link</p>
+                                    </div>
+                                    <button
+                                        onClick={async () => {
+                                            try {
+                                                await api.post('/groups/toggle-link-approval', { groupId: activeRoom.id });
+                                                toast.success("Đã cập nhật chính sách phê duyệt liên kết!");
+                                                loadData();
+                                            } catch (err) {
+                                                toast.error(err.response?.data?.error || "Lỗi cập nhật!");
+                                            }
+                                        }}
+                                        className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all ${currentGroup?.linkApprovalRequired ? 'bg-amber-600 text-white' : 'bg-slate-700 text-gray-300'}`}
+                                    >
+                                        {currentGroup?.linkApprovalRequired ? 'Cần duyệt' : 'Vào thẳng'}
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     )}
 

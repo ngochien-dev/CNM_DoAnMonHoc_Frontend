@@ -334,15 +334,19 @@ const ChatPage = ({ user, setUser }) => {
                 const toastId = toast.loading("Đang tự động tham gia nhóm từ liên kết mời...");
                 try {
                     const response = await api.post('/groups/join-by-invite', { token: pendingToken });
-                    const { groupId } = response.data;
-                    toast.success("Tự động tham gia nhóm thành công!", { id: toastId });
-                    
-                    // Tải lại dữ liệu nhóm mới
-                    await loadData();
-                    
-                    // Chuyển tới phòng chat mới
-                    const groupName = response.data.groupName || 'Nhóm mới';
-                    handleSwitchRoom({ id: groupId, name: groupName, isDM: false });
+                    const { groupId, joined } = response.data;
+                    if (joined === false) {
+                        toast.success("Đã gửi yêu cầu gia nhập nhóm từ liên kết mời. Vui lòng chờ phê duyệt!", { id: toastId });
+                    } else {
+                        toast.success("Tự động tham gia nhóm thành công!", { id: toastId });
+                        
+                        // Tải lại dữ liệu nhóm mới
+                        await loadData();
+                        
+                        // Chuyển tới phòng chat mới
+                        const groupName = response.data.groupName || 'Nhóm mới';
+                        handleSwitchRoom({ id: groupId, name: groupName, isDM: false });
+                    }
                 } catch (error) {
                     console.error("Auto join group failed:", error);
                     toast.error(error.response?.data?.error || "Không thể tự động gia nhập nhóm từ liên kết mời!", { id: toastId });

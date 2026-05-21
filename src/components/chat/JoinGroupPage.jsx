@@ -32,13 +32,18 @@ const JoinGroupPage = ({ user }) => {
         const joinGroup = async () => {
             try {
                 const response = await api.post('/groups/join-by-invite', { token });
-                setStatus('success');
-                toast.success("Tham gia nhóm thành công!");
-                
-                // Tự động chuyển hướng tới phòng chat vừa tham gia sau 1.5 giây
-                setTimeout(() => {
-                    navigate(`/chat?roomId=${response.data.groupId}`);
-                }, 1500);
+                if (response.data && response.data.joined === false) {
+                    setStatus('pending_approval');
+                    toast.success("Đã gửi yêu cầu gia nhập nhóm!");
+                } else {
+                    setStatus('success');
+                    toast.success("Tham gia nhóm thành công!");
+                    
+                    // Tự động chuyển hướng tới phòng chat vừa tham gia sau 1.5 giây
+                    setTimeout(() => {
+                        navigate(`/chat?roomId=${response.data.groupId}`);
+                    }, 1500);
+                }
             } catch (error) {
                 setStatus('error');
                 setErrorMessage(error.response?.data?.error || "Không thể gia nhập nhóm. Vui lòng thử lại!");
@@ -60,6 +65,24 @@ const JoinGroupPage = ({ user }) => {
                         <FaSpinner className="w-12 h-12 text-indigo-500 animate-spin" />
                         <h2 className="text-xl font-black uppercase tracking-wider">Đang xử lý mã mời</h2>
                         <p className="text-sm opacity-60">Hệ thống đang xác thực liên kết mời của bạn...</p>
+                    </div>
+                )}
+
+                {status === 'pending_approval' && (
+                    <div className="flex flex-col items-center justify-center py-8 space-y-4 animate-in zoom-in-95">
+                        <div className="w-16 h-16 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-500 border border-amber-500/20 shadow-inner">
+                            <FaSpinner className="w-8 h-8 animate-spin" />
+                        </div>
+                        <h2 className="text-xl font-black uppercase tracking-wider text-amber-500">Đang chờ duyệt</h2>
+                        <p className="text-sm opacity-80 font-bold">Yêu cầu gia nhập nhóm của bạn đã được gửi.</p>
+                        <p className="text-xs opacity-60 max-w-xs mx-auto">Chủ nhóm hoặc Phó nhóm cần phê duyệt yêu cầu này trước khi bạn có thể vào phòng chat.</p>
+                        
+                        <button 
+                            onClick={() => navigate('/')} 
+                            className="mt-6 px-6 py-3 bg-gradient-to-r from-orange-500 to-indigo-500 hover:from-orange-600 hover:to-indigo-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest transition-all shadow-lg active:scale-95"
+                        >
+                            Trở về trang chủ
+                        </button>
                     </div>
                 )}
 

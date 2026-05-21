@@ -313,11 +313,11 @@ const RightSidebar = ({
   const currentGroup = allGroups.find((g) => g.groupId === activeRoom?.id);
   const isDM = activeRoom?.isDM;
 
-  // Permissions
   const isSysAdmin = user?.role === 'admin';
   const isOwner = currentGroup?.owner === user?.username;
   const isMod = currentGroup?.mods?.includes(user?.username);
   const canManage = isSysAdmin || isOwner || isMod;
+  const isMember = currentGroup?.members?.includes(user?.username);
 
   const toggleSection = (section) => {
     setExpandedSections(prev => ({
@@ -510,9 +510,9 @@ const RightSidebar = ({
           <div className="flex flex-col items-center space-y-1">
             <button
               onClick={() => !isDM && setShowInviteModal(true)}
-              disabled={isDM || !canManage}
+              disabled={isDM || !isMember}
               className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 ${
-                isDM || !canManage
+                isDM || !isMember
                   ? 'bg-white/5 text-slate-600 cursor-not-allowed opacity-35'
                   : darkMode 
                     ? 'bg-white/10 hover:bg-white/20 text-gray-200 hover:scale-105' 

@@ -138,7 +138,7 @@ const ChatHeader = ({
 
                     {(isAdminOfGroup || isModOfGroup) && !activeRoom.isDM && (<button onClick={() => setShowGroupSettings(true)} className="text-gray-500 hover:text-white transition-all bg-white/5 p-1.5 rounded-lg" title="Cài đặt"><FaCog size={18} /></button>)}
                     {/* P1: Invite to group button */}
-                    {(isAdminOfGroup || isModOfGroup) && !activeRoom.isDM && (
+                    {isMember && !activeRoom.isDM && (
                         <button onClick={() => setShowInviteModal(true)} className="text-gray-500 hover:text-emerald-400 transition-all bg-white/5 p-1.5 rounded-lg" title="Mời thành viên"><FaUserPlus size={18} /></button>
                     )}
                     <button onClick={() => setIsRightSidebarVisible(!isRightSidebarVisible)} className={`p-1.5 rounded-lg transition-all ${isRightSidebarVisible ? 'text-indigo-500 bg-indigo-500/10' : 'text-gray-500 hover:text-white bg-white/5'}`}>{isRightSidebarVisible ? <FaChevronRight size={18} /> : <FaUsers size={18} />}</button>
