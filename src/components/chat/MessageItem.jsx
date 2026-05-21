@@ -91,18 +91,6 @@ const MessageItem = ({
                                 <FaLock size={10} /> Chat Bí Mật (Không lưu server)
                             </div>
                         )}
-                        {msg.expiresAt && !msg.isRevoked && (
-                            <div className={`mb-2 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest ${isMe ? 'text-indigo-200/60' : 'text-gray-400'}`}>
-                                <div className="w-2 h-2 rounded-full bg-orange-500 animate-ping"></div>
-                                <FaStopCircle size={10} />
-                                Tự hủy sau: {(() => {
-                                    const remaining = Math.max(0, Math.ceil((msg.expiresAt - Date.now()) / 1000));
-                                    if (remaining < 60) return `${remaining} giây`;
-                                    if (remaining < 3600) return `${Math.ceil(remaining / 60)} phút`;
-                                    return `${Math.ceil(remaining / 3600)} giờ`;
-                                })()}
-                            </div>
-                        )}
                         {!msg.isRevoked && msg.msgType === 'sticker' ? (
                             <img src={msg.fileData} className="w-40 h-40 object-contain animate-in zoom-in-50" alt="sticker" />
                         ) : (

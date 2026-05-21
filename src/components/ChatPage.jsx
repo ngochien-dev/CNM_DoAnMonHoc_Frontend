@@ -135,19 +135,6 @@ const ChatPage = ({ user, setUser }) => {
     const [showInviteModal, setShowInviteModal] = useState(false); // P1: Invite to group modal
     const [lastSeenMap, setLastSeenMap] = useState({}); // P1: Last seen timestamps
     const [activeSidebarTab, setActiveSidebarTab] = useState('all'); // Folders: all, personal, groups, unread
-    const [selfDestructTimers, setSelfDestructTimers] = useState(() => {
-        try { return JSON.parse(localStorage.getItem('selfDestructTimers') || '{}'); } catch { return {}; }
-    });
-    const selfDestructTimer = activeRoom ? (selfDestructTimers[activeRoom.id] || 0) : 0;
-    const setSelfDestructTimer = (val) => {
-        if (!activeRoom?.id) return;
-        setSelfDestructTimers(prev => {
-            const next = { ...prev, [activeRoom.id]: val };
-            if (val === 0) delete next[activeRoom.id];
-            localStorage.setItem('selfDestructTimers', JSON.stringify(next));
-            return next;
-        });
-    };
     const [activeRoomMenu, setActiveRoomMenu] = useState(null); // { roomId, name, isDM, isPinned, x, y }
 
     const toggleRoomClassification = (folderId, roomId) => {
@@ -182,21 +169,9 @@ const ChatPage = ({ user, setUser }) => {
         toast.success(durationMs === null ? 'Đã bật lại thông báo' : 'Đã tắt thông báo cuộc trò chuyện');
     };
 
-    const updateRoomSelfDestructTimer = (roomId, val) => {
-        if (!roomId) return;
-        setSelfDestructTimers(prev => {
-            const next = { ...prev, [roomId]: val };
-            if (val === 0) delete next[roomId];
-            localStorage.setItem('selfDestructTimers', JSON.stringify(next));
-            return next;
-        });
-        toast.success(`Đã đặt hẹn giờ tự xóa tin nhắn`);
-    };
-
     const [isSecretMode, setIsSecretMode] = useState(false); // P2: Secret Chat (no server logs)
     const [secretChatStatus, setSecretChatStatus] = useState('idle'); // 'idle' | 'waiting' | 'requested' | 'established'
     const [secretChatRequester, setSecretChatRequester] = useState(null);
-    const [showSelfDestructMenu, setShowSelfDestructMenu] = useState(false);
     const [viewingStories, setViewingStories] = useState(null); // { username, stories, allGroupedStories }
     const [showStoryUpload, setShowStoryUpload] = useState(false);
 
@@ -215,14 +190,6 @@ const ChatPage = ({ user, setUser }) => {
     const [isPinListExpanded, setIsPinListExpanded] = useState(false);
     const [showMentionPopup, setShowMentionPopup] = useState(false);
     const [mentionSearchQuery, setMentionSearchQuery] = useState('');
-
-    // P2: Periodically clean up expired messages from state
-    useEffect(() => {
-        const timer = setInterval(() => {
-            setMessages(prev => prev.filter(m => !m.expiresAt || m.expiresAt > Date.now()));
-        }, 5000); // Check every 5s
-        return () => clearInterval(timer);
-    }, []);
 
     const scrollRef = useRef(null);
     const activeRoomRef = useRef(null);
@@ -670,7 +637,7 @@ const ChatPage = ({ user, setUser }) => {
             if (!navigator.onLine && !before) {
                 const cached = await getCachedRoomMessages(roomId);
                 if (cached.length > 0) {
-                    const activeCached = cached.filter(m => !m.expiresAt || m.expiresAt > Date.now());
+                    const activeCached = cached;
                     setMessages(prev => {
                         const otherRoomMsgs = prev.filter(m => m.roomId !== roomId);
                         return [...otherRoomMsgs, ...activeCached];
@@ -692,12 +659,12 @@ const ChatPage = ({ user, setUser }) => {
                     // Prepend older messages
                     setMessages(prev => {
                         const existingIds = new Set(prev.map(m => m.messageId));
-                        const unique = newMsgs.filter(m => !existingIds.has(m.messageId) && (!m.expiresAt || m.expiresAt > Date.now()));
+                        const unique = newMsgs.filter(m => !existingIds.has(m.messageId));
                         return [...unique, ...prev];
                     });
                 } else {
                     // Initial load for room — merge with existing
-                    const activeNewMsgs = newMsgs.filter(m => !m.expiresAt || m.expiresAt > Date.now());
+                    const activeNewMsgs = newMsgs;
                     setMessages(prev => {
                         const otherRoomMsgs = prev.filter(m => m.roomId !== roomId);
                         return [...otherRoomMsgs, ...activeNewMsgs];
@@ -709,8 +676,7 @@ const ChatPage = ({ user, setUser }) => {
             } else {
                 // Legacy non-paginated response (fallback)
                 const filtered = (Array.isArray(data) ? data : [])
-                    .filter(msg => !(user.deletedMessages || []).includes(msg.messageId))
-                    .filter(msg => !msg.expiresAt || msg.expiresAt > Date.now());
+                    .filter(msg => !(user.deletedMessages || []).includes(msg.messageId));
                 setMessages(filtered);
                 cacheRoomMessages(roomId, filtered).catch(() => { });
             }
@@ -720,7 +686,7 @@ const ChatPage = ({ user, setUser }) => {
             if (!before) {
                 const cached = await getCachedRoomMessages(roomId);
                 if (cached.length > 0) {
-                    const activeCached = cached.filter(m => !m.expiresAt || m.expiresAt > Date.now());
+                    const activeCached = cached;
                     setMessages(prev => {
                         const otherRoomMsgs = prev.filter(m => m.roomId !== roomId);
                         return [...otherRoomMsgs, ...activeCached];
@@ -751,12 +717,10 @@ const ChatPage = ({ user, setUser }) => {
             if (Array.isArray(msgData)) {
                 setMessages(msgData
                     .filter(msg => !(u.data.deletedMessages || []).includes(msg.messageId))
-                    .filter(msg => !msg.expiresAt || msg.expiresAt > Date.now())
                 );
             } else if (msgData.messages) {
                 setMessages(msgData.messages
                     .filter(msg => !(u.data.deletedMessages || []).includes(msg.messageId))
-                    .filter(msg => !msg.expiresAt || msg.expiresAt > Date.now())
                 );
             }
             setAllGroups(g.data);
@@ -851,7 +815,6 @@ const ChatPage = ({ user, setUser }) => {
         setIsSecretMode(false); // Reset secret mode on room switch
         setSecretChatStatus('idle');
         setSecretChatRequester(null);
-        setShowSelfDestructMenu(false);
         if (room) {
             setUnreadCounts(prev => ({ ...prev, [room.id]: 0 }));
             // P0: Load messages for the new room (pagination)
@@ -1089,10 +1052,6 @@ const ChatPage = ({ user, setUser }) => {
             payload.isEncrypted = true;
             payload.iv = iv;
         }
-        if (selfDestructTimer > 0) {
-            payload.expiresAt = Date.now() + (selfDestructTimer * 1000);
-            payload.ttl = Math.floor(payload.expiresAt / 1000); // DynamoDB TTL
-        }
         if (replyingToMessage) {
             payload.replyTo = {
                 messageId: replyingToMessage.messageId,
@@ -1140,10 +1099,6 @@ const ChatPage = ({ user, setUser }) => {
                 createdAt: new Date().toISOString()
             };
             if (isSecretMode) payload.isSecret = true;
-            if (selfDestructTimer > 0) {
-                payload.expiresAt = Date.now() + (selfDestructTimer * 1000);
-                payload.ttl = Math.floor(payload.expiresAt / 1000);
-            }
             if (replyingToMessage) {
                 payload.replyTo = {
                     messageId: replyingToMessage.messageId,
@@ -1651,10 +1606,6 @@ const ChatPage = ({ user, setUser }) => {
                             setShowGlobalSearch={setShowGlobalSearch}
                             currentWallpaper={currentWallpaper}
                             setShowWallpaperModal={setShowWallpaperModal}
-                            showSelfDestructMenu={showSelfDestructMenu}
-                            setShowSelfDestructMenu={setShowSelfDestructMenu}
-                            selfDestructTimer={selfDestructTimer}
-                            setSelfDestructTimer={setSelfDestructTimer}
                             isSecretMode={isSecretMode}
                             secretChatStatus={secretChatStatus}
                             setIsSecretMode={setIsSecretMode}
@@ -2022,8 +1973,6 @@ const ChatPage = ({ user, setUser }) => {
                     setShowInviteModal={setShowInviteModal}
                     setShowMediaGallery={setShowMediaGallery}
                     setShowWallpaperModal={setShowWallpaperModal}
-                    selfDestructTimer={selfDestructTimer}
-                    setSelfDestructTimer={setSelfDestructTimer}
                     handleVideoCall={handleVideoCall}
                     isCallBusy={isCallBusy}
                     setShowSearch={setShowSearch}
@@ -2063,8 +2012,6 @@ const ChatPage = ({ user, setUser }) => {
                 toggleMuteRoomDuration={toggleMuteRoomDuration}
                 mutedRooms={mutedRooms}
                 handleToggleArchive={handleToggleArchive}
-                updateRoomSelfDestructTimer={updateRoomSelfDestructTimer}
-                selfDestructTimers={selfDestructTimers}
                 clearChatHistory={clearChatHistory}
             />
 

@@ -59,8 +59,6 @@ const RightSidebar = ({
   setShowInviteModal,
   setShowMediaGallery,
   setShowWallpaperModal,
-  selfDestructTimer,
-  setSelfDestructTimer,
   handleVideoCall,
   isCallBusy,
   setShowSearch,
@@ -345,20 +343,6 @@ const RightSidebar = ({
     const hours = Math.floor(mins / 60);
     if (hours < 24) return `${hours} giờ trước`;
     return `${Math.floor(hours / 24)} ngày trước`;
-  };
-
-  const getSelfDestructTimerLabel = () => {
-    if (selfDestructTimer === 60) return "1 phút";
-    if (selfDestructTimer === 3600) return "1 giờ";
-    if (selfDestructTimer === 86400) return "1 ngày";
-    return "Tắt";
-  };
-
-  // Switch to next self destruct timer option
-  const handleCycleSelfDestruct = () => {
-    const options = [0, 60, 3600, 86400];
-    const nextIdx = (options.indexOf(selfDestructTimer) + 1) % options.length;
-    setSelfDestructTimer(options[nextIdx]);
   };
 
   // --- HOME TAB / FRIENDS VIEW ---

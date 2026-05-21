@@ -8,7 +8,7 @@ const RoomContextMenu = ({
     menu, onClose, darkMode, handleTogglePin, customFolders, toggleRoomClassification,
     setEditingFolder, setFolderName, setFolderRooms, setShowFolderModal,
     unreadCounts, setUnreadCounts, toggleMuteRoomDuration, mutedRooms,
-    handleToggleArchive, selfDestructTimers, updateRoomSelfDestructTimer, clearChatHistory
+    handleToggleArchive, clearChatHistory
 }) => {
     if (!menu) return null;
 
