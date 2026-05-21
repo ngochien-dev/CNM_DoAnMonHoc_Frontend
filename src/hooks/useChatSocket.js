@@ -186,6 +186,10 @@ const useChatSocket = ({
             }
         });
 
+        socket.on('error_message', ({ error }) => {
+            toast.error(error || "Đã xảy ra lỗi khi gửi tin nhắn!");
+        });
+
         socket.on('force_logout', ({ username, reason, sessionId }) => {
             if (username === user.username) {
                 const currentSess = JSON.parse(localStorage.getItem('user_session') || '{}');
@@ -219,6 +223,7 @@ const useChatSocket = ({
             socket.off('secret_chat_closed');
             socket.off('force_logout');
             socket.off('message_pinned');
+            socket.off('error_message');
             socket.io?.off('reconnect');
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -21,7 +21,14 @@ const GroupSettingsModal = ({
     const [renameGroupValue, setRenameGroupValue] = useState("");
     const groupFileRef = useRef(null);
 
+    const [activeMuteSelect, setActiveMuteSelect] = useState(null);
+
     if (!isOpen || !activeRoom) return null;
+
+    const handleClose = () => {
+        setActiveMuteSelect(null);
+        onClose();
+    };
 
     const handleGroupAvatarChange = (e) => {
         const file = e.target.files[0];
@@ -63,10 +70,10 @@ const GroupSettingsModal = ({
                         <h2 className="text-xl font-black uppercase italic tracking-tighter">Cấu hình #{activeRoom.name}</h2>
                         <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest opacity-60 italic uppercase">Admin Control Center</p>
                     </div>
-                    <button onClick={onClose} className="w-10 h-10 flex items-center justify-center bg-white/5 hover:bg-red-500 rounded-full transition-all"><FaTimes/></button>
+                    <button onClick={handleClose} className="w-10 h-10 flex items-center justify-center bg-white/5 hover:bg-red-500 rounded-full transition-all"><FaTimes/></button>
                 </div>
                 
-                <div className="p-8 space-y-8 font-bold">
+                <div className="p-8 space-y-8 font-bold max-h-[70vh] overflow-y-auto scrollbar-hide">
                     {/* Rename Group */}
                     {(isAdminOfGroup || isModOfGroup) && (
                         <div className="space-y-3">
@@ -83,7 +90,7 @@ const GroupSettingsModal = ({
                                         if (!renameGroupValue.trim()) return; 
                                         await api.post('/groups/rename', { groupId: activeRoom.id, newName: renameGroupValue.trim() }); 
                                         setRenameGroupValue(''); 
-                                        onClose();
+                                        handleClose();
                                         loadData(); 
                                         handleSwitchRoom({ id: activeRoom.id, name: renameGroupValue.trim() });
                                     }} 
@@ -124,8 +131,98 @@ const GroupSettingsModal = ({
                         </div>
                     )}
 
+                    {/* Invite Link & Channel Mode Management */}
+                    {(isAdminOfGroup || isModOfGroup) && (
+                        <div className="space-y-4 border-t border-white/5 pt-4">
+                            <p className="text-[9px] font-black uppercase text-gray-500 tracking-[2px] italic border-l-2 border-emerald-500 pl-3">Liên kết mời & Kênh</p>
+                            
+                            {/* Channel Mode Toggle */}
+                            <div className="flex items-center justify-between p-3 rounded-2xl bg-white/5 border border-white/5">
+                                <div className="flex-1">
+                                    <p className="text-xs font-bold text-slate-200">Chế độ kênh thông báo</p>
+                                    <p className="text-[9px] text-gray-400 font-bold">Chỉ cho phép Chủ nhóm & Phó nhóm gửi tin nhắn</p>
+                                </div>
+                                <button
+                                    onClick={async () => {
+                                        try {
+                                            await api.post('/groups/toggle-channel', { groupId: activeRoom.id });
+                                            toast.success("Đã cập nhật chế độ kênh!");
+                                            loadData();
+                                        } catch (err) {
+                                            toast.error(err.response?.data?.error || "Lỗi thay đổi chế độ kênh!");
+                                        }
+                                    }}
+                                    className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all ${currentGroup?.isChannel ? 'bg-indigo-600 text-white' : 'bg-slate-700 text-gray-300'}`}
+                                >
+                                    {currentGroup?.isChannel ? 'Đang bật' : 'Đang tắt'}
+                                </button>
+                            </div>
+
+                            {/* Invite Link Manager */}
+                            <div className="p-3 rounded-2xl bg-white/5 border border-white/5 space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className="text-xs font-bold text-slate-200">Liên kết mời thành viên</p>
+                                        <p className="text-[9px] text-gray-400 font-bold">Cho phép người khác tham gia qua liên kết</p>
+                                    </div>
+                                    <button
+                                        onClick={async () => {
+                                            try {
+                                                const enabled = !currentGroup?.inviteLinkEnabled;
+                                                await api.post('/groups/invite-link/toggle', { groupId: activeRoom.id, enabled });
+                                                toast.success(enabled ? "Đã bật liên kết mời!" : "Đã tắt liên kết mời!");
+                                                loadData();
+                                            } catch (err) {
+                                                toast.error(err.response?.data?.error || "Lỗi bật/tắt liên kết mời!");
+                                            }
+                                        }}
+                                        className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all ${currentGroup?.inviteLinkEnabled ? 'bg-emerald-600 text-white' : 'bg-slate-700 text-gray-300'}`}
+                                    >
+                                        {currentGroup?.inviteLinkEnabled ? 'Đang bật' : 'Đang tắt'}
+                                    </button>
+                                </div>
+
+                                {currentGroup?.inviteLinkEnabled && currentGroup?.inviteToken && (
+                                    <div className="space-y-2 animate-in slide-in-from-top-1">
+                                        <div className="flex gap-2">
+                                            <input
+                                                readOnly
+                                                value={`${window.location.origin}/join/${currentGroup.inviteToken}`}
+                                                className={`flex-1 p-2.5 rounded-xl border border-white/10 text-[11px] outline-none font-mono ${darkMode ? 'bg-black/40 text-slate-300' : 'bg-gray-100 text-slate-700'}`}
+                                            />
+                                            <button
+                                                onClick={() => {
+                                                    navigator.clipboard.writeText(`${window.location.origin}/join/${currentGroup.inviteToken}`);
+                                                    toast.success("Đã sao chép liên kết mời!");
+                                                }}
+                                                className="px-3 bg-indigo-600 text-white rounded-xl font-black uppercase text-[9px] tracking-wider hover:bg-indigo-500 transition-all"
+                                            >
+                                                Sao chép
+                                            </button>
+                                        </div>
+                                        <button
+                                            onClick={async () => {
+                                                if (!window.confirm("Bạn có chắc chắn muốn làm mới liên kết mời? Các liên kết cũ sẽ không thể sử dụng.")) return;
+                                                try {
+                                                    await api.post('/groups/invite-link/reset', { groupId: activeRoom.id });
+                                                    toast.success("Đã làm mới liên kết mời!");
+                                                    loadData();
+                                                } catch (err) {
+                                                    toast.error(err.response?.data?.error || "Lỗi làm mới liên kết mời!");
+                                                }
+                                            }}
+                                            className="text-[9px] font-black text-indigo-400 hover:text-indigo-300 transition-colors uppercase tracking-widest"
+                                        >
+                                            Làm mới liên kết mời (Reset)
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
                     {isAdminOfGroup && (
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-2 gap-4 border-t border-white/5 pt-4">
                             <button onClick={() => handleManageGroup('disable')} className={`p-4 rounded-2xl border-2 flex items-center justify-center gap-2 uppercase text-[10px] font-black transition-all ${currentGroup?.isDisabled ? 'border-emerald-500 text-emerald-500 bg-emerald-500/5 shadow-inner' : 'border-red-500 text-red-500 bg-red-500/5 shadow-inner'}`}>
                                 {currentGroup?.isDisabled ? <><FaPlayCircle size={14}/> Mở cửa</> : <><FaPauseCircle size={14}/> Khóa chat</>}
                             </button>
@@ -136,7 +233,7 @@ const GroupSettingsModal = ({
                     )}
 
                     {!currentGroup?.isPublic && (
-                        <div className="space-y-3 max-h-[300px] overflow-y-auto scrollbar-hide">
+                        <div className="space-y-3 max-h-[300px] overflow-y-auto scrollbar-hide border-t border-white/5 pt-4">
                             <p className="text-[9px] font-black uppercase text-gray-500 tracking-[2px] italic mb-4 border-l-2 border-indigo-500 pl-3">Đội ngũ thám hiểm ({currentGroup?.members?.length})</p>
                             {currentGroup?.members?.map(u => {
                                 const isHost = u === currentGroup.owner;
@@ -146,6 +243,18 @@ const GroupSettingsModal = ({
                                 
                                 // MOD không thể đuổi Host hoặc MOD khác
                                 const canKick = myRoleIsHost ? !isHost : (myRoleIsMod && !isHost && !isMod);
+                                const canMute = myRoleIsHost ? !isHost : (myRoleIsMod && !isHost && !isMod);
+
+                                // Trạng thái cấm chat
+                                const muteExpiresAt = currentGroup?.mutedMembers?.[u];
+                                let isUserMuted = false;
+                                if (muteExpiresAt) {
+                                    if (muteExpiresAt === 'forever' || muteExpiresAt === '9999-12-31T23:59:59.999Z') {
+                                        isUserMuted = true;
+                                    } else {
+                                        isUserMuted = new Date(muteExpiresAt).getTime() > Date.now();
+                                    }
+                                }
 
                                 return (
                                     <div key={u} className="flex items-center justify-between p-3 rounded-2xl bg-white/5 border border-white/5 group/user hover:border-indigo-500/30 transition-all shadow-sm">
@@ -153,34 +262,118 @@ const GroupSettingsModal = ({
                                             @{u} 
                                             {isHost && <span className="text-[8px] bg-indigo-500 text-white px-2 py-0.5 rounded-full uppercase ml-2 shadow-md">Host</span>}
                                             {isMod && <span className="text-[8px] bg-emerald-500 text-white px-2 py-0.5 rounded-full uppercase ml-2 shadow-md">Mod</span>}
+                                            {isUserMuted && <span className="text-[8px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full uppercase ml-2 font-black border border-red-500/20 shadow-md">Muted</span>}
                                         </span>
-                                        <div className="flex gap-2 opacity-0 group-hover/user:opacity-100 transition-all">
-                                            {myRoleIsHost && !isHost && (
+                                        <div className={`flex gap-1.5 items-center transition-all ${activeMuteSelect === u ? 'opacity-100' : 'opacity-0 group-hover/user:opacity-100'}`}>
+                                            {activeMuteSelect === u ? (
+                                                <div className="flex gap-1 items-center bg-black/40 p-1 rounded-xl border border-white/10 animate-in fade-in zoom-in-95">
+                                                    <button
+                                                        onClick={async () => {
+                                                            try {
+                                                                await api.post('/groups/mute', { groupId: activeRoom.id, targetUsername: u, duration: '5m' });
+                                                                toast.success(`Đã cấm chat @${u} trong 5 phút!`);
+                                                                setActiveMuteSelect(null);
+                                                                loadData();
+                                                            } catch (err) {
+                                                                toast.error(err.response?.data?.error || "Lỗi cấm chat!");
+                                                            }
+                                                        }}
+                                                        className="px-1.5 py-0.5 bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white rounded text-[8px] font-black uppercase transition-all"
+                                                    >
+                                                        5m
+                                                    </button>
+                                                    <button
+                                                        onClick={async () => {
+                                                            try {
+                                                                await api.post('/groups/mute', { groupId: activeRoom.id, targetUsername: u, duration: '1h' });
+                                                                toast.success(`Đã cấm chat @${u} trong 1 giờ!`);
+                                                                setActiveMuteSelect(null);
+                                                                loadData();
+                                                            } catch (err) {
+                                                                toast.error(err.response?.data?.error || "Lỗi cấm chat!");
+                                                            }
+                                                        }}
+                                                        className="px-1.5 py-0.5 bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white rounded text-[8px] font-black uppercase transition-all"
+                                                    >
+                                                        1h
+                                                    </button>
+                                                    <button
+                                                        onClick={async () => {
+                                                            try {
+                                                                await api.post('/groups/mute', { groupId: activeRoom.id, targetUsername: u, duration: 'forever' });
+                                                                toast.success(`Đã cấm chat @${u} vô hạn!`);
+                                                                setActiveMuteSelect(null);
+                                                                loadData();
+                                                            } catch (err) {
+                                                                toast.error(err.response?.data?.error || "Lỗi cấm chat!");
+                                                            }
+                                                        }}
+                                                        className="px-1.5 py-0.5 bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white rounded text-[8px] font-black uppercase transition-all"
+                                                    >
+                                                        Vô hạn
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setActiveMuteSelect(null)}
+                                                        className="px-1.5 py-0.5 bg-slate-700 text-slate-300 hover:bg-slate-600 rounded text-[8px] font-black uppercase transition-all"
+                                                    >
+                                                        Hủy
+                                                    </button>
+                                                </div>
+                                            ) : (
                                                 <>
-                                                    <button 
-                                                        onClick={() => handleUpdateRole(u, isMod ? 'revoke' : 'grant')} 
-                                                        className={`text-[9px] px-2 py-1 uppercase rounded-lg font-black transition-all ${isMod ? 'bg-orange-500 text-white' : 'bg-emerald-500 text-white'}`}
-                                                    >
-                                                        {isMod ? 'Hủy Mod' : 'Phong Mod'}
-                                                    </button>
-                                                    <button 
-                                                        onClick={async () => { 
-                                                            if (!window.confirm(`Chuyển quyền chủ nhóm cho @${u}?`)) return; 
-                                                            await api.post('/groups/transfer-ownership', { groupId: activeRoom.id, newOwner: u }); 
-                                                            loadData(); 
-                                                            onClose();
-                                                        }} 
-                                                        className="text-[9px] px-2 py-1 uppercase rounded-lg font-black bg-cyan-500 text-white transition-all hover:bg-cyan-400"
-                                                        title="Chuyển quyền chủ nhóm"
-                                                    >
-                                                        <FaExchangeAlt size={10} className="inline mr-1"/> Chuyển
-                                                    </button>
+                                                    {canMute && (
+                                                        isUserMuted ? (
+                                                            <button
+                                                                onClick={async () => {
+                                                                    try {
+                                                                        await api.post('/groups/unmute', { groupId: activeRoom.id, targetUsername: u });
+                                                                        toast.success(`Đã mở cấm chat cho @${u}!`);
+                                                                        loadData();
+                                                                    } catch (err) {
+                                                                        toast.error(err.response?.data?.error || "Lỗi mở cấm chat!");
+                                                                    }
+                                                                }}
+                                                                className="text-[9px] px-2 py-1 bg-emerald-500 text-white rounded-lg font-black uppercase hover:bg-emerald-400 transition-all shadow-md"
+                                                            >
+                                                                Mở cấm
+                                                            </button>
+                                                        ) : (
+                                                            <button
+                                                                onClick={() => setActiveMuteSelect(u)}
+                                                                className="text-[9px] px-2 py-1 bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500 hover:text-white rounded-lg font-black uppercase transition-all"
+                                                            >
+                                                                Cấm chat
+                                                            </button>
+                                                        )
+                                                    )}
+                                                    {myRoleIsHost && !isHost && (
+                                                        <>
+                                                            <button 
+                                                                onClick={() => handleUpdateRole(u, isMod ? 'revoke' : 'grant')} 
+                                                                className={`text-[9px] px-2 py-1 uppercase rounded-lg font-black transition-all ${isMod ? 'bg-orange-500 text-white' : 'bg-emerald-500 text-white'}`}
+                                                            >
+                                                                {isMod ? 'Hủy Mod' : 'Phong Mod'}
+                                                            </button>
+                                                            <button 
+                                                                onClick={async () => { 
+                                                                    if (!window.confirm(`Chuyển quyền chủ nhóm cho @${u}?`)) return; 
+                                                                    await api.post('/groups/transfer-ownership', { groupId: activeRoom.id, newOwner: u }); 
+                                                                    loadData(); 
+                                                                    handleClose();
+                                                                }} 
+                                                                className="text-[9px] px-2 py-1 uppercase rounded-lg font-black bg-cyan-500 text-white transition-all hover:bg-cyan-400"
+                                                                title="Chuyển quyền chủ nhóm"
+                                                            >
+                                                                <FaExchangeAlt size={10} className="inline mr-1"/> Chuyển
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                    {canKick && (
+                                                        <button onClick={() => handleKick(u)} className="text-red-400 hover:scale-110 active:text-red-600 bg-red-500/10 p-1.5 rounded-lg">
+                                                            <FaUserMinus size={14}/>
+                                                        </button>
+                                                    )}
                                                 </>
-                                            )}
-                                            {canKick && (
-                                                <button onClick={() => handleKick(u)} className="text-red-400 hover:scale-110 active:text-red-600 bg-red-500/10 p-1.5 rounded-lg">
-                                                    <FaUserMinus size={14}/>
-                                                </button>
                                             )}
                                         </div>
                                     </div>

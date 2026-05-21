@@ -324,9 +324,12 @@ const RightSidebar = ({
       [section]: !prev[section]
     }));
   };
-
   const handleCopyInviteLink = () => {
-    const inviteLink = `${window.location.origin}/invite/${activeRoom?.id}`;
+    if (!currentGroup?.inviteLinkEnabled || !currentGroup?.inviteToken) {
+      alert("Liên kết mời nhóm đang bị tắt hoặc chưa được cấu hình!");
+      return;
+    }
+    const inviteLink = `${window.location.origin}/join/${currentGroup.inviteToken}`;
     navigator.clipboard.writeText(inviteLink);
     alert("Đã sao chép đường dẫn tham gia nhóm!");
   };
@@ -656,7 +659,10 @@ const RightSidebar = ({
                     <input
                       type="text"
                       readOnly
-                      value={`${window.location.origin}/invite/${activeRoom?.id}`}
+                      value={currentGroup?.inviteLinkEnabled && currentGroup?.inviteToken
+                        ? `${window.location.origin}/join/${currentGroup.inviteToken}`
+                        : "Liên kết mời nhóm đang bị tắt"
+                      }
                       className={`flex-1 text-[9px] p-2.5 rounded-xl border font-bold text-slate-500 outline-none ${
                         darkMode ? 'bg-black/30 border-white/5' : 'bg-slate-50 border-gray-200'
                       }`}

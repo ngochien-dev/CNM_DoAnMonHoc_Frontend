@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { useState, useEffect } from 'react';
 import AuthPage from './components/auth/AuthPage';
 import ChatPage from './components/ChatPage';
+import JoinGroupPage from './components/chat/JoinGroupPage';
 import { CallProvider } from './context/CallContext';
 
 function normalizeUserSession(session) {
@@ -41,6 +42,7 @@ function App() {
                 <Routes>
                     <Route path="/" element={!user ? <AuthPage onLogin={handleLogin} /> : <Navigate to="/chat" />} />
                     <Route path="/chat" element={user ? <ChatPage user={user} setUser={setUser} /> : <Navigate to="/" />} />
+                    <Route path="/join/:token" element={<JoinGroupPage user={user} />} />
                 </Routes>
             </Router>
         </CallProvider>

@@ -20,7 +20,7 @@ export default function useFCM(user) {
       if (tokenRef.current) {
         const tokenToDelete = tokenRef.current;
         tokenRef.current = null;
-        api.delete('/api/notifications/token', { data: { token: tokenToDelete } })
+        api.delete('/notifications/token', { data: { token: tokenToDelete } })
           .then(() => console.log('[FCM] Đã xóa FCM Token trên backend.'))
           .catch((err) => console.warn('[FCM] Lỗi khi xóa FCM Token:', err.message));
       }
@@ -59,7 +59,7 @@ export default function useFCM(user) {
             console.log('[FCM] FCM Token của thiết bị:', token);
             tokenRef.current = token;
             if (isMounted) {
-              await api.post('/api/notifications/token', { token });
+              await api.post('/notifications/token', { token });
               console.log('[FCM] Đã gửi FCM Token lên server.');
             }
           } else {

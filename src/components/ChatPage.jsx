@@ -324,6 +324,35 @@ const ChatPage = ({ user, setUser }) => {
         }
     }, [allGroups, user?.username]);
 
+    // Xử lý link mời nhóm còn đang chờ (sau khi đăng nhập)
+    useEffect(() => {
+        const pendingToken = localStorage.getItem('pending_invite_token');
+        if (pendingToken && user?.username) {
+            localStorage.removeItem('pending_invite_token'); // Xóa ngay tránh lặp lại
+            
+            const joinPendingGroup = async () => {
+                const toastId = toast.loading("Đang tự động tham gia nhóm từ liên kết mời...");
+                try {
+                    const response = await api.post('/groups/join-by-invite', { token: pendingToken });
+                    const { groupId } = response.data;
+                    toast.success("Tự động tham gia nhóm thành công!", { id: toastId });
+                    
+                    // Tải lại dữ liệu nhóm mới
+                    await loadData();
+                    
+                    // Chuyển tới phòng chat mới
+                    const groupName = response.data.groupName || 'Nhóm mới';
+                    handleSwitchRoom({ id: groupId, name: groupName, isDM: false });
+                } catch (error) {
+                    console.error("Auto join group failed:", error);
+                    toast.error(error.response?.data?.error || "Không thể tự động gia nhập nhóm từ liên kết mời!", { id: toastId });
+                }
+            };
+            
+            joinPendingGroup();
+        }
+    }, [user?.username]);
+
 
 
     const [replyingToMessage, setReplyingToMessage] = useState(null);

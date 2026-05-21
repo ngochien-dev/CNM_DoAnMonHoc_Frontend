@@ -19,8 +19,42 @@ const ChatInput = ({
     isRecording, startRecording, stopRecording, recordingTime, formatTime
 }) => {
 
-    // Nếu là kênh thông báo và user không phải owner -> Chỉ đọc
-    if (currentGroup?.isChannel && user.username !== currentGroup.owner) {
+    const isOwner = user.username === currentGroup?.owner;
+    const isMod = (currentGroup?.mods || []).includes(user.username);
+    const canSendInChannel = isOwner || isMod;
+
+    // Kiểm tra cấm chat (Muted)
+    const muteExpiresAt = currentGroup?.mutedMembers?.[user.username];
+    let isMuted = false;
+    let muteMessage = '';
+    
+    if (muteExpiresAt) {
+        if (muteExpiresAt === 'forever') {
+            isMuted = true;
+            muteMessage = "Bạn đã bị cấm chat vô thời hạn bởi Quản trị viên";
+        } else {
+            const expireTime = new Date(muteExpiresAt).getTime();
+            if (expireTime > Date.now()) {
+                isMuted = true;
+                const formattedTime = new Date(muteExpiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const formattedDate = new Date(muteExpiresAt).toLocaleDateString([], { day: '2-digit', month: '2-digit' });
+                muteMessage = `Bạn đã bị cấm chat bởi Quản trị viên đến ${formattedTime} ngày ${formattedDate}`;
+            }
+        }
+    }
+
+    if (isMuted) {
+        return (
+            <div className="p-6 shrink-0 relative bg-transparent">
+                <div className="flex items-center justify-center p-4 bg-red-500/10 rounded-2xl text-red-500 font-black uppercase tracking-[2px] text-[10px] border border-red-500/20 animate-pulse">
+                    <FaLock className="mr-2" /> {muteMessage}
+                </div>
+            </div>
+        );
+    }
+
+    // Nếu là kênh thông báo và user không phải owner/mod -> Chỉ đọc
+    if (currentGroup?.isChannel && !canSendInChannel) {
         return (
             <div className="p-6 shrink-0 relative bg-transparent">
                 <div className="flex items-center justify-center p-4 bg-indigo-500/10 rounded-2xl text-indigo-400 font-black uppercase tracking-[3px] text-[10px] border border-indigo-500/20 animate-pulse">
