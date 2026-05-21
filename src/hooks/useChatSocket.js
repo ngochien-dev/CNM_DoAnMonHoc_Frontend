@@ -7,7 +7,9 @@ const useChatSocket = ({
     activeRoomRef, chatContainerRef, mutedRoomsRef,
     setMessages, setOnlineUsers, setUnreadCounts, setTypingUsers,
     setSecretChatStatus, setSecretChatRequester, setIsSecretMode,
-    playNotificationSound, sendBrowserNotification
+    playNotificationSound, sendBrowserNotification,
+    onReconnect,       // Callback: trigger offline sync flush khi socket reconnect
+    resolvePendingMessage  // Callback: resolve pending msg khi server confirm
 }) => {
     useEffect(() => {
         if (!user?.username) return;
@@ -20,7 +22,16 @@ const useChatSocket = ({
         // 2. Các sự kiện lắng nghe
         socket.on('groups_updated', loadData);
 
+        // Offline sync: khi socket reconnect -> flush pending queue
+        socket.io?.on('reconnect', () => {
+            if (onReconnect) onReconnect();
+        });
+
         socket.on('receive_message', (d) => {
+            // Nếu đây là tin nhắn confirm cho pending message -> resolve optimistic UI
+            if (d._tempId && resolvePendingMessage) {
+                resolvePendingMessage(d);
+            }
             const container = chatContainerRef.current;
             let isCloseToBottom = false;
             if (container) {
@@ -208,6 +219,7 @@ const useChatSocket = ({
             socket.off('secret_chat_closed');
             socket.off('force_logout');
             socket.off('message_pinned');
+            socket.io?.off('reconnect');
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user?.username]); // Bỏ qua dependency check để tránh loop

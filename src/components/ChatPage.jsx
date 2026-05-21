@@ -67,6 +67,9 @@ import {
 
 import E2EEDecryptor from './chat/E2EEDecryptor';
 import WaveformVoicePlayer from './chat/WaveformVoicePlayer';
+import OfflineIndicator from './chat/OfflineIndicator';
+import useOfflineSync from '../hooks/useOfflineSync';
+
 const ChatPage = ({ user, setUser }) => {
     const socket = getSocket();
     const [msgInput, setMsgInput] = useState('');
@@ -231,6 +234,32 @@ const ChatPage = ({ user, setUser }) => {
 
     // Tích hợp hook cuộc gọi
     const { startCall, isCallBusy, callHistoryVersion } = useCall();
+
+    // Ref trỏ đến loadRoomMessages để dùng trong onSyncComplete callback (tránh forward reference)
+    const loadRoomMessagesRef = useRef(null);
+
+    // Offline/Sync: IndexedDB cache + pending message queue
+    const {
+        isOnline,
+        pendingCount,
+        syncStatus,
+        sendOfflineMessage,
+        cacheRoomMessages,
+        getCachedRoomMessages,
+        flushPendingQueue,
+        resolvePendingMessage,
+    } = useOfflineSync({
+        socket,
+        user,
+        setMessages,
+        activeRoomId: activeRoom?.id,
+        onSyncComplete: () => {
+            // Reload dữ liệu sau khi sync xong (dùng ref để tránh stale closure)
+            if (activeRoom?.id && loadRoomMessagesRef.current) {
+                loadRoomMessagesRef.current(activeRoom.id);
+            }
+        },
+    });
 
 
 
@@ -539,6 +568,19 @@ const ChatPage = ({ user, setUser }) => {
         if (!roomId || loadingMessages) return;
         setLoadingMessages(true);
         try {
+            // Nếu đang offline, đọc từ IndexedDB cache ngay lập tức
+            if (!navigator.onLine && !before) {
+                const cached = await getCachedRoomMessages(roomId);
+                if (cached.length > 0) {
+                    setMessages(prev => {
+                        const otherRoomMsgs = prev.filter(m => m.roomId !== roomId);
+                        return [...otherRoomMsgs, ...cached];
+                    });
+                }
+                setLoadingMessages(false);
+                return;
+            }
+
             const params = new URLSearchParams({ roomId, limit: '50' });
             if (before) params.append('before', before);
             const res = await api.get(`/v1/messages/${user.username}?${params.toString()}`);
@@ -560,19 +602,36 @@ const ChatPage = ({ user, setUser }) => {
                         const otherRoomMsgs = prev.filter(m => m.roomId !== roomId);
                         return [...otherRoomMsgs, ...newMsgs];
                     });
+                    // Cache lại vào IndexedDB sau khi fetch thành công
+                    cacheRoomMessages(roomId, newMsgs).catch(() => { });
                 }
                 setHasMoreMessages(prev => ({ ...prev, [roomId]: data.hasMore }));
             } else {
                 // Legacy non-paginated response (fallback)
                 const filtered = (Array.isArray(data) ? data : []).filter(msg => !(user.deletedMessages || []).includes(msg.messageId));
                 setMessages(filtered);
+                cacheRoomMessages(roomId, filtered).catch(() => { });
             }
         } catch (err) {
             console.error('Load room messages error:', err);
+            // API lỗi (ví dụ: mất mạng) -> fallback về IndexedDB cache
+            if (!before) {
+                const cached = await getCachedRoomMessages(roomId);
+                if (cached.length > 0) {
+                    setMessages(prev => {
+                        const otherRoomMsgs = prev.filter(m => m.roomId !== roomId);
+                        return [...otherRoomMsgs, ...cached];
+                    });
+                }
+            }
         } finally {
             setLoadingMessages(false);
         }
-    }, [user?.username, loadingMessages]);
+    }, [user?.username, loadingMessages, getCachedRoomMessages, cacheRoomMessages]);
+
+    // Sync ref sau khi khai báo (để onSyncComplete callback luôn có version mới nhất)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    loadRoomMessagesRef.current = loadRoomMessages;
 
     const loadData = async () => {
         if (!user?.username) return;
@@ -934,6 +993,16 @@ const ChatPage = ({ user, setUser }) => {
                 iv: replyingToMessage.iv || null
             };
         }
+        // Nếu đang offline hoặc socket chưa kết nối, enqueue vào IndexedDB queue
+        if (!isOnline || !socket.connected) {
+            const optimisticMsg = await sendOfflineMessage(payload, activeRoom.id);
+            setMessages(prev => [...prev, optimisticMsg]);
+            setMsgInput(''); setShowEmojiPicker(false);
+            setReplyingToMessage(null);
+            if (activeRoom?.id) clearDraft(activeRoom?.id);
+            return;
+        }
+
         socket.emit('send_message', payload);
 
         setMsgInput(''); setShowEmojiPicker(false);
@@ -1297,7 +1366,9 @@ const ChatPage = ({ user, setUser }) => {
         activeRoomRef, chatContainerRef, mutedRoomsRef,
         setMessages, setOnlineUsers, setUnreadCounts, setTypingUsers,
         setSecretChatStatus, setSecretChatRequester, setIsSecretMode,
-        playNotificationSound, sendBrowserNotification
+        playNotificationSound, sendBrowserNotification,
+        onReconnect: flushPendingQueue,          // Flush pending queue khi socket reconnect
+        resolvePendingMessage,                   // Resolve optimistic messages khi server confirm
     });
 
     // Load lại data khi có thay đổi từ cuộc gọi
@@ -1755,6 +1826,13 @@ const ChatPage = ({ user, setUser }) => {
                                         {typingUsers.map(u => `@${u}`).join(', ')} đang soạn tin nhắn...
                                     </div>
                                 )}
+
+                                {/* Offline/Sync Indicator */}
+                                <OfflineIndicator
+                                    isOnline={isOnline}
+                                    pendingCount={pendingCount}
+                                    syncStatus={syncStatus}
+                                />
 
                                 <ChatInput
                                     user={user}
