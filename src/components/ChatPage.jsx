@@ -55,12 +55,12 @@ import InviteMemberModal from './modals/InviteMemberModal';
 import ConversationSidebar from './chat/ConversationSidebar';
 import ChatInput from './chat/ChatInput';
 import useChatSocket from '../hooks/useChatSocket';
+import useE2EE from '../hooks/useE2EE';
+import useDrafts from '../hooks/useDrafts';
 
 import useCall from '../context/useCall';
 import { getSocket, connectSocket, disconnectSocket } from '../services/socket';
 import {
-    generateE2EEKeyPair,
-    deriveSharedKey,
     encryptText,
     decryptText
 } from '../utils/crypto';
@@ -263,20 +263,7 @@ const ChatPage = ({ user, setUser }) => {
     const [showFilterDropdown, setShowFilterDropdown] = useState(false);
 
     // Persisted Draft Messages State
-    const [drafts, setDrafts] = useState(() => {
-        try {
-            const saved = localStorage.getItem(`ott_drafts_${user?.username}`);
-            return saved ? JSON.parse(saved) : {};
-        } catch (e) {
-            return {};
-        }
-    });
-
-    useEffect(() => {
-        if (user?.username) {
-            localStorage.setItem(`ott_drafts_${user.username}`, JSON.stringify(drafts));
-        }
-    }, [drafts, user?.username]);
+    const { updateDraft, clearDraft, getDraft } = useDrafts(user?.username);
 
     const toggleRoomInFolder = (roomId) => {
         setFolderRooms(prev =>
@@ -336,85 +323,7 @@ const ChatPage = ({ user, setUser }) => {
     };
 
     const { isRecording, recordingTime, startRecording, stopRecording, formatTime } = useAudioRecorder(handleSendAudio);
-    const [sharedE2EEKey, setSharedE2EEKey] = useState(null);
-
-    // Initialize E2EE Keys for the logged-in user
-    useEffect(() => {
-        if (!user?.username) return;
-
-        const initUserE2EE = async () => {
-            const storageKey = `e2ee_private_key_${user.username}`;
-            let ownPrivateKeyJwk = localStorage.getItem(storageKey);
-
-            if (!ownPrivateKeyJwk) {
-                console.log("Generating E2EE key pair for", user.username);
-                try {
-                    const { publicKeyJwk, privateKeyJwk } = await generateE2EEKeyPair();
-                    localStorage.setItem(storageKey, JSON.stringify(privateKeyJwk));
-                    // Upload public key to DynamoDB
-                    await api.post('/users/update-e2ee-key', {
-                        username: user.username,
-                        e2eePublicKey: publicKeyJwk
-                    });
-                    toast.success("Đã kích hoạt Mã hóa Đầu cuối (E2EE) thành công!");
-                } catch (err) {
-                    console.error("Failed to initialize E2EE keys:", err);
-                }
-            } else {
-                // If server is missing the public key, re-upload it derived from our local private key
-                if (!user.e2eePublicKey) {
-                    try {
-                        const ownPrivKeyParsed = JSON.parse(ownPrivateKeyJwk);
-                        const { d, ...publicKeyJwk } = ownPrivKeyParsed;
-                        publicKeyJwk.key_ops = []; // Public key has no private ops
-                        await api.post('/users/update-e2ee-key', {
-                            username: user.username,
-                            e2eePublicKey: publicKeyJwk
-                        });
-                        console.log("Re-uploaded E2EE public key to server");
-                    } catch (err) {
-                        console.error("Failed to re-upload E2EE public key:", err);
-                    }
-                }
-            }
-        };
-
-        initUserE2EE();
-    }, [user?.username, user?.e2eePublicKey]);
-
-    // Derive Shared E2EE Key when switching rooms
-    useEffect(() => {
-        if (!user?.username || !activeRoom || !activeRoom.id?.startsWith('dm_')) {
-            setSharedE2EEKey(null);
-            return;
-        }
-
-        const deriveKey = async () => {
-            try {
-                const peerUsername = activeRoom.name;
-                const res = await api.get(`/users/${peerUsername}`);
-                const peerPubKey = res.data.e2eePublicKey;
-
-                if (peerPubKey) {
-                    const storageKey = `e2ee_private_key_${user.username}`;
-                    const ownPrivateKeyJwk = localStorage.getItem(storageKey);
-                    if (ownPrivateKeyJwk) {
-                        const sharedKey = await deriveSharedKey(JSON.parse(ownPrivateKeyJwk), peerPubKey);
-                        setSharedE2EEKey(sharedKey);
-                        console.log("Derived E2EE shared key with", peerUsername);
-                    }
-                } else {
-                    setSharedE2EEKey(null);
-                    console.log("Peer has no E2EE public key");
-                }
-            } catch (err) {
-                console.error("Failed to derive shared E2EE key:", err);
-                setSharedE2EEKey(null);
-            }
-        };
-
-        deriveKey();
-    }, [activeRoom, user?.username]);
+    const sharedE2EEKey = useE2EE(user, activeRoom);
 
     // Load Wallpaper when switching rooms
     useEffect(() => {
@@ -749,15 +658,7 @@ const ChatPage = ({ user, setUser }) => {
 
         // SAVE DRAFT FOR THE PREVIOUS ROOM
         if (activeRoom?.id) {
-            setDrafts(prev => {
-                const nextDrafts = { ...prev };
-                if (msgInput.trim()) {
-                    nextDrafts[activeRoom.id] = msgInput;
-                } else {
-                    delete nextDrafts[activeRoom.id];
-                }
-                return nextDrafts;
-            });
+            updateDraft(activeRoom?.id, msgInput);
         }
 
         if (activeRoom && (isSecretMode || secretChatStatus !== 'idle')) {
@@ -788,7 +689,7 @@ const ChatPage = ({ user, setUser }) => {
             // P0: Load messages for the new room (pagination)
             loadRoomMessages(room.id);
             // RESTORE DRAFT FOR THE NEW ROOM
-            setMsgInput(drafts[room.id] || '');
+            setMsgInput(getDraft(room.id));
         } else {
             setMsgInput('');
         }
@@ -1040,11 +941,7 @@ const ChatPage = ({ user, setUser }) => {
 
         // CLEAR DRAFT ON MESSAGE SEND
         if (activeRoom?.id) {
-            setDrafts(prev => {
-                const nextDrafts = { ...prev };
-                delete nextDrafts[activeRoom.id];
-                return nextDrafts;
-            });
+            clearDraft(activeRoom?.id);
         }
     };
 
@@ -1173,15 +1070,7 @@ const ChatPage = ({ user, setUser }) => {
 
         // SAVE DRAFT IN REAL TIME
         if (activeRoom?.id) {
-            setDrafts(prev => {
-                const nextDrafts = { ...prev };
-                if (val.trim()) {
-                    nextDrafts[activeRoom.id] = val;
-                } else {
-                    delete nextDrafts[activeRoom.id];
-                }
-                return nextDrafts;
-            });
+            updateDraft(activeRoom?.id, val);
         }
 
         if (!activeRoom) return;
@@ -1204,11 +1093,7 @@ const ChatPage = ({ user, setUser }) => {
             setMsgInput(nextVal);
             setShowMentionPopup(false);
             if (activeRoom?.id) {
-                setDrafts(prev => {
-                    const nextDrafts = { ...prev };
-                    nextDrafts[activeRoom.id] = nextVal;
-                    return nextDrafts;
-                });
+                updateDraft(activeRoom?.id, nextVal);
             }
         }
     };
@@ -1219,11 +1104,7 @@ const ChatPage = ({ user, setUser }) => {
 
         // SAVE DRAFT IN REAL TIME ON EMOJI SELECT
         if (activeRoom?.id) {
-            setDrafts(prev => {
-                const nextDrafts = { ...prev };
-                nextDrafts[activeRoom.id] = newVal;
-                return nextDrafts;
-            });
+            updateDraft(activeRoom?.id, newVal);
         }
     };
 
@@ -2147,11 +2028,8 @@ const ChatPage = ({ user, setUser }) => {
                 onClose={() => setShowStoryUpload(false)}
                 user={user}
             />
-
-
             {/* Todo List Modal */}
         </div>
     );
 };
-
 export default ChatPage;
