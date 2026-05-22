@@ -23,6 +23,8 @@ import {
   FaSignOutAlt,
   FaExclamationTriangle,
   FaClock,
+  FaChartBar,
+  FaCalendarAlt,
   FaEyeSlash,
   FaVideo,
   FaCopy,
@@ -594,7 +596,24 @@ const RightSidebar = ({
                   <FaThumbtack size={12} className="text-slate-400" />
                   <span className={`text-[12.5px] ${darkMode ? 'text-gray-200' : 'text-slate-700'}`}>Xem tin nhắn đã ghim</span>
                 </div>
-
+                <div 
+                  onClick={() => setShowMediaGallery('polls')}
+                  className={`flex items-center gap-3.5 py-2.5 px-2 rounded-xl cursor-pointer transition-colors ${
+                    darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-100'
+                  }`}
+                >
+                  <FaChartBar size={12} className="text-slate-400" />
+                  <span className={`text-[12.5px] ${darkMode ? 'text-gray-200' : 'text-slate-700'}`}>Lịch sử bình chọn</span>
+                </div>
+                <div 
+                  onClick={() => setShowMediaGallery('events')}
+                  className={`flex items-center gap-3.5 py-2.5 px-2 rounded-xl cursor-pointer transition-colors ${
+                    darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-100'
+                  }`}
+                >
+                  <FaCalendarAlt size={12} className="text-slate-400" />
+                  <span className={`text-[12.5px] ${darkMode ? 'text-gray-200' : 'text-slate-700'}`}>Lịch sử sự kiện nhóm</span>
+                </div>
               </div>
             )}
           </div>

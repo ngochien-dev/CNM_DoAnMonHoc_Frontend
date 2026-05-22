@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { FaTimes, FaImage, FaFileAlt, FaLink, FaDownload, FaExternalLinkAlt, FaPlay, FaThumbtack } from 'react-icons/fa';
+import { FaTimes, FaImage, FaFileAlt, FaLink, FaDownload, FaExternalLinkAlt, FaPlay, FaThumbtack, FaChartBar, FaCalendarAlt } from 'react-icons/fa';
 import api from '../../services/api';
 
 const MediaGallery = ({ roomId, onClose, darkMode, initialTab = 'media', onNavigateToMessage }) => {
     const [activeTab, setActiveTab] = useState(initialTab);
-    const [data, setData] = useState({ media: [], files: [], links: [], pinned: [] });
+    const [data, setData] = useState({ media: [], files: [], links: [], pinned: [], polls: [], events: [] });
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -35,8 +35,12 @@ const MediaGallery = ({ roomId, onClose, darkMode, initialTab = 'media', onNavig
                 {/* Header */}
                 <div className="p-6 flex items-center justify-between border-b border-white/5">
                     <div>
-                        <h2 className={`text-xl font-black ${darkMode ? 'text-white' : 'text-slate-800'}`}>Kho lưu trữ Media</h2>
-                        <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">Lịch sử gửi nhận trong phòng chat</p>
+                        <h2 className={`text-xl font-black ${darkMode ? 'text-white' : 'text-slate-800'}`}>
+                            {['media', 'files', 'links'].includes(activeTab) ? 'Kho lưu trữ Media' : 'Hoạt động đoạn chat'}
+                        </h2>
+                        <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">
+                            {['media', 'files', 'links'].includes(activeTab) ? 'Lịch sử gửi nhận trong phòng chat' : 'Tin nhắn ghim, bình chọn và sự kiện'}
+                        </p>
                     </div>
                     <button onClick={onClose} className={`p-3 rounded-full transition-all ${darkMode ? 'hover:bg-white/10 text-gray-400' : 'hover:bg-gray-100 text-slate-500'}`}>
                         <FaTimes size={20}/>
@@ -45,23 +49,41 @@ const MediaGallery = ({ roomId, onClose, darkMode, initialTab = 'media', onNavig
 
                 {/* Tabs */}
                 <div className="flex px-6 pt-4 gap-6">
-                    {[
-                        { id: 'media', label: 'Ảnh & Video', icon: <FaImage/> },
-                        { id: 'files', label: 'Tệp đính kèm', icon: <FaFileAlt/> },
-                        { id: 'links', label: 'Liên kết', icon: <FaLink/> },
-                        { id: 'pinned', label: 'Tin nhắn ghim', icon: <FaThumbtack/> }
-                    ].map(tab => (
-                        <button
-                            key={tab.id}
-                            onClick={() => setActiveTab(tab.id)}
-                            className={`flex items-center gap-2 pb-4 text-sm font-black transition-all border-b-2 ${activeTab === tab.id ? 'border-indigo-500 text-indigo-500' : 'border-transparent text-gray-500 hover:text-gray-400'}`}
-                        >
-                            {tab.icon} {tab.label}
-                            <span className={`ml-1 px-2 py-0.5 rounded-full text-[10px] ${activeTab === tab.id ? 'bg-indigo-500/20' : 'bg-gray-500/10'}`}>
-                                {data[tab.id]?.length || 0}
-                            </span>
-                        </button>
-                    ))}
+                    {['media', 'files', 'links'].includes(activeTab) ? (
+                        [
+                            { id: 'media', label: 'Ảnh & Video', icon: <FaImage/> },
+                            { id: 'files', label: 'Tệp đính kèm', icon: <FaFileAlt/> },
+                            { id: 'links', label: 'Liên kết', icon: <FaLink/> }
+                        ].map(tab => (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id)}
+                                className={`flex items-center gap-2 pb-4 text-sm font-black transition-all border-b-2 ${activeTab === tab.id ? 'border-indigo-500 text-indigo-500' : 'border-transparent text-gray-500 hover:text-gray-400'}`}
+                            >
+                                {tab.icon} {tab.label}
+                                <span className={`ml-1 px-2 py-0.5 rounded-full text-[10px] ${activeTab === tab.id ? 'bg-indigo-500/20' : 'bg-gray-500/10'}`}>
+                                    {data[tab.id]?.length || 0}
+                                </span>
+                            </button>
+                        ))
+                    ) : (
+                        [
+                            { id: 'pinned', label: 'Tin nhắn ghim', icon: <FaThumbtack/> },
+                            { id: 'polls', label: 'Bình chọn', icon: <FaChartBar/> },
+                            { id: 'events', label: 'Sự kiện', icon: <FaCalendarAlt/> }
+                        ].map(tab => (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id)}
+                                className={`flex items-center gap-2 pb-4 text-sm font-black transition-all border-b-2 ${activeTab === tab.id ? 'border-indigo-500 text-indigo-500' : 'border-transparent text-gray-500 hover:text-gray-400'}`}
+                            >
+                                {tab.icon} {tab.label}
+                                <span className={`ml-1 px-2 py-0.5 rounded-full text-[10px] ${activeTab === tab.id ? 'bg-indigo-500/20' : 'bg-gray-500/10'}`}>
+                                    {data[tab.id]?.length || 0}
+                                </span>
+                            </button>
+                        ))
+                    )}
                 </div>
 
                 {/* Content */}
@@ -161,6 +183,63 @@ const MediaGallery = ({ roomId, onClose, darkMode, initialTab = 'media', onNavig
                                         </div>
                                     ))}
                                     {data.pinned.length === 0 && <EmptyState text="Chưa có tin nhắn được ghim nào." icon={<FaThumbtack size={48}/>} />}
+                                </div>
+                            )}
+
+                            {activeTab === 'polls' && (
+                                <div className="space-y-3">
+                                    {data.polls.map((item, i) => (
+                                        <div key={i} onClick={() => onNavigateToMessage && onNavigateToMessage(item.messageId)} className={`p-4 rounded-2xl flex flex-col gap-2 border transition-all cursor-pointer ${darkMode ? 'bg-white/5 border-white/10 hover:bg-white/10' : 'bg-slate-50 border-gray-100 hover:bg-white shadow-sm'}`}>
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 bg-orange-500/20 rounded-full flex items-center justify-center text-orange-500 shrink-0 font-bold uppercase text-[10px] border border-orange-500/30">
+                                                    <FaChartBar size={12}/>
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className={`text-xs font-bold truncate ${darkMode ? 'text-orange-400' : 'text-orange-600'}`}>Tạo bởi @{item.senderUsername}</p>
+                                                    <p className="text-[9px] text-slate-500 font-medium">{formatTime(item.sentAt)}</p>
+                                                </div>
+                                                <div className="w-7 h-7 rounded-full flex items-center justify-center text-slate-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-500/10 transition-colors" title="Đi tới bình chọn">
+                                                    <FaExternalLinkAlt size={10}/>
+                                                </div>
+                                            </div>
+                                            <div className={`text-[13px] leading-snug whitespace-pre-wrap font-bold ${darkMode ? 'text-gray-200' : 'text-slate-700'}`}>
+                                                {item.pollData?.question || item.text || '[Bình chọn]'}
+                                            </div>
+                                            <div className="text-[10px] text-slate-500 mt-1">
+                                                {item.pollData?.options?.length || 0} lựa chọn
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {data.polls.length === 0 && <EmptyState text="Chưa có bình chọn nào." icon={<FaChartBar size={48}/>} />}
+                                </div>
+                            )}
+
+                            {activeTab === 'events' && (
+                                <div className="space-y-3">
+                                    {data.events.map((item, i) => (
+                                        <div key={i} onClick={() => onNavigateToMessage && onNavigateToMessage(item.messageId)} className={`p-4 rounded-2xl flex flex-col gap-2 border transition-all cursor-pointer ${darkMode ? 'bg-white/5 border-white/10 hover:bg-white/10' : 'bg-slate-50 border-gray-100 hover:bg-white shadow-sm'}`}>
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 bg-rose-500/20 rounded-full flex items-center justify-center text-rose-500 shrink-0 font-bold uppercase text-[10px] border border-rose-500/30">
+                                                    <FaCalendarAlt size={12}/>
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className={`text-xs font-bold truncate ${darkMode ? 'text-rose-400' : 'text-rose-600'}`}>Tạo bởi @{item.senderUsername}</p>
+                                                    <p className="text-[9px] text-slate-500 font-medium">{formatTime(item.sentAt)}</p>
+                                                </div>
+                                                <div className="w-7 h-7 rounded-full flex items-center justify-center text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors" title="Đi tới sự kiện">
+                                                    <FaExternalLinkAlt size={10}/>
+                                                </div>
+                                            </div>
+                                            <div className={`text-[13px] leading-snug whitespace-pre-wrap font-bold ${darkMode ? 'text-gray-200' : 'text-slate-700'}`}>
+                                                {item.eventData?.title || item.text || '[Sự kiện]'}
+                                            </div>
+                                            <div className="text-[10px] text-slate-500 mt-1 flex flex-col gap-0.5">
+                                                <span>📅 {item.eventData?.date} lúc {item.eventData?.time}</span>
+                                                {item.eventData?.location && <span>📍 {item.eventData?.location}</span>}
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {data.events.length === 0 && <EmptyState text="Chưa có lịch nhóm / sự kiện nào." icon={<FaCalendarAlt size={48}/>} />}
                                 </div>
                             )}
                         </div>
