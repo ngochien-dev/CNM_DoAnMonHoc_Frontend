@@ -162,7 +162,7 @@ const CallHistoryTab = ({ user, callHistory = [], onlineUsers = {}, startCall, i
                     </div>
 
                     {/* Search query */}
-                    <div className="relative">
+                    <div className="relative w-full sm:w-auto">
                         <span className="absolute left-3.5 top-3 text-gray-500"><FaSearch size={14} /></span>
                         <input
                             type="text"

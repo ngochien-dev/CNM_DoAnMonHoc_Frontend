@@ -14,8 +14,7 @@ const SnakeGame = ({ user, onScoreUpdate }) => {
     const snakeRef = useRef([{ x: 10, y: 10 }]);
     const foodRef = useRef({ x: 15, y: 15 });
     const dirRef = useRef({ x: 1, y: 0 });
-    const gameLoopRef = useRef(null);
-    
+
     const gridSize = 20;
     const tileCount = 20; // 400x400 canvas
 
@@ -122,10 +121,10 @@ const SnakeGame = ({ user, onScoreUpdate }) => {
         setIsPlaying(false);
         if (finalScore > 0) {
             try {
-                const res = await api.post('/users/update-score', { username: user.username, score: finalScore, gameId: 'snake' });
+                const res = await api.post('/users/update-score', { username: user?.username, score: finalScore, gameId: 'snake' });
                 if (res.data.isNewHigh) {
                     toast.success(`Kỷ lục mới của bạn: ${finalScore} điểm! 🎉`);
-                    onScoreUpdate();
+                    onScoreUpdate?.('snake');
                 } else {
                     toast.error(`Game Over! Điểm của bạn: ${finalScore}`);
                 }
@@ -307,10 +306,10 @@ const FlappyBird = ({ user, onScoreUpdate }) => {
         setIsPlaying(false);
         if (finalScore > 0) {
             try {
-                const res = await api.post('/users/update-score', { username: user.username, score: finalScore, gameId: 'flappy' });
+                const res = await api.post('/users/update-score', { username: user?.username, score: finalScore, gameId: 'flappy' });
                 if (res.data.isNewHigh) {
                     toast.success(`Kỷ lục mới của bạn: ${finalScore} điểm! 🎉`);
-                    onScoreUpdate();
+                    onScoreUpdate?.('flappy');
                 } else {
                     toast.error(`Game Over! Điểm của bạn: ${finalScore}`);
                 }
@@ -348,16 +347,24 @@ const FlappyBird = ({ user, onScoreUpdate }) => {
 
 const GameCenter = ({ user, onClose, darkMode }) => {
     const [leaderboard, setLeaderboard] = useState([]);
+    const [isLeaderboardLoading, setIsLeaderboardLoading] = useState(false);
+    const [leaderboardError, setLeaderboardError] = useState('');
     const [activeGame, setActiveGame] = useState(null); // null means showing menu
     const [lbTab, setLbTab] = useState('snake');
     const socket = getSocket();
 
     const fetchLeaderboard = useCallback(async (gameId = lbTab) => {
+        setIsLeaderboardLoading(true);
+        setLeaderboardError('');
         try {
             const res = await api.get(`/users/leaderboard/top?gameId=${gameId}`);
-            setLeaderboard(res.data);
+            setLeaderboard(Array.isArray(res.data) ? res.data : []);
         } catch (error) {
             console.error("Lỗi tải bảng xếp hạng:", error);
+            setLeaderboard([]);
+            setLeaderboardError('Không tải được bảng xếp hạng.');
+        } finally {
+            setIsLeaderboardLoading(false);
         }
     }, [lbTab]);
 
@@ -384,7 +391,7 @@ const GameCenter = ({ user, onClose, darkMode }) => {
     }, [socket, fetchLeaderboard, lbTab]);
 
     return (
-        <div className={`flex-1 flex flex-col md:flex-row h-full overflow-hidden select-none transition-colors duration-300 ${
+        <div className={`flex-1 flex flex-col md:flex-row h-full overflow-hidden select-none transition-colors duration-300 font-sans ${
             darkMode ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-800'
         }`}>
             {/* Game Screen Column */}
@@ -394,7 +401,7 @@ const GameCenter = ({ user, onClose, darkMode }) => {
                 
                 {/* Close Button / Back to menu if in game */}
                 <button 
-                    onClick={onClose}
+                    onClick={() => onClose?.()}
                     className={`absolute top-4 right-4 w-10 h-10 ${
                         darkMode ? 'bg-slate-800/80 hover:bg-red-500 text-gray-300 hover:text-white' : 'bg-slate-100 hover:bg-red-500 text-gray-500 hover:text-white'
                     } rounded-full flex items-center justify-center z-50 transition-colors shadow-sm`}
@@ -456,7 +463,7 @@ const GameCenter = ({ user, onClose, darkMode }) => {
                                         <div className="w-16 h-16 bg-gradient-to-br from-sky-400 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg mb-4 group-hover:scale-110 transition-transform">
                                             <span className="text-3xl">🦅</span>
                                         </div>
-                                        <h3 className={`text-xl font-bold mb-2 group-hover:text-sky-500 transition-colors ${darkMode ? 'text-white' : 'text-slate-850'}`}>Chim Bay (Flappy)</h3>
+                                        <h3 className={`text-xl font-bold mb-2 group-hover:text-sky-500 transition-colors ${darkMode ? 'text-white' : 'text-slate-800'}`}>Chim Bay (Flappy)</h3>
                                         <p className={`text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-slate-500'}`}>Nhấn Space để bay qua các ống nước. Cực kỳ ức chế và dễ nghiện!</p>
                                         <button className="mt-5 w-full py-3 bg-sky-500/10 hover:bg-sky-500 text-sky-500 hover:text-white rounded-xl font-bold transition-colors">Chơi Ngay</button>
                                     </div>
@@ -494,7 +501,11 @@ const GameCenter = ({ user, onClose, darkMode }) => {
                     )}
                 </div>
                 <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-                    {leaderboard.length === 0 ? (
+                    {isLeaderboardLoading ? (
+                        <div className={`text-center mt-10 font-bold ${darkMode ? 'text-gray-500' : 'text-slate-400'}`}>Đang tải bảng xếp hạng...</div>
+                    ) : leaderboardError ? (
+                        <div className={`text-center mt-10 font-bold ${darkMode ? 'text-red-400' : 'text-red-500'}`}>{leaderboardError}</div>
+                    ) : leaderboard.length === 0 ? (
                         <div className={`text-center mt-10 font-bold ${darkMode ? 'text-gray-500' : 'text-slate-400'}`}>Chưa có ai ghi điểm ở game này!</div>
                     ) : (
                         <div className="flex flex-col gap-3">
@@ -512,7 +523,7 @@ const GameCenter = ({ user, onClose, darkMode }) => {
                                         idx === 0 
                                             ? 'bg-yellow-500 text-yellow-950 shadow-[0_0_10px_rgba(234,179,8,0.4)]' 
                                             : idx === 1 
-                                                ? 'bg-slate-350 text-slate-800' 
+                                                ? 'bg-slate-300 text-slate-800'
                                                 : idx === 2 
                                                     ? 'bg-orange-400 text-orange-950' 
                                                     : darkMode ? 'bg-slate-700 text-gray-300' : 'bg-slate-200 text-slate-700'
@@ -521,7 +532,7 @@ const GameCenter = ({ user, onClose, darkMode }) => {
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <div className={`font-black text-sm truncate flex items-center gap-1.5 ${darkMode ? 'text-gray-200' : 'text-slate-800'}`}>
-                                            {lb.displayName} {lb.username === user.username && <span className="text-[10px] bg-indigo-650 text-white px-2 py-0.5 rounded-full font-black">Bạn</span>}
+                                            {lb.displayName || lb.username || 'Người chơi'} {lb.username === user?.username && <span className="text-[10px] bg-indigo-600 text-white px-2 py-0.5 rounded-full font-black">Bạn</span>}
                                         </div>
                                         <div className={`text-xs truncate ${darkMode ? 'text-gray-500' : 'text-slate-400'}`}>@{lb.username}</div>
                                     </div>

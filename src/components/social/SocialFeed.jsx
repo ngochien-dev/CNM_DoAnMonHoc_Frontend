@@ -15,8 +15,12 @@ const SocialFeed = ({ user, darkMode }) => {
     const [postImage, setPostImage] = useState(null);
     const [postPrivacy, setPostPrivacy] = useState("friends"); // 'public' | 'friends' | 'private'
     const [loading, setLoading] = useState(false);
+    const [feedLoading, setFeedLoading] = useState(false);
+    const [feedError, setFeedError] = useState("");
     const [showArchive, setShowArchive] = useState(false);
     const [archivedStories, setArchivedStories] = useState([]);
+    const [selectedImage, setSelectedImage] = useState(null);
+    const username = user?.username || "";
     
     // UI Interaction States
     const [expandedComments, setExpandedComments] = useState({}); // { postId: boolean }
@@ -55,7 +59,7 @@ const SocialFeed = ({ user, darkMode }) => {
         fetchRooms();
 
         // Listen for real-time post updates
-        socket.on('posts_updated', fetchPosts);
+        socket?.on('posts_updated', fetchPosts);
 
         // Click outside listener to close reaction menu
         const handleClickOutside = (event) => {
@@ -66,17 +70,23 @@ const SocialFeed = ({ user, darkMode }) => {
         document.addEventListener('mousedown', handleClickOutside);
 
         return () => {
-            socket.off('posts_updated', fetchPosts);
+            socket?.off('posts_updated', fetchPosts);
             document.removeEventListener('mousedown', handleClickOutside);
         };
-    }, []);
+    }, [socket, username]);
 
     const fetchPosts = async () => {
+        setFeedLoading(true);
+        setFeedError("");
         try {
-            const res = await api.get(`/posts/list?friends=${user.friends?.join(',') || ''}`);
-            setPosts(res.data);
+            const res = await api.get(`/posts/list?friends=${user?.friends?.join(',') || ''}`);
+            setPosts(Array.isArray(res.data) ? res.data : []);
         } catch (err) {
             console.error("Fetch posts error", err);
+            setPosts([]);
+            setFeedError("Không thể tải bảng tin. Vui lòng thử lại sau.");
+        } finally {
+            setFeedLoading(false);
         }
     };
 
@@ -87,7 +97,7 @@ const SocialFeed = ({ user, darkMode }) => {
             const groups = groupsRes.data || [];
             
             // Format DMs and Groups for sharing
-            const myGroups = groups.filter(g => g.members?.includes(user.username) || g.owner === user.username);
+            const myGroups = groups.filter(g => g.members?.includes(username) || g.owner === username);
             const list = myGroups.map(g => ({
                 id: g.groupId,
                 name: g.groupName,
@@ -95,9 +105,9 @@ const SocialFeed = ({ user, darkMode }) => {
             }));
 
             // Add DMs for friends
-            if (user.friends) {
+            if (user?.friends) {
                 user.friends.forEach(friend => {
-                    const dmRoomId = `dm_${[user.username, friend].sort().join("_")}`;
+                    const dmRoomId = `dm_${[username, friend].sort().join("_")}`;
                     list.push({
                         id: dmRoomId,
                         name: `@${friend}`,
@@ -118,7 +128,7 @@ const SocialFeed = ({ user, darkMode }) => {
             await api.post('/posts/create', {
                 text: postText,
                 mediaData: postImage,
-                username: user.username,
+                username,
                 privacy: postPrivacy
             });
             setPostText("");
@@ -182,7 +192,7 @@ const SocialFeed = ({ user, darkMode }) => {
         setPosts(prevPosts => prevPosts.map(post => {
             if (post.postId !== postId) return post;
             const reactions = [...(post.reactions || [])];
-            const existingIdx = reactions.findIndex(r => r.username === user.username);
+            const existingIdx = reactions.findIndex(r => r.username === username);
             if (existingIdx > -1) {
                 if (reactions[existingIdx].emoji === emoji) {
                     reactions.splice(existingIdx, 1);
@@ -190,7 +200,7 @@ const SocialFeed = ({ user, darkMode }) => {
                     reactions[existingIdx].emoji = emoji;
                 }
             } else {
-                reactions.push({ username: user.username, emoji });
+                reactions.push({ username, emoji });
             }
             return { ...post, reactions };
         }));
@@ -198,7 +208,7 @@ const SocialFeed = ({ user, darkMode }) => {
         setActiveReactionPostId(null); // Close popup immediately
 
         try {
-            await api.post('/posts/react', { postId, username: user.username, emoji });
+            await api.post('/posts/react', { postId, username, emoji });
         } catch (err) {
             // Rollback if server fails
             setPosts(previousPosts);
@@ -217,7 +227,7 @@ const SocialFeed = ({ user, darkMode }) => {
         const tempCommentId = `temp_c_${Date.now()}`;
         const newComment = {
             commentId: tempCommentId,
-            username: user.username,
+            username,
             text: text.trim(),
             mediaUrl: attachedImg || "",
             stickerUrl: stickerUrl || "",
@@ -243,7 +253,7 @@ const SocialFeed = ({ user, darkMode }) => {
         try {
             await api.post('/posts/comment', { 
                 postId, 
-                username: user.username, 
+                username,
                 text: text.trim(),
                 mediaData: attachedImg,
                 stickerUrl
@@ -266,7 +276,7 @@ const SocialFeed = ({ user, darkMode }) => {
                 comments: (post.comments || []).map(comment => {
                     if (comment.commentId !== commentId) return comment;
                     const reactions = [...(comment.reactions || [])];
-                    const existingIdx = reactions.findIndex(r => r.username === user.username);
+                    const existingIdx = reactions.findIndex(r => r.username === username);
                     if (existingIdx > -1) {
                         if (reactions[existingIdx].emoji === emoji) {
                             reactions.splice(existingIdx, 1);
@@ -274,7 +284,7 @@ const SocialFeed = ({ user, darkMode }) => {
                             reactions[existingIdx].emoji = emoji;
                         }
                     } else {
-                        reactions.push({ username: user.username, emoji });
+                        reactions.push({ username, emoji });
                     }
                     return { ...comment, reactions };
                 })
@@ -284,7 +294,7 @@ const SocialFeed = ({ user, darkMode }) => {
         setActiveReactionCommentId(null);
 
         try {
-            await api.post('/posts/comment/react', { postId, commentId, username: user.username, emoji });
+            await api.post('/posts/comment/react', { postId, commentId, username, emoji });
         } catch (err) {
             setPosts(previousPosts);
             toast.error("Không thể thả cảm xúc bình luận");
@@ -300,7 +310,7 @@ const SocialFeed = ({ user, darkMode }) => {
         const tempReplyId = `temp_reply_${Date.now()}`;
         const newReply = {
             replyId: tempReplyId,
-            username: user.username,
+            username,
             text: text.trim(),
             createdAt: new Date().toISOString()
         };
@@ -323,7 +333,7 @@ const SocialFeed = ({ user, darkMode }) => {
         setActiveReplyCommentId(null);
 
         try {
-            await api.post('/posts/comment/reply', { postId, commentId, username: user.username, text });
+            await api.post('/posts/comment/reply', { postId, commentId, username, text });
         } catch (err) {
             setPosts(previousPosts);
             toast.error("Không thể gửi phản hồi");
@@ -351,7 +361,7 @@ const SocialFeed = ({ user, darkMode }) => {
         setEditingCommentPostId(null);
 
         try {
-            await api.post('/posts/comment/edit', { postId, commentId, text: editingCommentText.trim(), username: user.username });
+            await api.post('/posts/comment/edit', { postId, commentId, text: editingCommentText.trim(), username });
             toast.success("Đã sửa bình luận!");
         } catch (err) {
             setPosts(previousPosts);
@@ -374,7 +384,7 @@ const SocialFeed = ({ user, darkMode }) => {
         }));
 
         try {
-            await api.post('/posts/comment/delete', { postId, commentId, username: user.username });
+            await api.post('/posts/comment/delete', { postId, commentId, username });
             toast.success("Đã xóa bình luận");
         } catch (err) {
             setPosts(previousPosts);
@@ -389,7 +399,7 @@ const SocialFeed = ({ user, darkMode }) => {
     const fetchArchive = async () => {
         try {
             const res = await api.get('/stories/archive');
-            setArchivedStories(res.data);
+            setArchivedStories(Array.isArray(res.data) ? res.data : []);
             setShowArchive(true);
         } catch (err) {
             toast.error("Lỗi khi tải kho lưu trữ");
@@ -399,15 +409,16 @@ const SocialFeed = ({ user, darkMode }) => {
     const sharePostToRoom = (room) => {
         if (!sharePost) return;
         try {
-            const shareText = `📢 [Bài Viết Mới] @${sharePost.username}:\n"${sharePost.text.substring(0, 100)}${sharePost.text.length > 100 ? '...' : ''}"\n\n👉 Mở Bảng tin để xem chi tiết!`;
+            const sharedText = sharePost.text || "";
+            const shareText = `📢 [Bài Viết Mới] @${sharePost.username || 'unknown'}:\n"${sharedText.substring(0, 100)}${sharedText.length > 100 ? '...' : ''}"\n\n👉 Mở Bảng tin để xem chi tiết!`;
             
-            socket.emit('send_message', {
+            socket?.emit('send_message', {
                 roomId: room.id,
                 text: shareText,
                 fileData: sharePost.mediaUrl || null,
                 fileName: sharePost.mediaUrl ? 'SharedPostImage.jpg' : null,
                 fileType: sharePost.mediaUrl ? 'image' : null,
-                sender: user.displayName || user.username
+                sender: user?.displayName || username
             });
 
             toast.success(`Đã chia sẻ bài viết tới ${room.name}!`);
@@ -426,7 +437,7 @@ const SocialFeed = ({ user, darkMode }) => {
     };
 
     const getUserCurrentEmoji = (reactions = []) => {
-        const match = reactions.find(r => r.username === user.username);
+        const match = reactions.find(r => r.username === username);
         return match ? match.emoji : null;
     };
 
@@ -447,7 +458,7 @@ const SocialFeed = ({ user, darkMode }) => {
                 {/* Create Post */}
                 <div className={`p-6 rounded-[32px] border shadow-2xl transition-all ${darkMode ? 'bg-white/5 border-white/10' : 'bg-white border-gray-200'}`}>
                     <div className="flex gap-4">
-                        <img src={`https://ui-avatars.com/api/?name=${user.username}`} className="w-12 h-12 rounded-2xl border border-indigo-500/20" alt=""/>
+                        <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(username || 'User')}`} className="w-12 h-12 rounded-2xl border border-indigo-500/20" alt=""/>
                         <div className="flex-1">
                             <textarea 
                                 value={postText}
@@ -460,7 +471,12 @@ const SocialFeed = ({ user, darkMode }) => {
                     
                     {postImage && (
                         <div className="relative mt-4 mb-4 group overflow-hidden rounded-2xl border border-white/10 shadow-lg max-h-[300px]">
-                            <img src={postImage} className="w-full h-full object-cover" alt=""/>
+                            <img
+                                src={postImage}
+                                onClick={() => setSelectedImage(postImage)}
+                                className="w-full h-full object-cover cursor-zoom-in"
+                                alt=""
+                            />
                             <button 
                                 onClick={() => setPostImage(null)} 
                                 className="absolute top-3 right-3 w-8 h-8 bg-black/60 text-white rounded-full flex items-center justify-center hover:bg-red-500 transition-all opacity-0 group-hover:opacity-100 shadow-md"
@@ -478,6 +494,7 @@ const SocialFeed = ({ user, darkMode }) => {
                                 input.accept = 'image/*';
                                 input.onchange = (e) => {
                                     const file = e.target.files[0];
+                                    if (!file) return;
                                     const reader = new FileReader();
                                     reader.onloadend = () => setPostImage(reader.result);
                                     reader.readAsDataURL(file);
@@ -504,7 +521,7 @@ const SocialFeed = ({ user, darkMode }) => {
 
                         <button 
                             onClick={handleCreatePost}
-                            disabled={loading}
+                            disabled={loading || (!postText.trim() && !postImage)}
                             className="bg-indigo-600 hover:bg-indigo-500 text-white px-8 py-3 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-lg shadow-indigo-600/30 hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
                         >
                             {loading ? "Đang đăng..." : "Đăng bài"}
@@ -514,7 +531,17 @@ const SocialFeed = ({ user, darkMode }) => {
 
                 {/* Posts List */}
                 <div className="space-y-6">
-                    {posts.length === 0 ? (
+                    {feedLoading ? (
+                        <div className="text-center py-20 opacity-60">
+                            <FaSmile size={48} className="mx-auto mb-4 animate-bounce text-indigo-500"/>
+                            <p className="font-black uppercase italic tracking-widest text-xs">Đang tải bảng tin...</p>
+                        </div>
+                    ) : feedError ? (
+                        <div className="text-center py-20 opacity-80">
+                            <FaTimes size={42} className="mx-auto mb-4 text-red-500"/>
+                            <p className="font-black uppercase italic tracking-widest text-xs text-red-400">{feedError}</p>
+                        </div>
+                    ) : posts.length === 0 ? (
                         <div className="text-center py-20 opacity-40">
                             <FaSmile size={48} className="mx-auto mb-4 animate-bounce text-indigo-500"/>
                             <p className="font-black uppercase italic tracking-widest text-xs">Chưa có bài đăng nào. Hãy là người đầu tiên!</p>
@@ -611,7 +638,10 @@ const SocialFeed = ({ user, darkMode }) => {
                                     
                                     {/* Media Attachment */}
                                     {post.mediaUrl && (
-                                        <div className="rounded-2xl border border-white/10 mb-4 overflow-hidden shadow-xl max-h-[450px] bg-black/10">
+                                        <div
+                                            onClick={() => setSelectedImage(post.mediaUrl)}
+                                            className="rounded-2xl border border-white/10 mb-4 overflow-hidden shadow-xl max-h-[450px] bg-black/10 cursor-zoom-in"
+                                        >
                                             <img src={post.mediaUrl} className="w-full h-full object-contain" alt=""/>
                                         </div>
                                     )}
@@ -704,7 +734,7 @@ const SocialFeed = ({ user, darkMode }) => {
                                                     const isEditingThisComment = editingCommentId === comment.commentId && editingCommentPostId === post.postId;
                                                     
                                                     const commentReactions = comment.reactions || [];
-                                                    const userCommentReact = commentReactions.find(cr => cr.username === user.username)?.emoji;
+                                                    const userCommentReact = commentReactions.find(cr => cr.username === username)?.emoji;
                                                     const hasCommentReactions = commentReactions.length > 0;
                                                     const isReplyOpen = activeReplyCommentId === comment.commentId;
 
@@ -755,7 +785,10 @@ const SocialFeed = ({ user, darkMode }) => {
                                                                                 
                                                                                 {/* Comment Image Attachment */}
                                                                                 {comment.mediaUrl && (
-                                                                                    <div className="max-w-[200px] max-h-36 overflow-hidden rounded-xl border border-white/10 shadow-sm mt-1 bg-black/10">
+                                                                                    <div
+                                                                                        onClick={() => setSelectedImage(comment.mediaUrl)}
+                                                                                        className="max-w-[200px] max-h-36 overflow-hidden rounded-xl border border-white/10 shadow-sm mt-1 bg-black/10 cursor-zoom-in"
+                                                                                    >
                                                                                         <img src={comment.mediaUrl} className="w-full h-full object-contain" alt="" />
                                                                                     </div>
                                                                                 )}
@@ -891,7 +924,12 @@ const SocialFeed = ({ user, darkMode }) => {
                                             {/* Comment attached image thumbnail preview */}
                                             {commentImage[post.postId] && (
                                                 <div className="relative inline-block mt-2 mb-1 group overflow-hidden rounded-xl border border-white/10 max-h-[80px]">
-                                                    <img src={commentImage[post.postId]} className="h-full object-cover max-h-[85px] rounded-xl" alt=""/>
+                                                    <img
+                                                        src={commentImage[post.postId]}
+                                                        onClick={() => setSelectedImage(commentImage[post.postId])}
+                                                        className="h-full object-cover max-h-[85px] rounded-xl cursor-zoom-in"
+                                                        alt=""
+                                                    />
                                                     <button 
                                                         onClick={() => setCommentImage(prev => ({ ...prev, [post.postId]: null }))}
                                                         className="absolute top-1 right-1 w-5 h-5 bg-black/60 text-white rounded-full flex items-center justify-center hover:bg-red-500 transition-all opacity-80"
@@ -940,6 +978,7 @@ const SocialFeed = ({ user, darkMode }) => {
                                                         input.accept = 'image/*';
                                                         input.onchange = (e) => {
                                                             const file = e.target.files[0];
+                                                            if (!file) return;
                                                             const reader = new FileReader();
                                                             reader.onloadend = () => setCommentImage(prev => ({ ...prev, [post.postId]: reader.result }));
                                                             reader.readAsDataURL(file);
@@ -968,6 +1007,28 @@ const SocialFeed = ({ user, darkMode }) => {
                 </div>
             </div>
 
+            {/* Image Lightbox */}
+            {selectedImage && (
+                <div
+                    className="fixed inset-0 bg-black/90 z-[4000] flex items-center justify-center p-4 backdrop-blur-xl"
+                    onClick={() => setSelectedImage(null)}
+                >
+                    <button
+                        onClick={() => setSelectedImage(null)}
+                        className="absolute top-5 right-5 w-11 h-11 rounded-full bg-white/10 hover:bg-red-500 text-white flex items-center justify-center transition-all"
+                        title="Đóng ảnh"
+                    >
+                        <FaTimes size={18}/>
+                    </button>
+                    <img
+                        src={selectedImage}
+                        className="max-w-full max-h-[88vh] object-contain rounded-3xl border border-white/10 shadow-2xl"
+                        alt="preview"
+                        onClick={(e) => e.stopPropagation()}
+                    />
+                </div>
+            )}
+
             {/* Archive Modal */}
             {showArchive && (
                 <div className="fixed inset-0 bg-black/90 z-[3000] flex items-center justify-center p-4 backdrop-blur-2xl">
@@ -982,7 +1043,12 @@ const SocialFeed = ({ user, darkMode }) => {
                             ) : (
                                 archivedStories.map(story => (
                                     <div key={story.storyId} className="group relative aspect-[9/16] rounded-3xl overflow-hidden border border-white/10 shadow-xl bg-black/20 hover:scale-105 transition-all cursor-pointer">
-                                        <img src={story.mediaUrl} className="w-full h-full object-cover" alt=""/>
+                                        <img
+                                            src={story.mediaUrl}
+                                            onClick={() => setSelectedImage(story.mediaUrl)}
+                                            className="w-full h-full object-cover"
+                                            alt=""
+                                        />
                                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity p-4 flex flex-col justify-end">
                                             <p className="text-[10px] text-white font-black uppercase italic">{new Date(story.createdAt).toLocaleDateString()}</p>
                                         </div>

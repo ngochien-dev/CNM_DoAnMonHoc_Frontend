@@ -35,12 +35,13 @@ import {
   FaPaperclip,
   FaDownload
 } from "react-icons/fa";
+import api from "../../services/api";
 
 const RightSidebar = ({
   user,
-  onlineUsers,
+  onlineUsers = {},
   activeRoom,
-  allGroups,
+  allGroups = [],
   handleOpenProfile,
   handleStartDM,
   darkMode,
@@ -48,8 +49,9 @@ const RightSidebar = ({
   handleKick,
   handleToggleRole,
   lastSeenMap,
-  
+
   // Handlers and states
+  handleTogglePin,
   mutedRooms = {},
   toggleMuteRoom,
   clearChatHistory,
@@ -58,7 +60,7 @@ const RightSidebar = ({
   setShowInviteModal,
   setShowMediaGallery,
   setShowWallpaperModal,
-  selfDestructTimer,
+  selfDestructTimer = 0,
   setSelfDestructTimer,
   handleVideoCall,
   isCallBusy,
@@ -76,7 +78,8 @@ const RightSidebar = ({
   filterType,
   setFilterType,
   scrollToMessage,
-  handleExportChat
+  handleExportChat,
+  onOpenReportViolation
 }) => {
   const [expandedSections, setExpandedSections] = useState({
     chatInfo: true,
@@ -87,6 +90,34 @@ const RightSidebar = ({
   });
 
   const [searchResults, setSearchResults] = useState([]);
+  const [offlineUsersCache, setOfflineUsersCache] = useState({});
+
+  useEffect(() => {
+    const fetchMissingUsers = async () => {
+      if (!isVisible) return;
+      const currentGroup = allGroups.find((g) => g.groupId === activeRoom?.id);
+      const friendsList = user?.friends || [];
+      const membersList = currentGroup?.members || [];
+      const allNeeded = [...new Set([...friendsList, ...membersList])];
+
+      const missing = allNeeded.filter(uname => !onlineUsers[uname] && !offlineUsersCache[uname]);
+      if (missing.length === 0) return;
+
+      try {
+         const results = await Promise.all(
+           missing.map(uname => api.get(`/users/${uname}`).catch(() => null))
+         );
+         const newCache = { ...offlineUsersCache };
+         results.forEach((res, index) => {
+           if (res?.data) {
+             newCache[missing[index]] = res.data;
+           }
+         });
+         setOfflineUsersCache(newCache);
+      } catch (e) {}
+    };
+    fetchMissingUsers();
+  }, [user?.friends, activeRoom?.id, allGroups, onlineUsers, isVisible]);
 
   const handleSearch = () => {
     if (!searchContent.trim() && filterType === 'all') {
@@ -312,11 +343,11 @@ const RightSidebar = ({
   const currentGroup = allGroups.find((g) => g.groupId === activeRoom?.id);
   const isDM = activeRoom?.isDM;
 
-  // Permissions
   const isSysAdmin = user?.role === 'admin';
   const isOwner = currentGroup?.owner === user?.username;
   const isMod = currentGroup?.mods?.includes(user?.username);
   const canManage = isSysAdmin || isOwner || isMod;
+  const isMember = currentGroup?.members?.includes(user?.username);
 
   const toggleSection = (section) => {
     setExpandedSections(prev => ({
@@ -324,9 +355,12 @@ const RightSidebar = ({
       [section]: !prev[section]
     }));
   };
-
   const handleCopyInviteLink = () => {
-    const inviteLink = `${window.location.origin}/invite/${activeRoom?.id}`;
+    if (!currentGroup?.inviteLinkEnabled || !currentGroup?.inviteToken) {
+      alert("Liên kết mời nhóm đang bị tắt hoặc chưa được cấu hình!");
+      return;
+    }
+    const inviteLink = `${window.location.origin}/join/${currentGroup.inviteToken}`;
     navigator.clipboard.writeText(inviteLink);
     alert("Đã sao chép đường dẫn tham gia nhóm!");
   };
@@ -349,29 +383,33 @@ const RightSidebar = ({
     return "Tắt";
   };
 
-  // Switch to next self destruct timer option
   const handleCycleSelfDestruct = () => {
+    if (!setSelfDestructTimer) return;
     const options = [0, 60, 3600, 86400];
-    const nextIdx = (options.indexOf(selfDestructTimer) + 1) % options.length;
+    const currentIdx = options.includes(selfDestructTimer) ? options.indexOf(selfDestructTimer) : 0;
+    const nextIdx = (currentIdx + 1) % options.length;
     setSelfDestructTimer(options[nextIdx]);
   };
 
-  // --- HOME TAB / FRIENDS VIEW ---
   const renderFriends = () => {
-    const sortedFriends = [...(user.friends || [])].sort(
+    const sortedFriends = [...(user?.friends || [])].sort(
       (a, b) => !!onlineUsers[b] - !!onlineUsers[a]
     );
     return (
       <div className="flex flex-col h-full space-y-4">
         <div className="flex items-center justify-between pb-3 border-b border-slate-700/50">
           <p className="text-[10px] font-black uppercase tracking-[3px] text-indigo-400 italic">
-            Danh sách đồng minh ({user.friends?.length || 0})
+            Danh sách đồng minh ({user?.friends?.length || 0})
           </p>
           <FaUserFriends className="text-indigo-500/60" size={14} />
         </div>
         <div className="flex-1 overflow-y-auto space-y-2.5 scrollbar-hide">
           {sortedFriends.map((fName) => {
             const isOnline = !!onlineUsers[fName];
+            const cachedInfo = offlineUsersCache[fName];
+            const displayAvatar = onlineUsers[fName]?.avatar || cachedInfo?.avatar;
+            const displayName = onlineUsers[fName]?.displayName || cachedInfo?.displayName || fName;
+
             return (
               <div
                 key={fName}
@@ -379,7 +417,7 @@ const RightSidebar = ({
                   darkMode 
                     ? 'hover:bg-white/5 bg-slate-900/20 border border-white/5 hover:border-white/10' 
                     : 'hover:bg-slate-100 bg-white border border-gray-100 shadow-sm'
-                } ${!isOnline && "opacity-60"}`}
+                } ${!isOnline && "opacity-70 grayscale-[20%]"}`}
               >
                 <div
                   className="flex items-center gap-3 min-w-0"
@@ -388,12 +426,12 @@ const RightSidebar = ({
                   <div className="relative shrink-0">
                     <div
                       className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-white shadow-md uppercase border ${
-                        isOnline ? "border-emerald-500/50 bg-indigo-600" : "border-slate-600 bg-slate-700"
+                        isOnline ? "border-emerald-500/50 bg-indigo-600" : (darkMode ? "border-slate-600 bg-slate-700" : "border-slate-300 bg-slate-400")
                       }`}
                     >
-                      {onlineUsers[fName]?.avatar ? (
+                      {displayAvatar ? (
                         <img
-                          src={onlineUsers[fName].avatar}
+                          src={displayAvatar}
                           className="w-full h-full object-cover rounded-full"
                           alt=""
                         />
@@ -408,8 +446,8 @@ const RightSidebar = ({
                     />
                   </div>
                   <div className="truncate">
-                    <p className={`text-xs font-black uppercase italic tracking-tighter ${darkMode ? 'text-white' : 'text-slate-800'}`}>
-                      {onlineUsers[fName]?.displayName || fName}
+                    <p className={`text-xs font-black uppercase italic tracking-tighter truncate ${darkMode ? 'text-white' : 'text-slate-800'}`}>
+                      {displayName}
                     </p>
                     <p className="text-[8px] font-bold tracking-widest text-slate-500">
                       {isOnline ? "ĐANG ONLINE" : (formatLastSeen(lastSeenMap?.[fName]) || "OFFLINE")}
@@ -433,6 +471,7 @@ const RightSidebar = ({
   // --- MESSENGER STRUCTURED VIEW ---
   const renderChatInfo = () => {
     const isMuted = activeRoom ? !!mutedRooms[activeRoom.id] : false;
+    const isPinned = user?.pinnedRooms?.includes(activeRoom?.id);
     const currentAvatar = isDM 
       ? (onlineUsers[activeRoom.name]?.avatar)
       : (currentGroup?.avatar);
@@ -462,7 +501,7 @@ const RightSidebar = ({
         </div>
 
         {/* Circular Messenger Buttons under Profile */}
-        <div className="flex items-center justify-center gap-6 py-2 border-b border-slate-700/20 pb-5">
+        <div className="flex items-center justify-center gap-4 py-2 border-b border-slate-700/20 pb-5">
           {/* Mute/Unmute */}
           <div className="flex flex-col items-center space-y-1">
             <button
@@ -476,67 +515,75 @@ const RightSidebar = ({
             >
               {isMuted ? <FaBellSlash size={14} /> : <FaBell size={14} />}
             </button>
-            <span className="text-[10px] font-medium text-slate-400">
+            <span className="text-[10px] font-medium text-slate-400 leading-tight text-center">
               {isMuted ? "Bật lại" : "Tắt âm"}
             </span>
           </div>
 
-          {/* Search */}
+          {/* Pin/Unpin Conversation */}
           <div className="flex flex-col items-center space-y-1">
             <button
-              onClick={() => setShowSearch(!showSearch)}
+              onClick={() => handleTogglePin?.(activeRoom.id, isPinned)}
+              disabled={!handleTogglePin}
               className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 ${
-                showSearch 
-                  ? 'bg-indigo-600 text-white' 
+                !handleTogglePin
+                  ? 'bg-white/5 text-slate-600 cursor-not-allowed opacity-35'
+                  : isPinned
+                  ? 'bg-indigo-600 text-white hover:bg-indigo-700'
                   : darkMode 
                     ? 'bg-white/10 hover:bg-white/20 text-gray-200' 
                     : 'bg-slate-200/80 hover:bg-slate-300/80 text-slate-700'
               }`}
-              title="Tìm kiếm cuộc hội thoại"
+              title={isPinned ? "Bỏ ghim hội thoại" : "Ghim hội thoại"}
             >
-              <FaSearch size={14} />
+              <FaThumbtack size={14} className={isPinned ? '' : 'text-slate-400'} />
             </button>
-            <span className="text-[10px] font-medium text-slate-400">Tìm kiếm</span>
+            <span className="text-[10px] font-medium text-slate-400 leading-tight text-center">
+              {isPinned ? "Bỏ ghim" : "Ghim"}
+            </span>
           </div>
 
-          {/* Video (DM) / Invite (Group) */}
-          {isDM ? (
-            <div className="flex flex-col items-center space-y-1">
-              <button
-                onClick={() => handleVideoCall()}
-                disabled={isCallBusy}
-                className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 ${
-                  isCallBusy
-                    ? 'bg-white/5 text-slate-600 cursor-not-allowed'
-                    : darkMode 
-                      ? 'bg-white/10 hover:bg-white/20 text-gray-200 hover:scale-105' 
-                      : 'bg-slate-200/80 hover:bg-slate-300/80 text-slate-700 hover:scale-105'
-                }`}
-                title="Gọi video"
-              >
-                <FaVideo size={14} />
-              </button>
-              <span className="text-[10px] font-medium text-slate-400">Video</span>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center space-y-1">
-              <button
-                onClick={() => setShowInviteModal(true)}
-                disabled={!canManage}
-                className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 ${
-                  !canManage
-                    ? 'bg-white/5 text-slate-600 cursor-not-allowed opacity-30'
-                    : darkMode 
-                      ? 'bg-white/10 hover:bg-white/20 text-gray-200 hover:scale-105' 
-                      : 'bg-slate-200/80 hover:bg-slate-300/80 text-slate-700 hover:scale-105'
-                }`}
-                title="Thêm thành viên"
-              >
-                <FaUserPlus size={14} />
-              </button>
-              <span className="text-[10px] font-medium text-slate-400">Mời người</span>
-            </div>
-          )}
+          {/* Add member (Groups only) */}
+          <div className="flex flex-col items-center space-y-1">
+            <button
+              onClick={() => !isDM && setShowInviteModal(true)}
+              disabled={isDM || !isMember}
+              className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 ${
+                isDM || !isMember
+                  ? 'bg-white/5 text-slate-600 cursor-not-allowed opacity-35'
+                  : darkMode
+                    ? 'bg-white/10 hover:bg-white/20 text-gray-200 hover:scale-105'
+                    : 'bg-slate-200/80 hover:bg-slate-300/80 text-slate-700 hover:scale-105'
+              }`}
+              title={isDM ? "Không thể thêm thành viên vào DM" : "Thêm thành viên"}
+            >
+              <FaUserPlus size={14} />
+            </button>
+            <span className="text-[10px] font-medium text-slate-400 leading-tight text-center">
+              Thêm bạn
+            </span>
+          </div>
+
+          {/* Group Settings (Groups only) */}
+          <div className="flex flex-col items-center space-y-1">
+            <button
+              onClick={() => !isDM && setShowGroupSettings(true)}
+              disabled={isDM || !canManage}
+              className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 ${
+                isDM || !canManage
+                  ? 'bg-white/5 text-slate-600 cursor-not-allowed opacity-35'
+                  : darkMode
+                    ? 'bg-white/10 hover:bg-white/20 text-gray-200 hover:scale-105'
+                    : 'bg-slate-200/80 hover:bg-slate-300/80 text-slate-700 hover:scale-105'
+              }`}
+              title={isDM ? "Cài đặt không khả dụng cho DM" : "Cài đặt nhóm"}
+            >
+              <FaCog size={14} />
+            </button>
+            <span className="text-[10px] font-medium text-slate-400 leading-tight text-center">
+              Cài đặt
+            </span>
+          </div>
         </div>
 
         {/* MESSENGER STYLE ACCORDION LIST */}
@@ -579,6 +626,7 @@ const RightSidebar = ({
                     <span className="text-[11px] font-black text-orange-400 uppercase tracking-widest">{getSelfDestructTimerLabel()}</span>
                   </div>
                 </div>
+
               </div>
             )}
           </div>
@@ -656,7 +704,10 @@ const RightSidebar = ({
                     <input
                       type="text"
                       readOnly
-                      value={`${window.location.origin}/invite/${activeRoom?.id}`}
+                      value={currentGroup?.inviteLinkEnabled && currentGroup?.inviteToken
+                        ? `${window.location.origin}/join/${currentGroup.inviteToken}`
+                        : "Liên kết mời nhóm đang bị tắt"
+                      }
                       className={`flex-1 text-[9px] p-2.5 rounded-xl border font-bold text-slate-500 outline-none ${
                         darkMode ? 'bg-black/30 border-white/5' : 'bg-slate-50 border-gray-200'
                       }`}
@@ -673,36 +724,42 @@ const RightSidebar = ({
                   <div className="space-y-2 max-h-56 overflow-y-auto scrollbar-hide">
                     {currentGroup.members?.map((uname) => {
                       const isOnline = !!onlineUsers[uname];
+                      const cachedInfo = offlineUsersCache[uname];
+                      const displayAvatar = onlineUsers[uname]?.avatar || cachedInfo?.avatar;
+                      const displayName = onlineUsers[uname]?.displayName || cachedInfo?.displayName || uname;
                       const isGroupOwner = uname === currentGroup.owner;
                       const isUserMod = currentGroup?.mods?.includes(uname);
                       return (
                         <div
                           key={uname}
                           onClick={() => handleOpenProfile(uname)}
-                          className={`group flex items-center justify-between p-1.5 rounded-xl cursor-pointer hover:bg-white/5 transition-all duration-200 ${!isOnline && "opacity-60"}`}
+                          className={`group flex items-center justify-between p-2 rounded-xl cursor-pointer hover:bg-white/5 transition-all duration-200 ${!isOnline && "opacity-75"}`}
                         >
-                          <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="flex items-center gap-3 min-w-0">
                             <div className="relative shrink-0">
-                              <div className="w-7 h-7 rounded-full flex items-center justify-center font-black text-white text-xs bg-slate-700 overflow-hidden border">
-                                {onlineUsers[uname]?.avatar ? (
-                                  <img src={onlineUsers[uname].avatar} className="w-full h-full object-cover" alt="" />
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-white text-xs overflow-hidden border ${isOnline ? "bg-indigo-500 border-emerald-500/30" : "bg-slate-500 border-slate-600"}`}>
+                                {displayAvatar ? (
+                                  <img src={displayAvatar} className="w-full h-full object-cover" alt="" />
                                 ) : (
-                                  uname[0]
+                                  uname[0].toUpperCase()
                                 )}
                               </div>
                               <FaCircle
-                                className={`absolute -bottom-0.5 -right-0.5 text-[7px] border ${
+                                className={`absolute -bottom-0.5 -right-0.5 text-[8px] border-2 ${
                                   darkMode ? "border-[#0a0f1d]" : "border-white"
-                                } ${isOnline ? "text-green-500" : "text-gray-500"}`}
+                                } ${isOnline ? "text-emerald-500" : "text-gray-400"}`}
                               />
                             </div>
                             <div className="truncate">
-                              <p className={`text-[11px] font-semibold flex items-center gap-1 ${
-                                darkMode ? 'text-gray-200' : 'text-slate-800'
+                              <p className={`text-[12.5px] font-semibold flex items-center gap-1.5 ${
+                                darkMode ? 'text-slate-200' : 'text-slate-800'
                               }`}>
-                                {onlineUsers[uname]?.displayName || uname}
-                                {isGroupOwner && <FaCrown className="text-yellow-500 shrink-0" size={9} />}
-                                {isUserMod && !isGroupOwner && <FaShieldAlt className="text-indigo-400 shrink-0" size={9} />}
+                                {displayName}
+                                {isGroupOwner && <FaCrown className="text-yellow-500 shrink-0" size={10} title="Trưởng nhóm" />}
+                                {isUserMod && !isGroupOwner && <FaShieldAlt className="text-indigo-400 shrink-0" size={10} title="Phó nhóm" />}
+                              </p>
+                              <p className={`text-[10px] font-medium mt-0.5 ${isOnline ? 'text-emerald-500' : 'text-slate-500'}`}>
+                                {isOnline ? 'Đang trực tuyến' : (formatLastSeen(lastSeenMap?.[uname]) || 'Ngoại tuyến')}
                               </p>
                             </div>
                           </div>
@@ -833,7 +890,7 @@ const RightSidebar = ({
 
                 {/* Report Option */}
                 <div 
-                  onClick={() => alert("Đã ghi nhận báo cáo nội dung cuộc trò chuyện.")}
+                  onClick={() => onOpenReportViolation && onOpenReportViolation()}
                   className={`flex items-center gap-3.5 py-2.5 px-2.5 rounded-xl cursor-pointer transition-colors ${
                     darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-100'
                   }`}

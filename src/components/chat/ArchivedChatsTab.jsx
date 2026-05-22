@@ -122,7 +122,7 @@ const ArchivedChatsTab = ({
                                                 ) : (
                                                     <div className="relative shrink-0">
                                                         <div className="w-12 h-12 rounded-2xl bg-slate-700 flex items-center justify-center text-white text-base font-bold uppercase overflow-hidden border border-white/10">
-                                                            {onlineUsers[r.name]?.avatar ? <img src={onlineUsers[r.name].avatar} className="w-full h-full object-cover" alt="" /> : r.name[0]}
+                                                            {onlineUsers[r.name]?.avatar ? <img src={onlineUsers[r.name].avatar} className="w-full h-full object-cover" alt="" /> : r.name.substring(0, 2).toUpperCase()}
                                                         </div>
                                                         <FaCircle className={`absolute -bottom-0.5 -right-0.5 text-[10px] border-2 ${darkMode ? 'border-[#1e293b]' : 'border-white'} ${isOnline ? 'text-green-500 animate-pulse' : 'text-gray-400'}`} />
                                                     </div>
