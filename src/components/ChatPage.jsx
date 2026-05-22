@@ -1951,6 +1951,14 @@ const ChatPage = ({ user, setUser }) => {
                     <Home user={user} onlineUsers={onlineUsers} allGroups={allGroups} darkMode={darkMode} onSwitchTab={(tab) => {
                         if (tab === 'friends') setShowFriendsTab(true);
                         if (tab === 'discovery') setShowDiscoveryTab(true);
+                        if (tab === 'social') setShowSocialFeed(true);
+                        if (tab === 'todo') setShowTodoTab(true);
+                        if (tab === 'callHistory') setShowCallHistoryTab(true);
+                        if (tab === 'archived') setShowArchivedTab(true);
+                        if (tab === 'ai') setShowAITab(true);
+                        if (tab === 'cloudDrive') setShowCloudDriveTab(true);
+                        if (tab === 'game') setShowGameCenter(true);
+                        if (tab === 'admin' && user?.role === 'admin') setIsAdminMode(true);
                     }} />
                 )}
             </div>

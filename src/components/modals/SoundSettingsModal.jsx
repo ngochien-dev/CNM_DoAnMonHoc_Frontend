@@ -60,7 +60,7 @@ const SoundSettingsModal = ({ isOpen, onClose, darkMode, setDarkMode, playNotifi
                         <FaVolumeUp className="text-indigo-500" />
                         <h3 className="font-semibold text-sm">Nhạc chuông thông báo</h3>
                     </div>
-                    
+
                     <div className="space-y-2">
                         {[
                             { id: 'telegram', label: 'Telegram Bell', desc: 'Âm chuông cao vút, thanh lịch' },
