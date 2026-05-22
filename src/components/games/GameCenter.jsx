@@ -138,11 +138,11 @@ const SnakeGame = ({ user, onScoreUpdate }) => {
     return (
         <div className="flex flex-col items-center justify-center p-4">
             <div className="mb-4 text-center">
-                <h3 className="text-2xl font-black text-indigo-400 mb-1">Rắn Săn Mồi</h3>
-                <p className="text-gray-400 font-bold">Điểm hiện tại: <span className="text-white">{score}</span></p>
+                <h3 className="text-xl font-bold text-indigo-500 mb-1">Rắn Săn Mồi</h3>
+                <p className="text-gray-500 font-semibold text-sm">Điểm hiện tại: <span className="text-slate-800 dark:text-white">{score}</span></p>
             </div>
 
-            <div className="relative border-4 border-slate-700 rounded-xl overflow-hidden shadow-2xl">
+            <div className="relative border-4 border-slate-700 rounded-xl overflow-hidden shadow-lg">
                 <canvas 
                     ref={canvasRef} 
                     width={400} 
@@ -151,18 +151,18 @@ const SnakeGame = ({ user, onScoreUpdate }) => {
                 ></canvas>
                 
                 {!isPlaying && (
-                    <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center backdrop-blur-sm z-10">
+                    <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center backdrop-blur-sm z-10">
                         {gameOver && (
                             <div className="text-center mb-6">
-                                <h2 className="text-4xl font-black text-red-500 mb-2">GAME OVER</h2>
-                                <p className="text-xl text-white font-bold">Điểm: {score}</p>
+                                <h2 className="text-3xl font-bold text-red-400 mb-2">Trò Chơi Kết Thúc</h2>
+                                <p className="text-lg text-white font-medium">Điểm của bạn: {score}</p>
                             </div>
                         )}
                         <button 
                             onClick={startGame}
-                            className="flex items-center gap-2 bg-indigo-500 hover:bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold transition-all hover:scale-105 active:scale-95 shadow-lg shadow-indigo-500/30"
+                            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-xl font-semibold transition-colors shadow-sm"
                         >
-                            {gameOver ? <><FaRedo /> Chơi Lại</> : <><FaPlay /> Bắt Đầu Chơi</>}
+                            {gameOver ? <><FaRedo /> Chơi lại</> : <><FaPlay /> Bắt đầu chơi</>}
                         </button>
                         <p className="text-gray-400 mt-4 text-sm font-medium"><kbd className="bg-slate-800 px-2 py-1 rounded">W</kbd> <kbd className="bg-slate-800 px-2 py-1 rounded">A</kbd> <kbd className="bg-slate-800 px-2 py-1 rounded">S</kbd> <kbd className="bg-slate-800 px-2 py-1 rounded">D</kbd> để di chuyển</p>
                     </div>
@@ -321,23 +321,23 @@ const FlappyBird = ({ user, onScoreUpdate }) => {
     return (
         <div className="flex flex-col items-center justify-center p-4">
             <div className="mb-4 text-center">
-                <h3 className="text-2xl font-black text-sky-400 mb-1">Chim Bay (Flappy)</h3>
-                <p className="text-gray-400 font-bold">Điểm hiện tại: <span className="text-white">{score}</span></p>
+                <h3 className="text-xl font-bold text-sky-500 mb-1">Chim Bay (Flappy)</h3>
+                <p className="text-gray-500 font-semibold text-sm">Điểm hiện tại: <span className="text-slate-800 dark:text-white">{score}</span></p>
             </div>
-            <div className="relative border-4 border-slate-700 rounded-xl overflow-hidden shadow-2xl select-none" onClick={handleJump}>
+            <div className="relative border-4 border-slate-700 rounded-xl overflow-hidden shadow-lg select-none" onClick={handleJump}>
                 <canvas ref={canvasRef} width={400} height={400} className="bg-sky-400 block cursor-pointer"></canvas>
                 {!isPlaying && (
-                    <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center backdrop-blur-sm z-10">
+                    <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center backdrop-blur-sm z-10">
                         {gameOver && (
                             <div className="text-center mb-6">
-                                <h2 className="text-4xl font-black text-red-500 mb-2">GAME OVER</h2>
-                                <p className="text-xl text-white font-bold">Điểm: {score}</p>
+                                <h2 className="text-3xl font-bold text-red-400 mb-2">Trò Chơi Kết Thúc</h2>
+                                <p className="text-lg text-white font-medium">Điểm của bạn: {score}</p>
                             </div>
                         )}
-                        <button onClick={startGame} className="flex items-center gap-2 bg-sky-500 hover:bg-sky-600 text-white px-6 py-3 rounded-xl font-bold transition-all hover:scale-105 active:scale-95 shadow-lg shadow-sky-500/30">
-                            {gameOver ? <><FaRedo /> Chơi Lại</> : <><FaPlay /> Bắt Đầu Chơi</>}
+                        <button onClick={startGame} className="flex items-center gap-2 bg-sky-500 hover:bg-sky-600 text-white px-6 py-3 rounded-xl font-semibold transition-colors shadow-sm">
+                            {gameOver ? <><FaRedo /> Chơi lại</> : <><FaPlay /> Bắt đầu chơi</>}
                         </button>
-                        <p className="text-gray-300 mt-4 text-sm font-medium">Nhấn <kbd className="bg-slate-800 px-2 py-1 rounded border border-gray-600">Space</kbd> hoặc Click chuột để bay</p>
+                        <p className="text-gray-300 mt-4 text-sm font-medium">Nhấn <kbd className="bg-slate-800 px-2 py-1 rounded border border-gray-600">Space</kbd> hoặc Click để bay</p>
                     </div>
                 )}
             </div>
@@ -384,43 +384,34 @@ const GameCenter = ({ user, onClose, darkMode }) => {
     }, [socket, fetchLeaderboard, lbTab]);
 
     return (
-        <div className={`flex-1 flex flex-col md:flex-row h-full overflow-hidden select-none transition-colors duration-300 ${
+        <div className={`flex-1 flex flex-col md:flex-row h-full overflow-hidden select-none transition-colors duration-300 font-sans ${
             darkMode ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-800'
         }`}>
             {/* Game Screen Column */}
             <div className={`flex-1 flex flex-col relative ${
-                darkMode ? 'bg-slate-950 border-slate-800' : 'bg-white border-slate-200'
+                darkMode ? 'bg-[#0f172a] border-white/10' : 'bg-white border-gray-200'
             } border-r`}>
                 
-                {/* Close Button / Back to menu if in game */}
-                <button 
-                    onClick={onClose}
-                    className={`absolute top-4 right-4 w-10 h-10 ${
-                        darkMode ? 'bg-slate-800/80 hover:bg-red-500 text-gray-300 hover:text-white' : 'bg-slate-100 hover:bg-red-500 text-gray-500 hover:text-white'
-                    } rounded-full flex items-center justify-center z-50 transition-colors shadow-sm`}
-                    title="Thoát Game Center"
-                >
-                    <FaTimes size={18} />
-                </button>
+
 
                 {/* Phần Game Play */}
                 <div className="flex-1 flex flex-col relative h-full">
                     {activeGame !== null ? (
                         <>
                             <div className={`p-4 border-b ${
-                                darkMode ? 'border-slate-800/80 bg-slate-900/50' : 'border-slate-200 bg-slate-50'
+                                darkMode ? 'border-white/10' : 'border-gray-200'
                             } flex items-center gap-3`}>
                                 <button 
                                     onClick={() => setActiveGame(null)}
                                     className={`p-2 ${
-                                        darkMode ? 'bg-slate-800 hover:bg-slate-700 text-gray-400' : 'bg-slate-200/60 hover:bg-slate-200 text-slate-600'
-                                    } rounded-lg hover:text-indigo-500 transition-colors`}
+                                        darkMode ? 'hover:bg-white/10 text-gray-400' : 'hover:bg-gray-100 text-slate-600'
+                                    } rounded-lg transition-colors`}
                                     title="Quay lại danh sách game"
                                 >
                                     <FaChevronLeft />
                                 </button>
-                                <h2 className={`text-xl font-black ${darkMode ? 'text-white' : 'text-slate-800'} flex items-center gap-2`}>
-                                    <FaGamepad className="text-indigo-500 animate-pulse"/> Trung tâm Trò chơi
+                                <h2 className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-slate-800'} flex items-center gap-2`}>
+                                    <FaGamepad className="text-indigo-500"/> Trung tâm Trò chơi
                                 </h2>
                             </div>
                             <div className="flex-1 flex items-center justify-center overflow-auto p-4">
@@ -431,34 +422,34 @@ const GameCenter = ({ user, onClose, darkMode }) => {
                     ) : (
                         <div className="p-8 h-full flex flex-col justify-center overflow-y-auto">
                             <div className="max-w-3xl mx-auto w-full">
-                                <h2 className={`text-3xl font-black ${darkMode ? 'text-white' : 'text-slate-800'} mb-2 flex items-center gap-3`}>
-                                    <FaGamepad className="text-indigo-500 text-4xl animate-bounce"/> Game Center
+                                <h2 className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-slate-800'} mb-2 flex items-center gap-3`}>
+                                    <FaGamepad className="text-indigo-600"/> Game Center
                                 </h2>
-                                <p className={`mb-8 font-medium ${darkMode ? 'text-gray-400' : 'text-slate-500'}`}>Giải trí, thi tài cùng bạn bè trên bảng xếp hạng toàn máy chủ.</p>
+                                <p className={`mb-8 font-medium text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Giải trí, thi tài cùng bạn bè trên bảng xếp hạng toàn máy chủ.</p>
                                 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                                     {/* Thẻ Game 1 */}
-                                    <div className={`border rounded-3xl p-6 transition-all group cursor-pointer shadow-sm hover:shadow-lg ${
-                                        darkMode ? 'bg-slate-800 border-slate-700 hover:border-indigo-500' : 'bg-white border-slate-200 hover:border-indigo-500'
+                                    <div className={`border rounded-2xl p-6 transition-all group cursor-pointer shadow-sm hover:shadow-md ${
+                                        darkMode ? 'bg-[#1e293b] border-white/10 hover:border-indigo-500/50' : 'bg-white border-gray-200 hover:border-indigo-300'
                                     }`} onClick={() => setActiveGame('snake')}>
-                                        <div className="w-16 h-16 bg-gradient-to-br from-green-400 to-emerald-600 rounded-2xl flex items-center justify-center shadow-lg mb-4 group-hover:scale-110 transition-transform">
-                                            <span className="text-3xl">🐍</span>
+                                        <div className="w-14 h-14 bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400 rounded-xl flex items-center justify-center mb-4 transition-transform group-hover:-translate-y-1">
+                                            <span className="text-2xl">🐍</span>
                                         </div>
-                                        <h3 className={`text-xl font-bold mb-2 group-hover:text-indigo-500 transition-colors ${darkMode ? 'text-white' : 'text-slate-800'}`}>Rắn Săn Mồi</h3>
-                                        <p className={`text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-slate-500'}`}>Ăn mồi để dài ra và sống sót càng lâu càng tốt. Ghi danh lên bảng vàng!</p>
-                                        <button className="mt-5 w-full py-3 bg-indigo-500/10 hover:bg-indigo-500 text-indigo-500 hover:text-white rounded-xl font-bold transition-colors">Chơi Ngay</button>
+                                        <h3 className={`text-lg font-bold mb-2 transition-colors ${darkMode ? 'text-white group-hover:text-indigo-400' : 'text-slate-800 group-hover:text-indigo-600'}`}>Rắn Săn Mồi</h3>
+                                        <p className={`text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Ăn mồi để dài ra và sống sót càng lâu càng tốt. Ghi danh lên bảng vàng!</p>
+                                        <button className="mt-5 w-full py-2.5 bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-600 hover:text-white text-indigo-600 dark:text-indigo-400 rounded-xl font-semibold transition-colors text-sm">Chơi ngay</button>
                                     </div>
 
                                     {/* Thẻ Game 2 */}
-                                    <div className={`border rounded-3xl p-6 transition-all group cursor-pointer shadow-sm hover:shadow-lg ${
-                                        darkMode ? 'bg-slate-800 border-slate-700 hover:border-sky-500' : 'bg-white border-slate-200 hover:border-sky-500'
+                                    <div className={`border rounded-2xl p-6 transition-all group cursor-pointer shadow-sm hover:shadow-md ${
+                                        darkMode ? 'bg-[#1e293b] border-white/10 hover:border-sky-500/50' : 'bg-white border-gray-200 hover:border-sky-300'
                                     }`} onClick={() => setActiveGame('flappy')}>
-                                        <div className="w-16 h-16 bg-gradient-to-br from-sky-400 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg mb-4 group-hover:scale-110 transition-transform">
-                                            <span className="text-3xl">🦅</span>
+                                        <div className="w-14 h-14 bg-sky-100 text-sky-600 dark:bg-sky-500/20 dark:text-sky-400 rounded-xl flex items-center justify-center mb-4 transition-transform group-hover:-translate-y-1">
+                                            <span className="text-2xl">🦅</span>
                                         </div>
-                                        <h3 className={`text-xl font-bold mb-2 group-hover:text-sky-500 transition-colors ${darkMode ? 'text-white' : 'text-slate-850'}`}>Chim Bay (Flappy)</h3>
-                                        <p className={`text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-slate-500'}`}>Nhấn Space để bay qua các ống nước. Cực kỳ ức chế và dễ nghiện!</p>
-                                        <button className="mt-5 w-full py-3 bg-sky-500/10 hover:bg-sky-500 text-sky-500 hover:text-white rounded-xl font-bold transition-colors">Chơi Ngay</button>
+                                        <h3 className={`text-lg font-bold mb-2 transition-colors ${darkMode ? 'text-white group-hover:text-sky-400' : 'text-slate-800 group-hover:text-sky-600'}`}>Chim Bay (Flappy)</h3>
+                                        <p className={`text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Nhấn Space để bay qua các ống nước. Cực kỳ ức chế và dễ nghiện!</p>
+                                        <button className="mt-5 w-full py-2.5 bg-sky-50 dark:bg-sky-500/10 hover:bg-sky-500 hover:text-white text-sky-600 dark:text-sky-400 rounded-xl font-semibold transition-colors text-sm">Chơi ngay</button>
                                     </div>
                                 </div>
                             </div>
@@ -468,25 +459,25 @@ const GameCenter = ({ user, onClose, darkMode }) => {
             </div>
 
             {/* Bảng xếp hạng (Leaderboard) */}
-            <div className={`w-full md:w-80 flex flex-col h-full shrink-0 ${darkMode ? 'bg-slate-900' : 'bg-slate-50/50'}`}>
-                <div className={`p-5 border-b ${darkMode ? 'border-slate-800 bg-slate-900/80' : 'border-slate-200 bg-slate-100/50'} sticky top-0 z-10 flex flex-col gap-3`}>
+            <div className={`w-full md:w-80 flex flex-col h-full shrink-0 border-l ${darkMode ? 'bg-[#0f172a] border-white/10' : 'bg-gray-50 border-gray-200'}`}>
+                <div className={`p-5 border-b ${darkMode ? 'border-white/10 bg-[#0f172a]' : 'border-gray-200 bg-white'} sticky top-0 z-10 flex flex-col gap-4`}>
                     <div className="flex items-center justify-between">
-                        <h3 className={`text-lg font-black flex items-center gap-2 ${darkMode ? 'text-white' : 'text-slate-800'}`}>
-                            <FaTrophy className="text-yellow-500 text-xl animate-bounce"/> {lbTab === 'snake' ? 'BXH Cờ Rắn' : 'BXH Chim Bay'}
+                        <h3 className={`text-base font-bold flex items-center gap-2 ${darkMode ? 'text-white' : 'text-slate-800'}`}>
+                            <FaTrophy className="text-yellow-500"/> {lbTab === 'snake' ? 'BXH Rắn Săn Mồi' : 'BXH Chim Bay'}
                         </h3>
-                        <p className={`text-xs font-bold ${darkMode ? 'text-gray-500' : 'text-slate-400'}`}>(Top 10)</p>
+                        <p className={`text-xs font-semibold ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>Top 10</p>
                     </div>
                     {activeGame === null && (
-                        <div className={`flex rounded-xl p-1 border ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-200/50 border-slate-300/30'} animate-fade-in`}>
+                        <div className={`flex p-1 rounded-xl ${darkMode ? 'bg-white/5' : 'bg-gray-100'}`}>
                             <button 
                                 onClick={() => setLbTab('snake')}
-                                className={`flex-1 py-2 text-xs font-black rounded-lg transition-all ${lbTab === 'snake' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-indigo-500'}`}
+                                className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all ${lbTab === 'snake' ? 'bg-white text-slate-800 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-gray-500 hover:text-slate-700 dark:text-gray-400 dark:hover:text-white'}`}
                             >
                                 🐍 Rắn Săn Mồi
                             </button>
                             <button 
                                 onClick={() => setLbTab('flappy')}
-                                className={`flex-1 py-2 text-xs font-black rounded-lg transition-all ${lbTab === 'flappy' ? 'bg-sky-500 text-white shadow-lg' : 'text-slate-500 hover:text-sky-500'}`}
+                                className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all ${lbTab === 'flappy' ? 'bg-white text-slate-800 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-gray-500 hover:text-slate-700 dark:text-gray-400 dark:hover:text-white'}`}
                             >
                                 🦅 Chim Bay
                             </button>
@@ -495,37 +486,37 @@ const GameCenter = ({ user, onClose, darkMode }) => {
                 </div>
                 <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
                     {leaderboard.length === 0 ? (
-                        <div className={`text-center mt-10 font-bold ${darkMode ? 'text-gray-500' : 'text-slate-400'}`}>Chưa có ai ghi điểm ở game này!</div>
+                        <div className={`text-center mt-10 font-semibold text-sm ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>Chưa có thành tích nào!</div>
                     ) : (
-                        <div className="flex flex-col gap-3">
+                        <div className="flex flex-col gap-2">
                             {leaderboard.map((lb, idx) => (
-                                <div key={idx} className={`flex items-center gap-3 p-3 rounded-2xl transition-all border ${
+                                <div key={idx} className={`flex items-center gap-3 p-3 rounded-xl transition-all border ${
                                     idx === 0 
-                                        ? 'bg-yellow-500/10 border-yellow-500/30' 
+                                        ? (darkMode ? 'bg-yellow-500/10 border-yellow-500/20' : 'bg-yellow-50 border-yellow-200') 
                                         : idx === 1 
-                                            ? 'bg-slate-400/10 border-slate-400/20' 
+                                            ? (darkMode ? 'bg-slate-400/10 border-slate-400/20' : 'bg-slate-100 border-slate-200') 
                                             : idx === 2 
-                                                ? 'bg-orange-500/10 border-orange-500/20' 
-                                                : darkMode ? 'bg-slate-800/40 border-slate-700/50 hover:bg-slate-800' : 'bg-white border-slate-200 hover:bg-slate-100/50'
+                                                ? (darkMode ? 'bg-orange-500/10 border-orange-500/20' : 'bg-orange-50 border-orange-200') 
+                                                : (darkMode ? 'bg-white/5 border-transparent hover:bg-white/10' : 'bg-white border-gray-100 shadow-sm hover:border-gray-200')
                                 }`}>
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black ${
+                                    <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs ${
                                         idx === 0 
-                                            ? 'bg-yellow-500 text-yellow-950 shadow-[0_0_10px_rgba(234,179,8,0.4)]' 
+                                            ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-500' 
                                             : idx === 1 
-                                                ? 'bg-slate-350 text-slate-800' 
+                                                ? 'bg-slate-200 text-slate-700 dark:bg-slate-600 dark:text-slate-300' 
                                                 : idx === 2 
-                                                    ? 'bg-orange-400 text-orange-950' 
-                                                    : darkMode ? 'bg-slate-700 text-gray-300' : 'bg-slate-200 text-slate-700'
+                                                    ? 'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-500' 
+                                                    : (darkMode ? 'bg-slate-800 text-gray-400' : 'bg-gray-100 text-gray-500')
                                     }`}>
                                         {idx + 1}
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <div className={`font-black text-sm truncate flex items-center gap-1.5 ${darkMode ? 'text-gray-200' : 'text-slate-800'}`}>
-                                            {lb.displayName} {lb.username === user.username && <span className="text-[10px] bg-indigo-650 text-white px-2 py-0.5 rounded-full font-black">Bạn</span>}
+                                        <div className={`font-semibold text-sm truncate flex items-center gap-1.5 ${darkMode ? 'text-white' : 'text-slate-800'}`}>
+                                            {lb.displayName} {lb.username === user.username && <span className="text-[10px] bg-indigo-100 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400 px-1.5 py-0.5 rounded font-bold">Bạn</span>}
                                         </div>
-                                        <div className={`text-xs truncate ${darkMode ? 'text-gray-500' : 'text-slate-400'}`}>@{lb.username}</div>
+                                        <div className={`text-xs truncate ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>@{lb.username}</div>
                                     </div>
-                                    <div className="font-black text-indigo-500">{lb.score}</div>
+                                    <div className={`font-bold text-sm ${idx === 0 ? 'text-yellow-600 dark:text-yellow-400' : idx === 1 ? 'text-slate-600 dark:text-slate-400' : idx === 2 ? 'text-orange-600 dark:text-orange-400' : 'text-indigo-600 dark:text-indigo-400'}`}>{lb.score}</div>
                                 </div>
                             ))}
                         </div>
