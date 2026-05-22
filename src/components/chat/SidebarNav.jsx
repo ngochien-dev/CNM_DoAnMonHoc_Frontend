@@ -147,20 +147,12 @@ const SidebarNav = ({
 
             <div className="w-8 h-[2px] bg-gray-600 rounded-full opacity-20"></div>
 
-            {/* 12. Sáng / Tối */}
+            {/* 13. Cài đặt ứng dụng */}
             <div className="group relative flex items-center justify-center w-full">
-                <div onClick={() => { localStorage.setItem('theme', !darkMode ? 'dark' : 'light'); setDarkMode(!darkMode); }} className="w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer bg-white/10 hover:bg-white/20 transition-all">
-                    {darkMode ? <FaSun className="text-yellow-400" /> : <FaMoon />}
-                </div>
-                <div className="absolute left-16 px-2.5 py-1.5 bg-slate-900/90 text-white text-[11px] font-bold rounded-lg shadow-xl opacity-0 scale-90 pointer-events-none group-hover:opacity-100 group-hover:scale-100 transition-all duration-150 origin-left whitespace-nowrap z-50 border border-white/10">Chuyển chế độ Sáng/Tối</div>
-            </div>
-
-            {/* 13. Cài đặt nhạc chuông */}
-            <div className="group relative flex items-center justify-center w-full">
-                <div onClick={() => setShowSoundSettings(true)} className="w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer bg-white/10 hover:bg-white/20 transition-all text-indigo-400 hover:text-white">
+                <div onClick={() => setShowSoundSettings(true)} className={`w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all ${darkMode ? 'bg-white/10 hover:bg-white/20 text-indigo-400 hover:text-white' : 'bg-gray-100 hover:bg-gray-200 text-slate-500 hover:text-indigo-600'}`}>
                     <FaCog size={20} />
                 </div>
-                <div className="absolute left-16 px-2.5 py-1.5 bg-slate-900/90 text-white text-[11px] font-bold rounded-lg shadow-xl opacity-0 scale-90 pointer-events-none group-hover:opacity-100 group-hover:scale-100 transition-all duration-150 origin-left whitespace-nowrap z-50 border border-white/10">Cài đặt nhạc chuông</div>
+                <div className="absolute left-16 px-2.5 py-1.5 bg-slate-900/90 text-white text-[11px] font-bold rounded-lg shadow-xl opacity-0 scale-90 pointer-events-none group-hover:opacity-100 group-hover:scale-100 transition-all duration-150 origin-left whitespace-nowrap z-50 border border-white/10">Cài đặt ứng dụng</div>
             </div>
 
             {/* 14. Admin Panel */}

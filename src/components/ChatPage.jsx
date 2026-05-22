@@ -2141,11 +2141,12 @@ const ChatPage = ({ user, setUser }) => {
                 loadData={loadData}
             />
 
-            {/* Modal Cài Đặt Nhạc Chuông Thông Báo */}
+            {/* Modal Cài Đặt Ứng Dụng (Giao diện, Nhạc chuông) */}
             <SoundSettingsModal
                 isOpen={showSoundSettings}
                 onClose={() => setShowSoundSettings(false)}
                 darkMode={darkMode}
+                setDarkMode={setDarkMode}
                 playNotificationSound={playNotificationSound}
             />
 
