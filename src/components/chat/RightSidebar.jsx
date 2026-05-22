@@ -35,6 +35,7 @@ import {
   FaPaperclip,
   FaDownload
 } from "react-icons/fa";
+import api from "../../services/api";
 
 const RightSidebar = ({
   user,
@@ -87,6 +88,34 @@ const RightSidebar = ({
   });
 
   const [searchResults, setSearchResults] = useState([]);
+  const [offlineUsersCache, setOfflineUsersCache] = useState({});
+
+  useEffect(() => {
+    const fetchMissingUsers = async () => {
+      if (!isVisible) return;
+      const currentGroup = allGroups.find((g) => g.groupId === activeRoom?.id);
+      const friendsList = user?.friends || [];
+      const membersList = currentGroup?.members || [];
+      const allNeeded = [...new Set([...friendsList, ...membersList])];
+      
+      const missing = allNeeded.filter(uname => !onlineUsers[uname] && !offlineUsersCache[uname]);
+      if (missing.length === 0) return;
+
+      try {
+         const results = await Promise.all(
+           missing.map(uname => api.get(`/users/${uname}`).catch(() => null))
+         );
+         const newCache = { ...offlineUsersCache };
+         results.forEach((res, index) => {
+           if (res?.data) {
+             newCache[missing[index]] = res.data;
+           }
+         });
+         setOfflineUsersCache(newCache);
+      } catch (e) {}
+    };
+    fetchMissingUsers();
+  }, [user?.friends, activeRoom?.id, allGroups, onlineUsers, isVisible]);
 
   const handleSearch = () => {
     if (!searchContent.trim() && filterType === 'all') {
@@ -345,30 +374,33 @@ const RightSidebar = ({
     return `${Math.floor(hours / 24)} ngày trước`;
   };
 
-  // --- HOME TAB / FRIENDS VIEW ---
   const renderFriends = () => {
     const sortedFriends = [...(user.friends || [])].sort(
       (a, b) => !!onlineUsers[b] - !!onlineUsers[a]
     );
     return (
       <div className="flex flex-col h-full space-y-4">
-        <div className="flex items-center justify-between pb-3 border-b border-slate-700/50">
-          <p className="text-[10px] font-black uppercase tracking-[3px] text-indigo-400 italic">
-            Danh sách đồng minh ({user.friends?.length || 0})
+        <div className="flex items-center justify-between pb-3 border-b border-slate-700/20">
+          <p className={`text-[12.5px] font-semibold tracking-wide ${darkMode ? 'text-gray-300' : 'text-slate-700'}`}>
+            Danh sách bạn bè ({user.friends?.length || 0})
           </p>
-          <FaUserFriends className="text-indigo-500/60" size={14} />
+          <FaUserFriends className="text-indigo-400" size={14} />
         </div>
         <div className="flex-1 overflow-y-auto space-y-2.5 scrollbar-hide">
           {sortedFriends.map((fName) => {
             const isOnline = !!onlineUsers[fName];
+            const cachedInfo = offlineUsersCache[fName];
+            const displayAvatar = onlineUsers[fName]?.avatar || cachedInfo?.avatar;
+            const displayName = onlineUsers[fName]?.displayName || cachedInfo?.displayName || fName;
+            
             return (
               <div
                 key={fName}
                 className={`group flex items-center justify-between p-3 rounded-2xl cursor-pointer transition-all duration-300 ${
                   darkMode 
-                    ? 'hover:bg-white/5 bg-slate-900/20 border border-white/5 hover:border-white/10' 
-                    : 'hover:bg-slate-100 bg-white border border-gray-100 shadow-sm'
-                } ${!isOnline && "opacity-60"}`}
+                    ? 'hover:bg-white/5 bg-[#1e293b]/50 border border-slate-700/50 hover:border-slate-600' 
+                    : 'hover:bg-slate-50 bg-white border border-gray-200 shadow-sm'
+                } ${!isOnline && "opacity-75 grayscale-[20%]"}`}
               >
                 <div
                   className="flex items-center gap-3 min-w-0"
@@ -376,13 +408,13 @@ const RightSidebar = ({
                 >
                   <div className="relative shrink-0">
                     <div
-                      className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-white shadow-md uppercase border ${
-                        isOnline ? "border-emerald-500/50 bg-indigo-600" : "border-slate-600 bg-slate-700"
+                      className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white shadow-sm uppercase border ${
+                        isOnline ? "border-emerald-500/30 bg-indigo-500" : (darkMode ? "border-slate-600 bg-slate-600" : "border-slate-300 bg-slate-400")
                       }`}
                     >
-                      {onlineUsers[fName]?.avatar ? (
+                      {displayAvatar ? (
                         <img
-                          src={onlineUsers[fName].avatar}
+                          src={displayAvatar}
                           className="w-full h-full object-cover rounded-full"
                           alt=""
                         />
@@ -391,23 +423,23 @@ const RightSidebar = ({
                       )}
                     </div>
                     <FaCircle
-                      className={`absolute -bottom-0.5 -right-0.5 text-[8px] border ${
+                      className={`absolute -bottom-0.5 -right-0.5 text-[10px] border-2 ${
                         darkMode ? "border-[#0f172a]" : "border-white"
-                      } ${isOnline ? "text-emerald-500" : "text-gray-500"}`}
+                      } ${isOnline ? "text-emerald-500" : "text-gray-400"}`}
                     />
                   </div>
                   <div className="truncate">
-                    <p className={`text-xs font-black uppercase italic tracking-tighter ${darkMode ? 'text-white' : 'text-slate-800'}`}>
-                      {onlineUsers[fName]?.displayName || fName}
+                    <p className={`text-sm font-semibold truncate ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                      {displayName}
                     </p>
-                    <p className="text-[8px] font-bold tracking-widest text-slate-500">
-                      {isOnline ? "ĐANG ONLINE" : (formatLastSeen(lastSeenMap?.[fName]) || "OFFLINE")}
+                    <p className={`text-[10px] font-medium tracking-wide mt-0.5 ${isOnline ? "text-emerald-500" : "text-slate-500"}`}>
+                      {isOnline ? "Đang trực tuyến" : (formatLastSeen(lastSeenMap?.[fName]) || "Ngoại tuyến")}
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={() => handleStartDM(fName)}
-                  className="opacity-0 group-hover:opacity-100 p-2 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 rounded-xl transition-all"
+                  className={`opacity-0 group-hover:opacity-100 p-2.5 rounded-xl transition-all ${darkMode ? 'text-indigo-400 hover:text-white hover:bg-indigo-500' : 'text-indigo-600 hover:text-white hover:bg-indigo-500'}`}
                 >
                   <FaCommentDots size={14} />
                 </button>
@@ -660,36 +692,42 @@ const RightSidebar = ({
                   <div className="space-y-2 max-h-56 overflow-y-auto scrollbar-hide">
                     {currentGroup.members?.map((uname) => {
                       const isOnline = !!onlineUsers[uname];
+                      const cachedInfo = offlineUsersCache[uname];
+                      const displayAvatar = onlineUsers[uname]?.avatar || cachedInfo?.avatar;
+                      const displayName = onlineUsers[uname]?.displayName || cachedInfo?.displayName || uname;
                       const isGroupOwner = uname === currentGroup.owner;
                       const isUserMod = currentGroup?.mods?.includes(uname);
                       return (
                         <div
                           key={uname}
                           onClick={() => handleOpenProfile(uname)}
-                          className={`group flex items-center justify-between p-1.5 rounded-xl cursor-pointer hover:bg-white/5 transition-all duration-200 ${!isOnline && "opacity-60"}`}
+                          className={`group flex items-center justify-between p-2 rounded-xl cursor-pointer hover:bg-white/5 transition-all duration-200 ${!isOnline && "opacity-75"}`}
                         >
-                          <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="flex items-center gap-3 min-w-0">
                             <div className="relative shrink-0">
-                              <div className="w-7 h-7 rounded-full flex items-center justify-center font-black text-white text-xs bg-slate-700 overflow-hidden border">
-                                {onlineUsers[uname]?.avatar ? (
-                                  <img src={onlineUsers[uname].avatar} className="w-full h-full object-cover" alt="" />
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-white text-xs overflow-hidden border ${isOnline ? "bg-indigo-500 border-emerald-500/30" : "bg-slate-500 border-slate-600"}`}>
+                                {displayAvatar ? (
+                                  <img src={displayAvatar} className="w-full h-full object-cover" alt="" />
                                 ) : (
-                                  uname[0]
+                                  uname[0].toUpperCase()
                                 )}
                               </div>
                               <FaCircle
-                                className={`absolute -bottom-0.5 -right-0.5 text-[7px] border ${
+                                className={`absolute -bottom-0.5 -right-0.5 text-[8px] border-2 ${
                                   darkMode ? "border-[#0a0f1d]" : "border-white"
-                                } ${isOnline ? "text-green-500" : "text-gray-500"}`}
+                                } ${isOnline ? "text-emerald-500" : "text-gray-400"}`}
                               />
                             </div>
                             <div className="truncate">
-                              <p className={`text-[11px] font-semibold flex items-center gap-1 ${
-                                darkMode ? 'text-gray-200' : 'text-slate-800'
+                              <p className={`text-[12.5px] font-semibold flex items-center gap-1.5 ${
+                                darkMode ? 'text-slate-200' : 'text-slate-800'
                               }`}>
-                                {onlineUsers[uname]?.displayName || uname}
-                                {isGroupOwner && <FaCrown className="text-yellow-500 shrink-0" size={9} />}
-                                {isUserMod && !isGroupOwner && <FaShieldAlt className="text-indigo-400 shrink-0" size={9} />}
+                                {displayName}
+                                {isGroupOwner && <FaCrown className="text-yellow-500 shrink-0" size={10} title="Trưởng nhóm" />}
+                                {isUserMod && !isGroupOwner && <FaShieldAlt className="text-indigo-400 shrink-0" size={10} title="Phó nhóm" />}
+                              </p>
+                              <p className={`text-[10px] font-medium mt-0.5 ${isOnline ? 'text-emerald-500' : 'text-slate-500'}`}>
+                                {isOnline ? 'Đang trực tuyến' : (formatLastSeen(lastSeenMap?.[uname]) || 'Ngoại tuyến')}
                               </p>
                             </div>
                           </div>
