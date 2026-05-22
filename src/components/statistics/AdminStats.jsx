@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, Legend, AreaChart, Area, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { FaChartBar, FaUsers, FaComments, FaLayerGroup, FaSignal, FaBan, FaUnlock, FaKey, FaShieldAlt, FaTrash, FaCheck, FaInfoCircle, FaTimes } from 'react-icons/fa';
 import api from '../../services/api';
 
 const COLORS = ['#5865F2', '#23A559', '#FEE75C', '#EB459E', '#ED4245'];
 
-const AdminStats = ({ stats, darkMode }) => {
+const AdminStats = ({ stats: initialStats, darkMode }) => {
+    const [stats, setStats] = useState(initialStats);
+    const [timeRange, setTimeRange] = useState(7);
+    const [loadingStats, setLoadingStats] = useState(false);
     const [activeTab, setActiveTab] = useState('stats');
     const [users, setUsers] = useState([]);
     const [loadingUsers, setLoadingUsers] = useState(false);
@@ -22,6 +25,28 @@ const AdminStats = ({ stats, darkMode }) => {
             fetchReports();
         }
     }, [activeTab]);
+
+    useEffect(() => {
+        setStats(initialStats);
+    }, [initialStats]);
+
+    useEffect(() => {
+        if (!initialStats) return;
+        const fetchRangeStats = async () => {
+            setLoadingStats(true);
+            try {
+                const res = await api.get(`/admin/stats?range=${timeRange}`);
+                setStats(res.data);
+            } catch (err) {
+                console.error("Lỗi khi tải thống kê:", err);
+            } finally {
+                setLoadingStats(false);
+            }
+        };
+        // Skip first fetch since initialStats already has 7 days by default
+        if (timeRange === 7 && stats === initialStats) return;
+        fetchRangeStats();
+    }, [timeRange]);
 
     const fetchUsers = async () => {
         try {
@@ -171,12 +196,19 @@ const AdminStats = ({ stats, darkMode }) => {
                 <>
                     {/* Thẻ thống kê nhanh */}
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-                        <div className="p-6 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-600 text-white shadow-lg shadow-indigo-500/20">
-                            <div className="flex items-center gap-3 mb-2">
+                        <div className="p-6 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-600 text-white shadow-lg shadow-indigo-500/20 relative overflow-hidden">
+                            <div className="flex items-center gap-3 mb-2 relative z-10">
                                 <FaUsers className="opacity-80"/>
                                 <h4 className="text-sm font-medium opacity-90">Người dùng</h4>
                             </div>
-                            <p className="text-3xl font-bold">{stats.totalUsers || 0}</p>
+                            <div className="flex items-baseline gap-2 relative z-10">
+                                <p className="text-3xl font-bold">{stats.totalUsers || 0}</p>
+                                <div className="flex gap-1 text-[10px] font-medium bg-white/20 px-2 py-0.5 rounded-full">
+                                    <span className="text-emerald-300">{stats.activeUsers || 0} active</span>
+                                    <span className="opacity-50">|</span>
+                                    <span className="text-rose-300">{stats.bannedUsers || 0} banned</span>
+                                </div>
+                            </div>
                         </div>
                         <div className="p-6 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/20">
                             <div className="flex items-center gap-3 mb-2">
@@ -201,38 +233,84 @@ const AdminStats = ({ stats, darkMode }) => {
                         </div>
                     </div>
 
+                    {/* Lưu lượng tin nhắn */}
+                    <div className={`p-6 rounded-2xl border mb-6 relative ${darkMode ? 'bg-slate-900 border-white/10' : 'bg-white border-gray-200 shadow-sm'}`}>
+                        {loadingStats && (
+                            <div className="absolute inset-0 bg-black/5 z-10 flex items-center justify-center rounded-2xl backdrop-blur-[1px]">
+                                <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                            </div>
+                        )}
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className={`font-bold text-sm ${darkMode ? 'text-white' : 'text-slate-800'}`}>Lưu lượng tin nhắn</h3>
+                            <select 
+                                value={timeRange}
+                                onChange={(e) => setTimeRange(Number(e.target.value))}
+                                className={`text-sm px-3 py-1.5 rounded-lg border outline-none font-medium cursor-pointer transition-colors
+                                    ${darkMode ? 'bg-slate-800 border-slate-700 text-white hover:bg-slate-700' : 'bg-slate-50 border-gray-200 text-slate-700 hover:bg-slate-100'}`}
+                            >
+                                <option value={7}>7 ngày qua</option>
+                                <option value={30}>30 ngày qua</option>
+                                <option value={180}>6 tháng qua</option>
+                                <option value={365}>1 năm qua</option>
+                            </select>
+                        </div>
+                        <div className="h-[250px] w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart data={stats.activityChartData || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                    <defs>
+                                        <linearGradient id="colorMessages" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#5865F2" stopOpacity={0.3}/>
+                                            <stop offset="95%" stopColor="#5865F2" stopOpacity={0}/>
+                                        </linearGradient>
+                                    </defs>
+                                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: darkMode ? '#94a3b8' : '#64748b' }} dy={10} />
+                                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: darkMode ? '#94a3b8' : '#64748b' }} />
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={darkMode ? '#334155' : '#e2e8f0'} />
+                                    <RechartsTooltip 
+                                        contentStyle={{ borderRadius: '12px', border: 'none', backgroundColor: darkMode ? '#1e293b' : '#fff', color: darkMode ? '#fff' : '#000', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                                        itemStyle={{ color: '#5865F2', fontWeight: 'bold' }}
+                                    />
+                                    <Area type="monotone" dataKey="messages" name="Tin nhắn" stroke="#5865F2" strokeWidth={3} fillOpacity={1} fill="url(#colorMessages)" />
+                                </AreaChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+
                     {/* Biểu đồ & Top hoạt động */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
                         <div className={`p-6 rounded-2xl border ${darkMode ? 'bg-slate-900 border-white/10' : 'bg-white border-gray-200 shadow-sm'}`}>
-                            <h3 className={`font-bold mb-6 text-sm ${darkMode ? 'text-white' : 'text-slate-800'}`}>Phân bổ dữ liệu</h3>
-                            <div className="h-[300px]">
+                            <h3 className={`font-bold mb-6 text-sm ${darkMode ? 'text-white' : 'text-slate-800'}`}>Phân bổ dữ liệu lưu trữ</h3>
+                            <div className="h-[250px]">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
-                                        <Pie data={stats.chartData || []} cx="50%" cy="50%" innerRadius={70} outerRadius={90} paddingAngle={5} dataKey="value">
+                                        <Pie data={stats.chartData || []} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
                                             {(stats.chartData || []).map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} stroke="none" />)}
                                         </Pie>
-                                        <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                                        <Legend verticalAlign="bottom" height={36} />
+                                        <RechartsTooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', backgroundColor: darkMode ? '#1e293b' : '#fff', color: darkMode ? '#fff' : '#000' }} />
+                                        <Legend verticalAlign="bottom" height={36} wrapperStyle={{ fontSize: '12px' }} />
                                     </PieChart>
                                 </ResponsiveContainer>
                             </div>
                         </div>
 
                         <div className={`p-6 rounded-2xl border ${darkMode ? 'bg-slate-900 border-white/10' : 'bg-white border-gray-200 shadow-sm'}`}>
-                            <h3 className={`font-bold mb-6 text-sm ${darkMode ? 'text-white' : 'text-slate-800'}`}>Thành viên tích cực</h3>
-                            <div className="space-y-5">
+                            <h3 className={`font-bold mb-6 text-sm ${darkMode ? 'text-white' : 'text-slate-800'}`}>Thành viên tích cực nhất</h3>
+                            <div className="space-y-4">
                                 {(stats.topUsers || []).map((u, i) => (
                                     <div key={i} className="group">
-                                        <div className={`flex justify-between mb-2 items-center ${darkMode ? 'text-white' : 'text-slate-800'}`}>
+                                        <div className={`flex justify-between mb-1.5 items-center ${darkMode ? 'text-white' : 'text-slate-800'}`}>
                                             <span className="font-medium text-sm">@{u.name}</span>
-                                            <span className="text-xs font-semibold text-indigo-500">{u.count} tin nhắn</span>
+                                            <span className="text-[11px] font-bold text-indigo-500 bg-indigo-500/10 px-2 py-0.5 rounded-md">{u.count} tin nhắn</span>
                                         </div>
-                                        <div className={`w-full rounded-full h-1.5 overflow-hidden ${darkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
-                                            <div className="bg-indigo-500 h-full transition-all duration-1000 rounded-full" 
-                                                 style={{ width: `${Math.min((u.count / (stats.totalMessages || 1)) * 100 * 5, 100)}%` }}></div>
+                                        <div className={`w-full rounded-full h-2 overflow-hidden ${darkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
+                                            <div className="bg-gradient-to-r from-indigo-400 to-indigo-600 h-full transition-all duration-1000 rounded-full" 
+                                                 style={{ width: `${Math.max((u.count / (stats.topUserMaxCount || 1)) * 100, 2)}%` }}></div>
                                         </div>
                                     </div>
                                 ))}
+                                {(!stats.topUsers || stats.topUsers.length === 0) && (
+                                    <div className="text-center py-8 text-gray-500 text-sm">Chưa có dữ liệu hoạt động</div>
+                                )}
                             </div>
                         </div>
                     </div>
