@@ -807,6 +807,9 @@ const ChatPage = ({ user, setUser }) => {
         setShowAITab(false);
         setShowCloudDriveTab(false);
         setShowGameCenter(false);
+        setShowArchivedTab(false);
+        setShowTodoTab(false);
+        setShowCallHistoryTab(false);
         setIsAdminMode(false);
         setShowSearch(false);
         setShowGlobalSearch(false);
