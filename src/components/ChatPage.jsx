@@ -1734,7 +1734,7 @@ const ChatPage = ({ user, setUser }) => {
                                     const latestPin = pinnedMsgs[pinnedMsgs.length - 1];
 
                                     return (
-                                        <div className="relative z-[150] shrink-0">
+                                        <div className="relative z-40 shrink-0">
                                             {/* Collapsed Main Pinned Banner */}
                                             <div className={`px-6 py-2.5 flex items-center justify-between gap-4 border-b transition-all duration-300 ${darkMode ? 'bg-[#0f172a]/95 border-white/5 text-indigo-200 backdrop-blur-md' : 'bg-indigo-50 border-indigo-100 text-indigo-900 shadow-sm'
                                                 }`}>
