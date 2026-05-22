@@ -586,7 +586,7 @@ const RightSidebar = ({
             {expandedSections.chatInfo && (
               <div className="space-y-1 pb-2">
                 <div 
-                  onClick={() => setShowMediaGallery(true)}
+                  onClick={() => setShowMediaGallery('pinned')}
                   className={`flex items-center gap-3.5 py-2.5 px-2 rounded-xl cursor-pointer transition-colors ${
                     darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-100'
                   }`}
@@ -778,7 +778,7 @@ const RightSidebar = ({
             {expandedSections.media && (
               <div className="space-y-1 pb-2">
                 <div 
-                  onClick={() => setShowMediaGallery(true)}
+                  onClick={() => setShowMediaGallery('media')}
                   className={`flex items-center gap-3.5 py-2.5 px-2 rounded-xl cursor-pointer transition-colors ${
                     darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-100'
                   }`}
@@ -787,7 +787,7 @@ const RightSidebar = ({
                   <span className={`text-[12.5px] ${darkMode ? 'text-gray-200' : 'text-slate-700'}`}>Ảnh / Video</span>
                 </div>
                 <div 
-                  onClick={() => setShowMediaGallery(true)}
+                  onClick={() => setShowMediaGallery('files')}
                   className={`flex items-center gap-3.5 py-2.5 px-2 rounded-xl cursor-pointer transition-colors ${
                     darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-100'
                   }`}
@@ -796,7 +796,7 @@ const RightSidebar = ({
                   <span className={`text-[12.5px] ${darkMode ? 'text-gray-200' : 'text-slate-700'}`}>Tập tin / Files</span>
                 </div>
                 <div 
-                  onClick={() => setShowMediaGallery(true)}
+                  onClick={() => setShowMediaGallery('links')}
                   className={`flex items-center gap-3.5 py-2.5 px-2 rounded-xl cursor-pointer transition-colors ${
                     darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-100'
                   }`}

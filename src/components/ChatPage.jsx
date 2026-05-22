@@ -2040,7 +2040,7 @@ const ChatPage = ({ user, setUser }) => {
             />
 
             {showStickerPicker && <div className="absolute bottom-24 left-6 z-50"><StickerPicker onSelect={handleSendSticker} darkMode={darkMode} onClose={() => setShowStickerPicker(false)} /></div>}
-            {showMediaGallery && activeRoom && <MediaGallery roomId={activeRoom.id} darkMode={darkMode} onClose={() => setShowMediaGallery(false)} />}
+            {showMediaGallery && activeRoom && <MediaGallery roomId={activeRoom.id} darkMode={darkMode} onClose={() => setShowMediaGallery(false)} initialTab={typeof showMediaGallery === 'string' ? showMediaGallery : 'media'} onNavigateToMessage={(msgId) => { scrollToMessage(msgId); setShowMediaGallery(false); }} />}
             <CreateChat user={user} isOpen={showGroupCreator} onClose={() => setShowGroupCreator(false)} onCreateGroup={handleCreateGroup} darkMode={darkMode} isPublicMode={isPublicGroupCreator} />
 
             {/* Modal Báo Cáo Tin Nhắn Vi Phạm */}

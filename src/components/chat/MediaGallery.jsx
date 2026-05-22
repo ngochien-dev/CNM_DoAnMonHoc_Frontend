@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { FaTimes, FaImage, FaFileAlt, FaLink, FaDownload, FaExternalLinkAlt, FaPlay } from 'react-icons/fa';
+import { FaTimes, FaImage, FaFileAlt, FaLink, FaDownload, FaExternalLinkAlt, FaPlay, FaThumbtack } from 'react-icons/fa';
 import api from '../../services/api';
 
-const MediaGallery = ({ roomId, onClose, darkMode }) => {
-    const [activeTab, setActiveTab] = useState('media');
-    const [data, setData] = useState({ media: [], files: [], links: [] });
+const MediaGallery = ({ roomId, onClose, darkMode, initialTab = 'media', onNavigateToMessage }) => {
+    const [activeTab, setActiveTab] = useState(initialTab);
+    const [data, setData] = useState({ media: [], files: [], links: [], pinned: [] });
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const fetchMedia = async () => {
             try {
-                const res = await api.get(`/v1/messages/room/${roomId}/media`);
-                setData(res.data);
+                const [resMedia, resPinned] = await Promise.all([
+                    api.get(`/v1/messages/room/${roomId}/media`),
+                    api.get(`/v1/messages/search/pinned?in=${roomId}`)
+                ]);
+                setData({ ...resMedia.data, pinned: resPinned.data || [] });
             } catch (err) {
                 console.error("Error fetching media:", err);
             } finally {
@@ -45,7 +48,8 @@ const MediaGallery = ({ roomId, onClose, darkMode }) => {
                     {[
                         { id: 'media', label: 'Ảnh & Video', icon: <FaImage/> },
                         { id: 'files', label: 'Tệp đính kèm', icon: <FaFileAlt/> },
-                        { id: 'links', label: 'Liên kết', icon: <FaLink/> }
+                        { id: 'links', label: 'Liên kết', icon: <FaLink/> },
+                        { id: 'pinned', label: 'Tin nhắn ghim', icon: <FaThumbtack/> }
                     ].map(tab => (
                         <button
                             key={tab.id}
@@ -132,6 +136,31 @@ const MediaGallery = ({ roomId, onClose, darkMode }) => {
                                         </a>
                                     ))}
                                     {data.links.length === 0 && <EmptyState text="Chưa có liên kết nào." icon={<FaLink size={48}/>} />}
+                                </div>
+                            )}
+
+                            {activeTab === 'pinned' && (
+                                <div className="space-y-3">
+                                    {data.pinned.map((item, i) => (
+                                        <div key={i} onClick={() => onNavigateToMessage && onNavigateToMessage(item.messageId)} className={`p-4 rounded-2xl flex flex-col gap-2 border transition-all cursor-pointer ${darkMode ? 'bg-white/5 border-white/10 hover:bg-white/10' : 'bg-slate-50 border-gray-100 hover:bg-white shadow-sm'}`}>
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 bg-indigo-500/20 rounded-full flex items-center justify-center text-indigo-500 shrink-0 font-bold uppercase text-[10px] border border-indigo-500/30">
+                                                    {(item.senderName || item.senderId)[0]}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className={`text-xs font-bold truncate ${darkMode ? 'text-indigo-400' : 'text-indigo-600'}`}>@{item.senderName || item.senderId}</p>
+                                                    <p className="text-[9px] text-slate-500 font-medium">{formatTime(item.sentAt)}</p>
+                                                </div>
+                                                <div className="w-7 h-7 rounded-full flex items-center justify-center text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 transition-colors" title="Đi tới tin nhắn">
+                                                    <FaExternalLinkAlt size={10}/>
+                                                </div>
+                                            </div>
+                                            <div className={`text-[13px] leading-snug whitespace-pre-wrap ${darkMode ? 'text-gray-200' : 'text-slate-700'}`}>
+                                                {item.content || <span className="italic opacity-50">[Có tệp đính kèm]</span>}
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {data.pinned.length === 0 && <EmptyState text="Chưa có tin nhắn được ghim nào." icon={<FaThumbtack size={48}/>} />}
                                 </div>
                             )}
                         </div>
