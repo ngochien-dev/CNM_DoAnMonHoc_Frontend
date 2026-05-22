@@ -1479,61 +1479,74 @@ const ChatPage = ({ user, setUser }) => {
     return (
         <div className={`flex h-screen overflow-hidden font-sans transition-colors duration-500 ${darkMode ? 'bg-[#0f172a] text-[#dbdee1]' : 'bg-[#f8fafc] text-slate-800'}`}>
             <Toaster position="top-right" />
-            <SidebarNav
-                user={user}
-                onlineUsers={onlineUsers}
-                activeRoom={activeRoom}
-                setActiveRoom={setActiveRoom}
-                darkMode={darkMode}
-                setDarkMode={setDarkMode}
-                showFriendsTab={showFriendsTab}
-                setShowFriendsTab={setShowFriendsTab}
-                showDiscoveryTab={showDiscoveryTab}
-                setShowDiscoveryTab={setShowDiscoveryTab}
-                showSocialFeed={showSocialFeed}
-                setShowSocialFeed={setShowSocialFeed}
-                showTodoTab={showTodoTab}
-                setShowTodoTab={setShowTodoTab}
-                showCallHistoryTab={showCallHistoryTab}
-                setShowCallHistoryTab={setShowCallHistoryTab}
-                showArchivedTab={showArchivedTab}
-                setShowArchivedTab={setShowArchivedTab}
-                showAITab={showAITab}
-                setShowAITab={setShowAITab}
-                showCloudDriveTab={showCloudDriveTab}
-                setShowCloudDriveTab={setShowCloudDriveTab}
-                showGameCenter={showGameCenter}
-                setShowGameCenter={setShowGameCenter}
-                isAdminMode={isAdminMode}
-                setIsAdminMode={setIsAdminMode}
-                setShowSoundSettings={setShowSoundSettings}
-                setIsPublicGroupCreator={setIsPublicGroupCreator}
-                setShowGroupCreator={setShowGroupCreator}
-                handleSwitchRoom={handleSwitchRoom}
-                setStats={setStats}
-                isCloudActive={isCloudActive}
-            />
+            <div onClickCapture={() => { if (profileModal.isOpen) setProfileModal({ isOpen: false, username: '' }); }} className="h-full shrink-0 flex">
+                <SidebarNav
+                    user={user}
+                    onlineUsers={onlineUsers}
+                    activeRoom={activeRoom}
+                    setActiveRoom={setActiveRoom}
+                    darkMode={darkMode}
+                    setDarkMode={setDarkMode}
+                    showFriendsTab={showFriendsTab}
+                    setShowFriendsTab={setShowFriendsTab}
+                    showDiscoveryTab={showDiscoveryTab}
+                    setShowDiscoveryTab={setShowDiscoveryTab}
+                    showSocialFeed={showSocialFeed}
+                    setShowSocialFeed={setShowSocialFeed}
+                    showTodoTab={showTodoTab}
+                    setShowTodoTab={setShowTodoTab}
+                    showCallHistoryTab={showCallHistoryTab}
+                    setShowCallHistoryTab={setShowCallHistoryTab}
+                    showArchivedTab={showArchivedTab}
+                    setShowArchivedTab={setShowArchivedTab}
+                    showAITab={showAITab}
+                    setShowAITab={setShowAITab}
+                    showCloudDriveTab={showCloudDriveTab}
+                    setShowCloudDriveTab={setShowCloudDriveTab}
+                    showGameCenter={showGameCenter}
+                    setShowGameCenter={setShowGameCenter}
+                    isAdminMode={isAdminMode}
+                    setIsAdminMode={setIsAdminMode}
+                    setShowSoundSettings={setShowSoundSettings}
+                    setIsPublicGroupCreator={setIsPublicGroupCreator}
+                    setShowGroupCreator={setShowGroupCreator}
+                    handleSwitchRoom={handleSwitchRoom}
+                    setStats={setStats}
+                    isCloudActive={isCloudActive}
+                />
+            </div>
 
-            <ConversationSidebar
-                user={user} setUser={setUser} onlineUsers={onlineUsers}
-                allGroups={allGroups} messages={messages} activeRoom={activeRoom}
-                darkMode={darkMode} isSidebarVisible={isSidebarVisible}
-                roomSearchQuery={roomSearchQuery} setRoomSearchQuery={setRoomSearchQuery}
-                setShowAddFriend={setShowAddFriend} setShowGroupCreator={setShowGroupCreator}
-                setIsPublicGroupCreator={setIsPublicGroupCreator}
-                activeSidebarTab={activeSidebarTab} setActiveSidebarTab={setActiveSidebarTab}
-                showFilterDropdown={showFilterDropdown} setShowFilterDropdown={setShowFilterDropdown}
-                customFolders={customFolders} setEditingFolder={setEditingFolder}
-                setFolderName={setFolderName} setFolderRooms={setFolderRooms}
-                setShowFolderModal={setShowFolderModal}
-                setViewingStories={setViewingStories} setShowStoryUpload={setShowStoryUpload}
-                unreadCounts={unreadCounts} handleSwitchRoom={handleSwitchRoom}
-                handleStartDM={handleStartDM} handleOpenProfile={handleOpenProfile}
-                setActiveRoomMenu={setActiveRoomMenu} getRecentChatUsers={getRecentChatUsers}
-            />
+            <div onClickCapture={() => { if (profileModal.isOpen) setProfileModal({ isOpen: false, username: '' }); }} className="h-full shrink-0 flex">
+                <ConversationSidebar
+                    user={user} setUser={setUser} onlineUsers={onlineUsers}
+                    allGroups={allGroups} messages={messages} activeRoom={activeRoom}
+                    darkMode={darkMode} isSidebarVisible={isSidebarVisible}
+                    roomSearchQuery={roomSearchQuery} setRoomSearchQuery={setRoomSearchQuery}
+                    setShowAddFriend={setShowAddFriend} setShowGroupCreator={setShowGroupCreator}
+                    setIsPublicGroupCreator={setIsPublicGroupCreator}
+                    activeSidebarTab={activeSidebarTab} setActiveSidebarTab={setActiveSidebarTab}
+                    showFilterDropdown={showFilterDropdown} setShowFilterDropdown={setShowFilterDropdown}
+                    customFolders={customFolders} setEditingFolder={setEditingFolder}
+                    setFolderName={setFolderName} setFolderRooms={setFolderRooms}
+                    setShowFolderModal={setShowFolderModal}
+                    setViewingStories={setViewingStories} setShowStoryUpload={setShowStoryUpload}
+                    unreadCounts={unreadCounts} handleSwitchRoom={handleSwitchRoom}
+                    handleStartDM={handleStartDM} handleOpenProfile={handleOpenProfile}
+                    setActiveRoomMenu={setActiveRoomMenu} getRecentChatUsers={getRecentChatUsers}
+                />
+            </div>
 
             <div className={`flex-1 flex flex-col min-w-0 ${darkMode ? 'bg-transparent' : 'bg-[#f8fafc]'}`}>
-                {showFriendsTab ? (
+                {profileModal.isOpen ? (
+                    <UserProfileModal
+                        isOpen={profileModal.isOpen}
+                        onClose={() => setProfileModal({ isOpen: false, username: '' })}
+                        targetUsername={profileModal.username}
+                        currentUser={user}
+                        onStartDM={handleStartDM}
+                        darkMode={darkMode}
+                    />
+                ) : showFriendsTab ? (
                     // Tích hợp thêm callHistory vào FriendsTab
                     <FriendsTab
                         user={user}
@@ -2021,7 +2034,6 @@ const ChatPage = ({ user, setUser }) => {
             {showStickerPicker && <div className="absolute bottom-24 left-6 z-50"><StickerPicker onSelect={handleSendSticker} darkMode={darkMode} onClose={() => setShowStickerPicker(false)} /></div>}
             {showMediaGallery && activeRoom && <MediaGallery roomId={activeRoom.id} darkMode={darkMode} onClose={() => setShowMediaGallery(false)} />}
             <CreateChat user={user} isOpen={showGroupCreator} onClose={() => setShowGroupCreator(false)} onCreateGroup={handleCreateGroup} darkMode={darkMode} isPublicMode={isPublicGroupCreator} />
-            <UserProfileModal isOpen={profileModal.isOpen} onClose={() => setProfileModal({ isOpen: false, username: '' })} targetUsername={profileModal.username} currentUser={user} onUpdateSuccess={handleUpdateSuccess} onStartDM={handleStartDM} />
 
             {/* Modal Báo Cáo Tin Nhắn Vi Phạm */}
             <ReportMessageModal

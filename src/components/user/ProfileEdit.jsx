@@ -1,72 +1,85 @@
-// frontend/src/components/user/ProfileEdit.jsx
 import React from "react";
 
-// Chỉnh sửa trang cá nhân
-const ProfileEdit = ({ editForm, setEditForm, setIsEditing, handleUpdate }) => (
-  <div className="space-y-4 animate-in slide-in-from-right duration-500 font-bold">
-    <div className="space-y-1.5">
-      <label className="text-[10px] font-black text-purple-400 uppercase ml-2 tracking-widest">
-        Tên hiển thị
-      </label>
-      <input
-        className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-sm font-bold focus:border-purple-500 outline-none text-white transition-all"
-        value={editForm.displayName || ""}
-        onChange={(e) =>
-          setEditForm({ ...editForm, displayName: e.target.value })
-        }
-      />
-    </div>
+const ProfileEdit = ({ editForm, setEditForm, setIsEditing, handleUpdate, darkMode }) => {
+  const inputClass = `w-full p-4 rounded-xl text-sm font-medium outline-none transition-all border ${
+    darkMode 
+      ? 'bg-slate-800/50 border-slate-700/50 text-slate-200 focus:border-indigo-500 focus:bg-slate-800 placeholder:text-slate-600' 
+      : 'bg-white border-slate-200 text-slate-800 focus:border-indigo-500 focus:bg-white placeholder:text-slate-400 shadow-sm'
+  }`;
 
-    <div className="space-y-1.5">
-      <label className="text-[10px] font-black text-purple-400 uppercase ml-2 tracking-widest">
-        Vị trí
-      </label>
-      <input
-        className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-sm font-bold focus:border-purple-500 outline-none text-white transition-all"
-        placeholder="Ví dụ: TP. Hồ Chí Minh"
-        value={editForm.address || ""}
-        onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
-      />
-    </div>
+  const labelClass = `text-xs font-semibold mb-1.5 block ${darkMode ? 'text-slate-400' : 'text-slate-600'}`;
 
-    <div className="grid grid-cols-1 gap-4">
-      <div className="space-y-1.5">
-        <label className="text-[10px] font-black text-purple-400 uppercase ml-2 tracking-widest">
-          Số điện thoại
+  return (
+    <div className="space-y-5 animate-in slide-in-from-right duration-500">
+      <div>
+        <label className={labelClass}>
+          Tên hiển thị
         </label>
         <input
-          className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-sm font-bold focus:border-purple-500 outline-none text-white"
-          value={editForm.phone || ""}
-          onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+          className={inputClass}
+          value={editForm.displayName || ""}
+          onChange={(e) => setEditForm({ ...editForm, displayName: e.target.value })}
+          placeholder="Nhập tên hiển thị của bạn"
         />
       </div>
-      <div className="space-y-1.5">
-        <label className="text-[10px] font-black text-purple-400 uppercase ml-2 tracking-widest">
-          Tiểu sử
-        </label>
-        <textarea
-          className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-sm font-bold h-20 resize-none focus:border-purple-500 outline-none text-white"
-          value={editForm.bio || ""}
-          onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })}
-        />
-      </div>
-    </div>
 
-    <div className="flex gap-3 pt-4">
-      <button
-        onClick={handleUpdate}
-        className="flex-1 bg-purple-600 hover:bg-purple-500 text-white py-4 rounded-2xl font-black uppercase text-[10px] tracking-[2px] transition-all shadow-lg shadow-purple-500/20 active:scale-95"
-      >
-        Lưu dữ liệu
-      </button>
-      <button
-        onClick={() => setIsEditing(false)}
-        className="px-8 bg-white/5 hover:bg-white/10 text-gray-400 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all"
-      >
-        Hủy
-      </button>
+      <div>
+        <label className={labelClass}>
+          Vị trí
+        </label>
+        <input
+          className={inputClass}
+          placeholder="Ví dụ: TP. Hồ Chí Minh"
+          value={editForm.address || ""}
+          onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 gap-5">
+        <div>
+          <label className={labelClass}>
+            Số điện thoại
+          </label>
+          <input
+            className={inputClass}
+            placeholder="Nhập số điện thoại"
+            value={editForm.phone || ""}
+            onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+          />
+        </div>
+        <div>
+          <label className={labelClass}>
+            Tiểu sử
+          </label>
+          <textarea
+            className={`${inputClass} h-24 resize-none`}
+            placeholder="Viết vài dòng giới thiệu về bản thân..."
+            value={editForm.bio || ""}
+            onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })}
+          />
+        </div>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-3 pt-4">
+        <button
+          onClick={handleUpdate}
+          className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 rounded-xl text-sm font-semibold transition-all shadow-md active:scale-[0.98]"
+        >
+          Lưu thay đổi
+        </button>
+        <button
+          onClick={() => setIsEditing(false)}
+          className={`flex-1 sm:flex-none sm:px-8 py-3.5 rounded-xl text-sm font-medium transition-all ${
+            darkMode 
+              ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' 
+              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+          }`}
+        >
+          Hủy
+        </button>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 export default ProfileEdit;
