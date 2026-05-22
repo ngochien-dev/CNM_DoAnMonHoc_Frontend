@@ -15,7 +15,6 @@ const FriendsTab = ({
   onlineUsers,
   handleStartDM,
   handleOpenProfile,
-  callHistory = [],
   startCall,
   isCallBusy,
   darkMode,
@@ -90,7 +89,7 @@ const FriendsTab = ({
         fromUser: user.username, 
         toUser: targetUname
       });
-      alert("Đã phát tín hiệu kết nối!");
+      alert("Đã gửi lời mời kết bạn!");
       setGlobalSearch("");
       setGlobalResults([]);
       loadData();
@@ -171,106 +170,67 @@ const FriendsTab = ({
     return result;
   }, [friends, localSearch, selectedTag, friendTags, sortOrder, onlineUsers, detailsCache]);
 
-  const recentCallHistory = useMemo(() => {
-    return (callHistory || []).slice(0, 4).map((call) => {
-      const peerUsername =
-        call.callerUsername === user.username ? call.calleeUsername : call.callerUsername;
-      const peerInfo = onlineUsers[peerUsername] || detailsCache[peerUsername];
-
-      return {
-        ...call,
-        peerUsername,
-        peerDisplayName: peerInfo?.displayName || peerUsername,
-      };
-    });
-  }, [callHistory, detailsCache, onlineUsers, user.username]);
-
   const startFriendCall = (friendUsername) => {
     if (!startCall || isCallBusy) return;
     const dmRoomId = `dm_${[user.username, friendUsername].sort().join("_")}`;
     startCall(friendUsername, dmRoomId);
   };
 
-  const formatCallStatus = (status) => {
-    const labels = {
-      ended: "Da ket thuc",
-      rejected: "Bi tu choi",
-      missed: "Bi nho",
-      cancelled: "Da huy",
-      timeout: "Het thoi gian",
-      failed: "That bai",
-      in_call: "Dang goi",
-      ringing: "Dang do chuong",
-      outgoing: "Dang goi",
-      incoming: "Dang nhan",
-    };
-
-    return labels[status] || status || "Khong ro";
-  };
-
-  const formatCallTime = (value) => {
-    if (!value) return "";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return "";
-
-    return date.toLocaleString("vi-VN", {
-      day: "2-digit",
-      month: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
   const renderMiniUser = (u, status, incoming = false) => {
     const uname = typeof u === 'string' ? u : u.S;
     const info = onlineUsers[uname] || detailsCache[uname];
     return (
-      <div key={uname} className={`flex items-center justify-between p-3 rounded-2xl mb-2 group transition-all border ${darkMode ? 'bg-white/2 border-white/5 hover:bg-white/5' : 'bg-white border-gray-100 hover:bg-slate-50 shadow-sm'}`}>
+      <div key={uname} className={`flex items-center justify-between p-3 rounded-2xl mb-2 group transition-all border ${darkMode ? 'bg-white/5 border-white/5 hover:bg-white/10' : 'bg-white border-gray-100 hover:bg-slate-50 shadow-sm'}`}>
         <div className="flex items-center gap-3 min-w-0">
-          <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-[10px] text-white font-black overflow-hidden ${darkMode ? 'bg-slate-800' : 'bg-slate-300'}`}>
-            {info?.avatar ? <img src={info.avatar} className="w-full h-full object-cover" /> : uname[0]}
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs text-white font-bold overflow-hidden shrink-0 ${darkMode ? 'bg-slate-700' : 'bg-slate-300'}`}>
+            {info?.avatar ? <img src={info.avatar} className="w-full h-full object-cover" /> : uname[0].toUpperCase()}
           </div>
           <div className="flex flex-col truncate">
-            <span className={`text-[11px] font-black truncate ${darkMode ? 'text-white' : 'text-slate-800'}`}>{info?.displayName || uname}</span>
-            <span className={`text-[7px] font-black uppercase ${incoming ? "text-indigo-400" : "text-yellow-600"}`}>{status}</span>
+            <span className={`text-sm font-semibold truncate ${darkMode ? 'text-white' : 'text-slate-800'}`}>{info?.displayName || uname}</span>
+            <span className={`text-[10px] font-medium uppercase tracking-wider ${incoming ? "text-indigo-400" : "text-yellow-600"}`}>{status}</span>
           </div>
         </div>
-        {incoming && <div className="flex gap-1"><button onClick={() => acceptFriend(uname)} className="p-1.5 bg-emerald-500 rounded-lg text-white hover:scale-110 transition-transform" title="Chấp nhận"><FaCheck size={10} /></button><button onClick={() => rejectFriend(uname)} className="p-1.5 bg-red-500 rounded-lg text-white hover:scale-110 transition-transform" title="Từ chối"><FaTimes size={10} /></button></div>}
+        {incoming && (
+          <div className="flex gap-2">
+            <button onClick={() => acceptFriend(uname)} className="p-2 bg-emerald-500 rounded-xl text-white hover:bg-emerald-400 transition-colors" title="Chấp nhận"><FaCheck size={12} /></button>
+            <button onClick={() => rejectFriend(uname)} className="p-2 bg-red-500 rounded-xl text-white hover:bg-red-400 transition-colors" title="Từ chối"><FaTimes size={12} /></button>
+          </div>
+        )}
       </div>
     );
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-transparent overflow-hidden font-black italic tracking-tighter uppercase">
+    <div className={`flex-1 flex flex-col h-full overflow-hidden font-sans ${darkMode ? 'bg-[#0f172a]' : 'bg-white'}`}>
       {/* TOP SEARCH - GLOBAL SEARCH */}
-      <div className={`p-6 border-b relative z-[1000] ${darkMode ? 'bg-white/5 backdrop-blur-2xl border-white/10' : 'bg-white border-gray-200 shadow-sm'}`}>
+      <div className={`p-6 border-b relative z-[1000] shrink-0 ${darkMode ? 'bg-[#0f172a] border-white/10' : 'bg-white border-gray-200'}`}>
         <div className="max-w-4xl mx-auto relative group">
-          <div className={`flex items-center rounded-2xl px-6 py-4 focus-within:border-indigo-500 transition-all shadow-2xl border ${darkMode ? 'bg-black/40 border-white/10' : 'bg-white border-gray-200'}`}>
-            <FaSearch className={`text-indigo-500 text-xl ${isSearchingGlobal ? "animate-spin" : "animate-pulse"}`} />
+          <div className={`flex items-center rounded-2xl px-6 py-4 transition-all shadow-sm border focus-within:border-indigo-500 focus-within:shadow-md ${darkMode ? 'bg-black/40 border-white/10' : 'bg-white border-gray-200'}`}>
+            <FaSearch className={`text-indigo-500 text-lg ${isSearchingGlobal ? "animate-spin" : ""}`} />
             <input
               value={globalSearch}
               onChange={(e) => setGlobalSearch(e.target.value)}
-              placeholder="GÕ ĐÚNG USERNAME ĐỂ TRUY QUÉT..."
-              className={`bg-transparent border-none outline-none ml-4 w-full text-sm font-black ${darkMode ? 'text-white placeholder:text-gray-700' : 'text-slate-800 placeholder:text-gray-400'}`}
+              placeholder="Nhập username để tìm kiếm mọi người..."
+              className={`bg-transparent border-none outline-none ml-4 w-full text-sm font-medium ${darkMode ? 'text-white placeholder:text-gray-500' : 'text-slate-800 placeholder:text-gray-400'}`}
             />
-            {globalSearch && <FaTimes onClick={() => setGlobalSearch("")} className="text-gray-500 cursor-pointer" />}
+            {globalSearch && <FaTimes onClick={() => setGlobalSearch("")} className="text-gray-400 cursor-pointer hover:text-gray-600 transition-colors" />}
           </div>
 
           {globalResults.length > 0 && (
-            <div className={`absolute top-full left-0 right-0 mt-2 border rounded-[25px] p-4 z-[1001] shadow-[0_20px_50px_rgba(0,0,0,0.1)] ${darkMode ? 'bg-[#0f172a] border-white/10' : 'bg-white border-gray-100'}`}>
+            <div className={`absolute top-full left-0 right-0 mt-2 border rounded-2xl p-2 z-[1001] shadow-lg ${darkMode ? 'bg-[#1e293b] border-white/10' : 'bg-white border-gray-100'}`}>
               {globalResults.map(u => (
-                <div key={u.username} className={`flex items-center justify-between p-4 rounded-2xl ${darkMode ? 'bg-white/5' : 'bg-slate-50'}`}>
+                <div key={u.username} className={`flex items-center justify-between p-3 rounded-xl transition-colors ${darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-50'}`}>
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-slate-700 rounded-xl flex items-center justify-center overflow-hidden text-white font-black">
-                        {u.avatar ? <img src={u.avatar} className="w-full h-full object-cover" /> : u.username[0]}
+                    <div className="w-10 h-10 bg-slate-700 rounded-full flex items-center justify-center overflow-hidden text-white font-bold">
+                        {u.avatar ? <img src={u.avatar} className="w-full h-full object-cover" /> : u.username[0].toUpperCase()}
                     </div>
                     <div>
-                        <p className={`text-sm font-black uppercase ${darkMode ? 'text-white' : 'text-slate-800'}`}>{u.displayName || u.username}</p>
-                        <p className={`text-[10px] italic lowercase tracking-normal font-sans ${darkMode ? 'text-gray-500' : 'text-slate-400'}`}>@{u.username}</p>
+                        <p className={`text-sm font-semibold ${darkMode ? 'text-white' : 'text-slate-800'}`}>{u.displayName || u.username}</p>
+                        <p className={`text-xs text-gray-500`}>@{u.username}</p>
                     </div>
                   </div>
-                  <button onClick={() => sendFriendRequest(u.username)} className="bg-indigo-600 p-3 rounded-xl text-white hover:bg-indigo-500 transition-all shadow-xl">
-                    <FaUserPlus size={20} />
+                  <button onClick={() => sendFriendRequest(u.username)} className="bg-indigo-600 p-2.5 rounded-xl text-white hover:bg-indigo-500 transition-colors shadow-sm flex items-center gap-2 text-xs font-semibold">
+                    <FaUserPlus size={14} /> Thêm bạn
                   </button>
                 </div>
               ))}
@@ -279,134 +239,114 @@ const FriendsTab = ({
         </div>
       </div>
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden min-h-0">
         {/* PANEL TRÁI */}
-        <div className={`w-80 border-r p-6 space-y-10 overflow-y-auto shrink-0 scrollbar-hide ${darkMode ? 'border-white/5 bg-black/10' : 'border-gray-200 bg-white'}`}>
+        <div className={`w-80 border-r p-6 space-y-8 overflow-y-auto shrink-0 scrollbar-hide ${darkMode ? 'border-white/5 bg-[#0f172a]' : 'border-gray-200 bg-gray-50/50'}`}>
           {/* QUẢN LÝ THẺ */}
-          <section className="space-y-5">
-            <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[4px] border-l-2 border-indigo-500 pl-3 uppercase">Kho thẻ</p>
-            <div className="space-y-2">
+          <section className="space-y-3">
+            <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider">Danh mục thẻ</p>
+            <div className="flex flex-wrap gap-2">
               {availableTags.map((tag) => (
-                <div key={tag} className="group/tag flex items-center gap-2">
-                  <button onClick={() => setSelectedTag(selectedTag === tag ? "All" : tag)} className={`flex-1 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase text-left transition-all ${selectedTag === tag ? "bg-indigo-600 text-white shadow-lg scale-105" : (darkMode ? "bg-white/5 text-gray-500 hover:bg-white/10" : "bg-slate-50 text-slate-500 hover:bg-slate-100")}`}>{tag}</button>
+                <div key={tag} className="group/tag relative flex items-center">
+                  <button onClick={() => setSelectedTag(selectedTag === tag ? "All" : tag)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${selectedTag === tag ? "bg-indigo-600 text-white shadow-md" : (darkMode ? "bg-white/5 text-gray-300 hover:bg-white/10" : "bg-white border border-gray-200 text-slate-600 hover:bg-slate-50")}`}>
+                    {tag}
+                    {selectedTag === tag && <FaCheck size={10} className="opacity-80"/>}
+                  </button>
                   {tag !== "All" && (
-                    <div className="hidden group-hover/tag:flex gap-1">
-                      <button onClick={() => { setEditingTag(tag); setTagInput(tag); }} className={`p-2 rounded-lg hover:bg-blue-500 hover:text-white ${darkMode ? 'bg-white/5 text-blue-400' : 'bg-blue-50 text-blue-500'}`}><FaEdit size={10} /></button>
-                      <button onClick={() => deleteTag(tag)} className={`p-2 rounded-lg hover:bg-red-500 hover:text-white ${darkMode ? 'bg-white/5 text-red-400' : 'bg-red-50 text-red-500'}`}><FaTrashAlt size={10} /></button>
+                    <div className="absolute -top-2 -right-2 hidden group-hover/tag:flex gap-0.5 shadow-md rounded-md p-0.5 border z-10 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'}">
+                      <button onClick={() => { setEditingTag(tag); setTagInput(tag); }} className="p-1 text-blue-500 hover:bg-blue-50 rounded transition-colors"><FaEdit size={10} /></button>
+                      <button onClick={() => deleteTag(tag)} className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors"><FaTrashAlt size={10} /></button>
                     </div>
                   )}
                 </div>
               ))}
             </div>
-            <div className={`p-4 rounded-2xl border mt-2 ${darkMode ? 'bg-black/20 border-white/5' : 'bg-slate-50 border-gray-100'}`}>
-              <div className="flex gap-2">
-                <input value={tagInput} onChange={(e) => setTagInput(e.target.value)} placeholder="..." className={`flex-1 border p-2.5 rounded-xl text-[10px] outline-none focus:border-indigo-500 ${darkMode ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-200 text-slate-800'}`} />
-                <button onClick={handleSaveTag} className="p-2.5 bg-indigo-600 rounded-xl text-white shadow-lg"><FaSave /></button>
-              </div>
+            <div className={`p-1.5 rounded-lg border mt-2 flex gap-2 shadow-sm focus-within:border-indigo-500 transition-colors ${darkMode ? 'bg-black/20 border-white/5' : 'bg-white border-gray-100'}`}>
+                <input value={tagInput} onChange={(e) => setTagInput(e.target.value)} placeholder="Tên thẻ mới..." className={`flex-1 bg-transparent border-none px-2 text-xs outline-none ${darkMode ? 'text-white placeholder:text-gray-500' : 'text-slate-800 placeholder:text-gray-400'}`} />
+                <button onClick={handleSaveTag} className="p-1.5 bg-indigo-600 rounded-md text-white hover:bg-indigo-500 transition-colors"><FaSave size={12}/></button>
             </div>
           </section>
 
-          {/* ĐÃ PHÁT TÍN HIỆU */}
+          {/* ĐÃ GỬI & YÊU CẦU ĐẾN */}
           <section className="space-y-4">
-            <p className="text-[10px] font-black text-yellow-500 tracking-[4px] border-l-2 border-yellow-500 pl-3 uppercase">Đã gửi</p>
+            <p className="text-xs font-bold text-yellow-500 uppercase tracking-wider">Đã gửi yêu cầu</p>
             <div className="space-y-2">
-              {user.sentRequests?.length > 0 ? (user.sentRequests.map((u) => renderMiniUser(u, "Pending"))) : (<p className="text-[9px] text-gray-700 text-center py-4">Trống</p>)}
+              {user.sentRequests?.length > 0 ? (user.sentRequests.map((u) => renderMiniUser(u, "Đang chờ"))) : (<p className="text-xs text-gray-500 py-2">Chưa có yêu cầu nào gửi đi.</p>)}
             </div>
           </section>
 
-          {/* YÊU CẦU ĐẾN */}
           {friendRequests.length > 0 && (
-            <section className="space-y-4">
-              <p className="text-[10px] font-black text-red-500 tracking-[4px] border-l-2 border-red-500 pl-3 animate-pulse uppercase">Yêu cầu đến</p>
-              {friendRequests.map((u) => renderMiniUser(u, "New Signal", true))}
+            <section className="space-y-4 pt-4 border-t border-gray-200/50">
+              <p className="text-xs font-bold text-red-500 uppercase tracking-wider flex items-center gap-2">Yêu cầu kết bạn <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span></p>
+              <div className="space-y-2">
+                {friendRequests.map((u) => renderMiniUser(u, "Mới", true))}
+              </div>
             </section>
           )}
         </div>
 
         {/* PANEL CHÍNH */}
-        <div className={`flex-1 p-8 overflow-hidden flex flex-col ${darkMode ? 'bg-white/2' : 'bg-slate-50'}`}>
-          <div className="flex justify-between items-center gap-6 mb-10">
+        <div className={`flex-1 p-8 overflow-y-auto scrollbar-hide flex flex-col ${darkMode ? 'bg-[#0f172a]' : 'bg-white'}`}>
+          <div className="flex justify-between items-center gap-4 mb-8 shrink-0">
             <div className="relative w-full max-w-md">
-              <FaSearch className="absolute left-4 top-4 text-gray-400" />
-              <input value={localSearch} onChange={(e) => setLocalSearch(e.target.value)} placeholder="LỌC TRONG VÙNG ĐẤT..." className={`w-full border p-4 pl-12 rounded-2xl text-xs outline-none focus:border-indigo-500 uppercase ${darkMode ? 'bg-black/40 border-white/10 text-white' : 'bg-white border-gray-200 text-slate-800'}`} />
+              <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input value={localSearch} onChange={(e) => setLocalSearch(e.target.value)} placeholder="Tìm kiếm bạn bè..." className={`w-full border py-3 pl-11 pr-4 rounded-xl text-sm outline-none transition-colors focus:border-indigo-500 ${darkMode ? 'bg-white/5 border-white/10 text-white focus:bg-white/10' : 'bg-gray-50 border-gray-200 text-slate-800 focus:bg-white'}`} />
             </div>
-            <div className={`flex items-center gap-4 p-2 rounded-2xl border shrink-0 ${darkMode ? 'bg-black/20 border-white/5' : 'bg-white border-gray-200'}`}>
-              <button onClick={() => setSortOrder("asc")} className={`p-3 rounded-xl transition-all ${sortOrder === "asc" ? "bg-indigo-600 text-white shadow-lg" : "text-gray-500 hover:text-white"}`}><FaSortAlphaDown size={18} /></button>
-              <button onClick={() => setSortOrder("desc")} className={`p-3 rounded-xl transition-all ${sortOrder === "desc" ? "bg-indigo-600 text-white shadow-lg" : "text-gray-500 hover:text-white"}`}><FaSortAlphaUp size={18} /></button>
+            <div className={`flex items-center gap-2 p-1 rounded-xl border shrink-0 ${darkMode ? 'bg-white/5 border-white/5' : 'bg-gray-50 border-gray-200'}`}>
+              <button onClick={() => setSortOrder("asc")} className={`p-2 rounded-lg transition-all ${sortOrder === "asc" ? "bg-white text-indigo-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`} title="Từ A đến Z"><FaSortAlphaDown size={16} /></button>
+              <button onClick={() => setSortOrder("desc")} className={`p-2 rounded-lg transition-all ${sortOrder === "desc" ? "bg-white text-indigo-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`} title="Từ Z đến A"><FaSortAlphaUp size={16} /></button>
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto scrollbar-hide pb-20">
-            {recentCallHistory.length > 0 && (
-              <section className={`mb-8 rounded-[28px] border p-5 ${darkMode ? 'bg-black/20 border-white/5' : 'bg-white border-gray-100 shadow-sm'}`}>
-                <p className="text-[10px] font-black text-cyan-500 tracking-[4px] mb-4 uppercase">Lich su goi gan day</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-                  {recentCallHistory.map((call) => (
-                    <div key={call.callId || `${call.peerUsername}-${call.createdAt}`} className={`p-3 rounded-2xl border ${darkMode ? 'bg-white/5 border-white/5' : 'bg-slate-50 border-gray-100'}`}>
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className="w-8 h-8 rounded-xl bg-cyan-600/20 text-cyan-400 flex items-center justify-center shrink-0">
-                          <FaVideo size={12} />
-                        </div>
-                        <div className="min-w-0">
-                          <p className={`text-[11px] font-black truncate ${darkMode ? 'text-white' : 'text-slate-800'}`}>
-                            {call.peerDisplayName}
-                          </p>
-                          <p className="text-[8px] text-gray-500 font-bold">{formatCallTime(call.createdAt)}</p>
-                        </div>
-                      </div>
-                      <div className="mt-3 flex items-center justify-between gap-2">
-                        <span className="text-[8px] text-cyan-400 font-black">{formatCallStatus(call.status)}</span>
-                        <button
-                          onClick={() => startFriendCall(call.peerUsername)}
-                          disabled={isCallBusy}
-                          className={`px-3 py-1.5 rounded-xl text-[8px] font-black transition-all ${isCallBusy ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-cyan-500 text-white hover:bg-cyan-400'}`}
-                        >
-                          GOI LAI
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
+          <div className="flex-1 pb-10">
             {processedFriends.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center opacity-10 grayscale"><FaGhost size={100} className="mb-6"/><p className="text-2xl font-black tracking-[10px]">TRỐNG TRẢI</p></div>
+                <div className="h-full min-h-[300px] flex flex-col items-center justify-center opacity-40">
+                  <FaUserFriends size={80} className="mb-4 text-gray-400"/>
+                  <p className="text-lg font-semibold text-gray-500">Danh sách trống</p>
+                </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-8">
+                <div className="flex flex-col gap-4">
                 {processedFriends.map((f) => (
-                    <div key={f.username} className={`group border p-6 rounded-[45px] hover:border-indigo-500/50 transition-all shadow-2xl relative overflow-hidden ${darkMode ? 'bg-[#1e293b] border-white/5' : 'bg-white border-gray-100'}`}>
-                    <div className="flex items-center gap-6">
-                        <div className="relative cursor-pointer" onClick={() => handleOpenProfile(f.username)}>
-                        <div className={`w-20 h-20 rounded-[30px] border-4 p-1.5 transition-all duration-500 ${f.isOnline ? "border-emerald-500" : (darkMode ? "border-white/10" : "border-gray-100")}`}>
-                            <div className="w-full h-full rounded-[20px] bg-slate-800 flex items-center justify-center text-3xl font-black text-white overflow-hidden shadow-inner uppercase">
-                            {f.avatar ? <img src={f.avatar} className="w-full h-full object-cover" /> : f.displayName[0]}
+                    <div key={f.username} className={`group border p-4 rounded-2xl hover:border-indigo-500/40 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm hover:shadow-md ${darkMode ? 'bg-[#1e293b] border-white/10' : 'bg-white border-gray-200'}`}>
+                      <div className="flex items-center gap-4 min-w-0">
+                          <div className="relative cursor-pointer shrink-0" onClick={() => handleOpenProfile(f.username)}>
+                            <div className={`w-14 h-14 rounded-full border-2 p-0.5 transition-colors ${f.isOnline ? "border-emerald-500" : (darkMode ? "border-white/10" : "border-gray-200")}`}>
+                                <div className="w-full h-full rounded-full bg-indigo-100 flex items-center justify-center text-xl font-bold text-indigo-600 overflow-hidden">
+                                {f.avatar ? <img src={f.avatar} className="w-full h-full object-cover" /> : f.displayName[0].toUpperCase()}
+                                </div>
                             </div>
-                        </div>
-                        <div className={`absolute -bottom-1 -right-1 w-6 h-6 rounded-full border-[5px] ${darkMode ? 'border-[#1e293b]' : 'border-white'} ${f.isOnline ? "bg-emerald-500 animate-pulse" : "bg-gray-400"}`}></div>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                        <h3 className={`text-xl font-black truncate group-hover:text-indigo-400 transition-colors uppercase ${darkMode ? 'text-white' : 'text-slate-800'}`}>{f.displayName}</h3>
-                        <p className={`text-[10px] lowercase opacity-40 font-sans tracking-normal ${darkMode ? 'text-gray-500' : 'text-slate-500'}`}>@{f.username}</p>
-                        <div className="flex items-center gap-2 mt-2 bg-indigo-500/10 w-fit px-3 py-1 rounded-full border border-indigo-500/20">
-                            <FaUserTag size={10} className="text-indigo-500" /><span className="text-[9px] font-black uppercase text-indigo-400">{friendTags[f.username] || "NO TAG"}</span>
-                        </div>
-                        </div>
-                    </div>
-                    <div className={`mt-8 space-y-3 p-4 rounded-[25px] border ${darkMode ? 'bg-black/20 border-white/5' : 'bg-slate-50 border-gray-100'}`}>
-                        <p className="text-[9px] font-black text-gray-400 tracking-[4px] ml-1 uppercase">Gán thẻ nhanh</p>
-                        <div className="flex flex-wrap gap-2">
-                        {availableTags.filter((t) => t !== "All").map((tag) => (
-                            <button key={tag} onClick={() => assignTag(f.username, tag)} className={`px-3 py-2 rounded-xl text-[9px] font-black uppercase border transition-all ${friendTags[f.username] === tag ? "bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-500/40" : (darkMode ? "border-white/10 text-gray-500 hover:border-white/30 hover:text-white" : "border-gray-200 text-slate-500 hover:bg-slate-200 hover:text-slate-800")}`}>{tag}</button>
-                        ))}
-                        <button onClick={() => assignTag(f.username, null)} className="p-2 rounded-xl text-gray-400 hover:text-red-500 transition-all"><FaTrashAlt size={14} /></button>
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-4 gap-3 mt-8">
-                        <button onClick={() => handleStartDM(f.username)} className="bg-indigo-600 hover:bg-indigo-500 text-white py-3.5 rounded-[20px] text-[10px] font-black transition-all shadow-xl active:scale-95 flex items-center justify-center gap-2 shadow-indigo-500/20"><FaCommentDots size={12} /> CHAT</button>
-                        <button onClick={() => startFriendCall(f.username)} disabled={isCallBusy} className={`py-3.5 rounded-[20px] text-[10px] font-black transition-all border active:scale-95 flex items-center justify-center gap-1 ${isCallBusy ? 'bg-white/5 text-gray-600 border-white/5 cursor-not-allowed' : 'bg-cyan-600 hover:bg-cyan-500 text-white border-cyan-500 shadow-xl shadow-cyan-500/20'}`}><FaVideo size={11}/> VIDEO</button>
-                        <button onClick={() => handleOpenProfile(f.username)} className={`py-3.5 rounded-[20px] text-[10px] font-black transition-all border active:scale-95 shadow-sm uppercase flex items-center justify-center ${darkMode ? 'bg-white/5 hover:bg-white/10 text-gray-400 border-white/5' : 'bg-white hover:bg-slate-50 text-slate-500 border-gray-200'}`}>PROFILE</button>
-                        <button onClick={async () => { if (!window.confirm(`Hủy kết bạn với @${f.username}?`)) return; try { await api.post('/friends/unfriend', { me: user.username, friendUname: f.username }); loadData(); } catch { alert('Lỗi!'); } }} className={`py-3.5 rounded-[20px] text-[10px] font-black transition-all border active:scale-95 uppercase flex items-center justify-center gap-1 ${darkMode ? 'bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white border-red-500/20' : 'bg-red-50 hover:bg-red-500 text-red-500 hover:text-white border-red-200'}`}><FaUserMinus size={11}/> HỦY</button>
-                    </div>
+                            <div className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 ${darkMode ? 'border-[#1e293b]' : 'border-white'} ${f.isOnline ? "bg-emerald-500" : "bg-gray-400"}`}></div>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className={`text-base font-bold truncate group-hover:text-indigo-500 transition-colors ${darkMode ? 'text-white' : 'text-slate-800'}`}>{f.displayName}</h3>
+                            <p className={`text-xs text-gray-500 truncate mb-1`}>@{f.username}</p>
+                            
+                            <div className="flex flex-wrap items-center gap-2">
+                                <div className="flex items-center gap-1.5 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100 shrink-0">
+                                  <FaUserTag size={10} className="text-indigo-500" />
+                                  <span className="text-[10px] font-semibold text-indigo-600">{friendTags[f.username] || "Chưa gắn thẻ"}</span>
+                                </div>
+                                
+                                <div className="hidden group-hover:flex flex-wrap items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  {availableTags.filter(t => t !== "All" && t !== friendTags[f.username]).map(tag => (
+                                      <button key={tag} onClick={() => assignTag(f.username, tag)} className={`px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors ${darkMode ? 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-slate-700'}`}>
+                                          {tag}
+                                      </button>
+                                  ))}
+                                  {friendTags[f.username] && (
+                                     <button onClick={() => assignTag(f.username, null)} className="px-1.5 py-0.5 text-[10px] text-red-400 hover:bg-red-50 hover:text-red-600 rounded-md transition-colors"><FaTimes/></button>
+                                  )}
+                                </div>
+                            </div>
+                          </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-2 sm:shrink-0 pt-3 sm:pt-0 border-t sm:border-t-0 border-gray-100 dark:border-white/5 mt-2 sm:mt-0">
+                          <button onClick={() => handleStartDM(f.username)} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-xl text-xs font-semibold transition-colors shadow-sm"><FaCommentDots size={14} /> Nhắn tin</button>
+                          <button onClick={() => startFriendCall(f.username)} disabled={isCallBusy} className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors border ${isCallBusy ? 'bg-gray-100 text-gray-400 border-gray-100 cursor-not-allowed dark:bg-white/5 dark:border-white/5' : 'bg-white hover:bg-cyan-50 text-cyan-600 border-cyan-200 dark:bg-transparent dark:text-cyan-400 dark:border-cyan-500/30 dark:hover:bg-cyan-500/10'}`} title="Gọi Video"><FaVideo size={14}/></button>
+                          <button onClick={() => handleOpenProfile(f.username)} className={`p-2.5 rounded-xl transition-colors border ${darkMode ? 'border-white/10 text-gray-400 hover:bg-white/10 hover:text-white' : 'border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-slate-800'}`} title="Hồ sơ"><FaUserShield size={14}/></button>
+                          <button onClick={async () => { if (!window.confirm(`Hủy kết bạn với @${f.username}?`)) return; try { await api.post('/friends/unfriend', { me: user.username, friendUname: f.username }); loadData(); } catch { alert('Lỗi!'); } }} className={`p-2.5 rounded-xl transition-colors border ${darkMode ? 'border-red-500/20 text-red-400 hover:bg-red-500 hover:text-white' : 'border-red-200 text-red-500 hover:bg-red-50 hover:text-red-700'}`} title="Hủy kết bạn"><FaUserMinus size={14}/></button>
+                      </div>
                     </div>
                 ))}
                 </div>
