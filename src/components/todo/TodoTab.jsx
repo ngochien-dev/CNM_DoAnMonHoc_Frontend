@@ -125,33 +125,33 @@ const TodoTab = ({ user, darkMode }) => {
     // Category style helper
     const getCategoryStyles = (cat) => {
         switch (cat) {
-            case 'Work': return { label: 'Công việc', bg: 'bg-blue-500/10 text-blue-500 border border-blue-500/20', icon: <FaBriefcase size={10} /> };
-            case 'Study': return { label: 'Học tập', bg: 'bg-purple-500/10 text-purple-500 border border-purple-500/20', icon: <FaBook size={10} /> };
-            case 'Urgent': return { label: 'Quan trọng', bg: 'bg-red-500/10 text-red-500 border border-red-500/20', icon: <FaStar size={10} /> };
-            default: return { label: 'Cá nhân', bg: 'bg-green-500/10 text-green-500 border border-green-500/20', icon: <FaUser size={10} /> };
+            case 'Work': return { label: 'Công việc', bg: 'bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400', icon: <FaBriefcase size={12} /> };
+            case 'Study': return { label: 'Học tập', bg: 'bg-purple-50 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400', icon: <FaBook size={12} /> };
+            case 'Urgent': return { label: 'Quan trọng', bg: 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400', icon: <FaStar size={12} /> };
+            default: return { label: 'Cá nhân', bg: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400', icon: <FaUser size={12} /> };
         }
     };
 
     return (
-        <div className="flex-1 flex flex-col h-full overflow-hidden">
+        <div className={`flex-1 flex flex-col h-full overflow-hidden font-sans ${darkMode ? 'bg-[#0f172a]' : 'bg-white'}`}>
             {/* Header */}
-            <div className={`p-6 border-b shrink-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 ${darkMode ? 'border-white/5 bg-slate-900/40' : 'border-gray-200 bg-white shadow-sm'}`}>
+            <div className={`p-8 border-b shrink-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 ${darkMode ? 'border-white/10' : 'border-gray-200'}`}>
                 <div>
-                    <h2 className="text-2xl font-black uppercase italic tracking-tighter flex items-center gap-3">
-                        <FaCalendarCheck className="text-indigo-500 text-3xl" /> Lập Lịch & Nhắc Nhở Công Việc
+                    <h2 className={`text-2xl font-bold flex items-center gap-3 ${darkMode ? 'text-white' : 'text-slate-800'}`}>
+                        <FaCalendarCheck className="text-indigo-600" /> Quản lý Công việc
                     </h2>
-                    <p className="text-xs text-gray-500 font-medium">Bản kế hoạch công việc cá nhân của @{user?.username}</p>
+                    <p className={`text-sm mt-2 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Bản kế hoạch công việc cá nhân của @{user?.username}</p>
                 </div>
 
                 {/* Progress bar */}
-                <div className={`w-full sm:w-64 p-3 rounded-2xl border flex flex-col gap-1.5 ${darkMode ? 'bg-slate-800/40 border-slate-700' : 'bg-slate-50 border-gray-200'}`}>
-                    <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-wider">
+                <div className={`w-full sm:w-72 p-4 rounded-2xl border flex flex-col gap-2 ${darkMode ? 'bg-black/20 border-white/10' : 'bg-gray-50 border-gray-200'}`}>
+                    <div className="flex justify-between items-center text-xs font-bold text-gray-500">
                         <span>Tiến độ hoàn thành</span>
-                        <span className="text-indigo-500">{completedCount}/{totalCount} ({completionRate}%)</span>
+                        <span className="text-indigo-600">{completedCount}/{totalCount} ({completionRate}%)</span>
                     </div>
-                    <div className="w-full h-2.5 bg-slate-700/30 dark:bg-black/20 rounded-full overflow-hidden">
+                    <div className="w-full h-2 bg-gray-200 dark:bg-white/10 rounded-full overflow-hidden">
                         <div 
-                            className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" 
+                            className="h-full bg-indigo-500 rounded-full transition-all duration-500" 
                             style={{ width: `${completionRate}%` }}
                         />
                     </div>
@@ -162,43 +162,43 @@ const TodoTab = ({ user, darkMode }) => {
             <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
                 
                 {/* Left Area: Add task panel */}
-                <div className={`w-full lg:w-[350px] p-6 border-b lg:border-b-0 lg:border-r overflow-y-auto shrink-0 ${darkMode ? 'border-white/5 bg-slate-900/20' : 'border-gray-200 bg-slate-50/50'}`}>
-                    <form onSubmit={handleAddTask} className="space-y-5">
-                        <h3 className="text-xs font-black uppercase tracking-widest text-indigo-400">Tạo công việc mới</h3>
+                <div className={`w-full lg:w-[380px] p-8 border-b lg:border-b-0 lg:border-r overflow-y-auto shrink-0 custom-scrollbar ${darkMode ? 'border-white/10 bg-[#0f172a]' : 'border-gray-200 bg-gray-50/30'}`}>
+                    <form onSubmit={handleAddTask} className="space-y-6">
+                        <h3 className="text-sm font-bold text-indigo-600">Thêm công việc mới</h3>
                         
                         {/* Title */}
                         <div>
-                            <label className="block text-[10px] font-black uppercase mb-1.5 opacity-70">Nội dung công việc</label>
+                            <label className={`block text-xs font-semibold mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Tên công việc <span className="text-red-500">*</span></label>
                             <input
                                 type="text"
                                 value={taskTitle}
                                 onChange={(e) => setTaskTitle(e.target.value)}
-                                placeholder="Gõ việc cần làm..."
-                                className={`w-full p-4 text-sm rounded-2xl outline-none border focus:border-indigo-500 font-bold transition-all ${darkMode ? 'bg-slate-800/50 border-slate-700 placeholder:text-slate-500 text-white' : 'bg-white border-gray-200 placeholder:text-slate-400 text-slate-800'}`}
+                                placeholder="Nhập tên công việc..."
+                                className={`w-full px-4 py-3 text-sm rounded-xl outline-none border focus:border-indigo-500 transition-colors ${darkMode ? 'bg-black/20 border-white/10 text-white placeholder:text-gray-500' : 'bg-white border-gray-200 text-slate-800 placeholder:text-gray-400'}`}
                                 required
                             />
                         </div>
 
                         {/* Notes */}
                         <div>
-                            <label className="block text-[10px] font-black uppercase mb-1.5 opacity-70">Ghi chú / Chi tiết</label>
+                            <label className={`block text-xs font-semibold mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Ghi chú chi tiết</label>
                             <textarea
                                 value={taskNotes}
                                 onChange={(e) => setTaskNotes(e.target.value)}
-                                placeholder="Mô tả cụ thể (nếu có)..."
+                                placeholder="Thêm mô tả..."
                                 rows="3"
-                                className={`w-full p-4 text-sm rounded-2xl outline-none border focus:border-indigo-500 font-semibold transition-all ${darkMode ? 'bg-slate-800/50 border-slate-700 placeholder:text-slate-500 text-white' : 'bg-white border-gray-200 placeholder:text-slate-400 text-slate-800'}`}
+                                className={`w-full px-4 py-3 text-sm rounded-xl outline-none border focus:border-indigo-500 transition-colors resize-none ${darkMode ? 'bg-black/20 border-white/10 text-white placeholder:text-gray-500' : 'bg-white border-gray-200 text-slate-800 placeholder:text-gray-400'}`}
                             />
                         </div>
 
                         {/* Category & Priority Grid */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4">
+                        <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-[10px] font-black uppercase mb-1.5 opacity-70">Phân loại</label>
+                                <label className={`block text-xs font-semibold mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Phân loại</label>
                                 <select
                                     value={taskCategory}
                                     onChange={(e) => setTaskCategory(e.target.value)}
-                                    className={`w-full p-3.5 text-xs rounded-xl outline-none border focus:border-indigo-500 font-bold ${darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-200 text-slate-800'}`}
+                                    className={`w-full px-4 py-3 text-sm rounded-xl outline-none border focus:border-indigo-500 transition-colors cursor-pointer ${darkMode ? 'bg-black/20 border-white/10 text-white' : 'bg-white border-gray-200 text-slate-800'}`}
                                 >
                                     <option value="Personal">Cá nhân</option>
                                     <option value="Work">Công việc</option>
@@ -208,44 +208,37 @@ const TodoTab = ({ user, darkMode }) => {
                             </div>
 
                             <div>
-                                <label className="block text-[10px] font-black uppercase mb-1.5 opacity-70">Mức độ ưu tiên</label>
-                                <div className="flex gap-2">
-                                    {['low', 'medium', 'high'].map(p => (
-                                        <button
-                                            key={p}
-                                            type="button"
-                                            onClick={() => setPriority(p)}
-                                            className={`flex-1 py-2 text-[10px] font-black uppercase rounded-xl border transition-all ${priority === p ? (
-                                                p === 'high' ? 'bg-red-500/20 border-red-500 text-red-500' :
-                                                p === 'medium' ? 'bg-yellow-500/20 border-yellow-500 text-yellow-500' :
-                                                'bg-green-500/20 border-green-500 text-green-500'
-                                            ) : (darkMode ? 'border-slate-800 text-slate-400 bg-slate-800/30' : 'border-gray-200 text-slate-400 bg-white')}`}
-                                        >
-                                            {p === 'low' ? 'Thấp' : p === 'medium' ? 'Trung' : 'Cao'}
-                                        </button>
-                                    ))}
-                                </div>
+                                <label className={`block text-xs font-semibold mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Mức độ ưu tiên</label>
+                                <select
+                                    value={priority}
+                                    onChange={(e) => setPriority(e.target.value)}
+                                    className={`w-full px-4 py-3 text-sm rounded-xl outline-none border focus:border-indigo-500 transition-colors cursor-pointer ${darkMode ? 'bg-black/20 border-white/10 text-white' : 'bg-white border-gray-200 text-slate-800'}`}
+                                >
+                                    <option value="low">Thấp</option>
+                                    <option value="medium">Trung bình</option>
+                                    <option value="high">Cao</option>
+                                </select>
                             </div>
                         </div>
 
                         {/* Date & Time Grid */}
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-[10px] font-black uppercase mb-1.5 opacity-70">Hạn chót</label>
+                                <label className={`block text-xs font-semibold mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Hạn chót</label>
                                 <input 
                                     type="date"
                                     value={dueDate}
                                     onChange={(e) => setDueDate(e.target.value)}
-                                    className={`w-full p-3.5 text-xs rounded-xl outline-none border focus:border-indigo-500 font-bold ${darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-200 text-slate-800'}`}
+                                    className={`w-full px-4 py-3 text-sm rounded-xl outline-none border focus:border-indigo-500 transition-colors ${darkMode ? 'bg-black/20 border-white/10 text-white' : 'bg-white border-gray-200 text-slate-800'}`}
                                 />
                             </div>
                             <div>
-                                <label className="block text-[10px] font-black uppercase mb-1.5 opacity-70">Giờ</label>
+                                <label className={`block text-xs font-semibold mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Giờ</label>
                                 <input 
                                     type="time"
                                     value={dueTime}
                                     onChange={(e) => setDueTime(e.target.value)}
-                                    className={`w-full p-3.5 text-xs rounded-xl outline-none border focus:border-indigo-500 font-bold ${darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-200 text-slate-800'}`}
+                                    className={`w-full px-4 py-3 text-sm rounded-xl outline-none border focus:border-indigo-500 transition-colors ${darkMode ? 'bg-black/20 border-white/10 text-white' : 'bg-white border-gray-200 text-slate-800'}`}
                                 />
                             </div>
                         </div>
@@ -253,24 +246,24 @@ const TodoTab = ({ user, darkMode }) => {
                         {/* Submit Button */}
                         <button
                             type="submit"
-                            className="w-full py-4 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white font-black text-xs uppercase tracking-[3px] rounded-2xl transition-all hover:scale-[1.02] shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-2"
+                            className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 mt-4"
                         >
-                            <FaPlus /> Thêm công việc
+                            <FaPlus /> Lưu công việc
                         </button>
                     </form>
                 </div>
 
                 {/* Right Area: List and Filters */}
-                <div className="flex-1 flex flex-col overflow-hidden bg-transparent">
+                <div className={`flex-1 flex flex-col overflow-hidden ${darkMode ? 'bg-[#0f172a]' : 'bg-white'}`}>
                     {/* Tool Bar: Filters, Search, Sorting */}
-                    <div className={`p-4 border-b flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0 ${darkMode ? 'border-white/5' : 'border-gray-200'}`}>
+                    <div className={`p-6 border-b flex flex-col xl:flex-row xl:items-center justify-between gap-4 shrink-0 ${darkMode ? 'border-white/10' : 'border-gray-200'}`}>
                         {/* Status Filters */}
-                        <div className="flex bg-slate-800/10 dark:bg-black/20 p-1 rounded-xl self-start gap-1">
+                        <div className={`flex p-1.5 rounded-xl self-start gap-1 ${darkMode ? 'bg-white/5' : 'bg-gray-100'}`}>
                             {['all', 'active', 'completed'].map(f => (
                                 <button
                                     key={f}
                                     onClick={() => setFilter(f)}
-                                    className={`px-4 py-2 rounded-lg text-xs font-black uppercase transition-all ${filter === f ? 'bg-indigo-500 text-white shadow-md' : (darkMode ? 'text-gray-400 hover:text-white' : 'text-slate-600 hover:text-slate-900')}`}
+                                    className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${filter === f ? 'bg-indigo-600 text-white shadow-sm' : (darkMode ? 'text-gray-400 hover:text-white hover:bg-white/5' : 'text-gray-600 hover:text-slate-900 hover:bg-white')}`}
                                 >
                                     {f === 'all' ? 'Tất cả' : f === 'active' ? 'Chưa xong' : 'Đã xong'}
                                 </button>
@@ -278,26 +271,26 @@ const TodoTab = ({ user, darkMode }) => {
                         </div>
 
                         {/* Search & Sort Panel */}
-                        <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex flex-col sm:flex-row items-center gap-4">
                             {/* Search */}
-                            <div className="relative">
-                                <span className="absolute left-3.5 top-3 text-gray-500"><FaSearch size={14} /></span>
+                            <div className="relative w-full sm:w-auto">
+                                <span className="absolute left-4 top-3.5 text-gray-400"><FaSearch size={14} /></span>
                                 <input
                                     type="text"
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                     placeholder="Tìm kiếm công việc..."
-                                    className={`pl-10 pr-4 py-2.5 w-60 text-xs rounded-xl outline-none border focus:border-indigo-500 font-semibold ${darkMode ? 'bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500' : 'bg-white border-gray-200 text-slate-800 placeholder:text-gray-400'}`}
+                                    className={`pl-10 pr-4 py-2.5 w-full sm:w-64 text-sm rounded-xl outline-none border focus:border-indigo-500 transition-colors ${darkMode ? 'bg-black/20 border-white/10 text-white placeholder:text-gray-500' : 'bg-white border-gray-200 text-slate-800 placeholder:text-gray-400'}`}
                                 />
                             </div>
 
                             {/* Sort */}
-                            <div className="flex items-center gap-2">
-                                <span className="text-gray-500"><FaSortAmountDown size={14} /></span>
+                            <div className="flex items-center gap-3 w-full sm:w-auto">
+                                <span className="text-gray-400 hidden sm:block"><FaSortAmountDown size={16} /></span>
                                 <select
                                     value={sortBy}
                                     onChange={(e) => setSortBy(e.target.value)}
-                                    className={`p-2.5 text-xs rounded-xl border outline-none font-bold focus:border-indigo-500 ${darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-200 text-slate-800'}`}
+                                    className={`p-2.5 text-sm rounded-xl border outline-none font-semibold focus:border-indigo-500 cursor-pointer w-full sm:w-auto ${darkMode ? 'bg-black/20 border-white/10 text-gray-300' : 'bg-white border-gray-200 text-slate-700'}`}
                                 >
                                     <option value="dateAdded">Mới nhất</option>
                                     <option value="dueDate">Hạn chót gần nhất</option>
@@ -308,15 +301,15 @@ const TodoTab = ({ user, darkMode }) => {
                     </div>
 
                     {/* Task Board Scrollable */}
-                    <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+                    <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
                         {processedTasks.length === 0 ? (
-                            <div className="h-full flex flex-col items-center justify-center text-center py-20 opacity-30">
-                                <FaCalendarCheck size={64} className="mb-4 text-indigo-400" />
-                                <p className="font-black text-lg">Hôm nay của bạn thật thanh thản!</p>
-                                <p className="text-xs max-w-sm mt-1">Không tìm thấy công việc nào phù hợp với bộ lọc hiện tại.</p>
+                            <div className="h-full flex flex-col items-center justify-center text-center opacity-50 min-h-[300px]">
+                                <FaCalendarCheck size={64} className="mb-6 text-gray-400" />
+                                <p className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-slate-800'}`}>Chưa có công việc nào!</p>
+                                <p className={`text-sm mt-2 max-w-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Không tìm thấy công việc nào phù hợp với bộ lọc hiện tại.</p>
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4 max-w-7xl">
                                 {processedTasks.map(t => {
                                     const overdue = isOverdue(t);
                                     const catInfo = getCategoryStyles(t.category);
@@ -325,15 +318,15 @@ const TodoTab = ({ user, darkMode }) => {
                                     return (
                                         <div 
                                             key={t.id}
-                                            className={`p-4 rounded-3xl border flex flex-col gap-3 transition-all hover:scale-[1.01] ${t.completed ? 'opacity-50' : ''} ${darkMode ? 'bg-slate-800/40 border-slate-700/60 hover:bg-slate-800/60' : 'bg-white border-gray-200 hover:bg-slate-50'} shadow-sm`}
+                                            className={`p-5 rounded-2xl border flex flex-col gap-3 transition-all duration-300 hover:shadow-md ${t.completed ? 'opacity-60' : ''} ${darkMode ? 'bg-[#1e293b] border-white/10 hover:border-indigo-500/30' : 'bg-white border-gray-200 hover:border-indigo-200'} shadow-sm`}
                                         >
-                                            <div className="flex items-start gap-3">
+                                            <div className="flex items-start gap-4">
                                                 {/* Check Box */}
                                                 <button 
                                                     onClick={() => handleToggleComplete(t.id)}
-                                                    className={`w-6 h-6 rounded-full border flex items-center justify-center shrink-0 transition-all ${t.completed ? 'bg-green-500 border-green-500 text-white' : (darkMode ? 'border-slate-600 hover:border-indigo-400' : 'border-gray-300 hover:border-indigo-500')}`}
+                                                    className={`w-6 h-6 rounded-full border flex items-center justify-center shrink-0 transition-colors mt-0.5 ${t.completed ? 'bg-emerald-500 border-emerald-500 text-white' : (darkMode ? 'border-gray-500 hover:border-indigo-400' : 'border-gray-300 hover:border-indigo-500')}`}
                                                 >
-                                                    {t.completed && <FaCheck size={10} />}
+                                                    {t.completed && <FaCheck size={12} />}
                                                 </button>
 
                                                 {/* Text Details */}
@@ -341,29 +334,29 @@ const TodoTab = ({ user, darkMode }) => {
                                                     onClick={() => handleToggleComplete(t.id)}
                                                     className="flex-1 min-w-0 cursor-pointer select-none"
                                                 >
-                                                    <h4 className={`font-black text-sm break-words ${t.completed ? 'line-through opacity-70' : ''}`}>{t.title}</h4>
+                                                    <h4 className={`text-base font-bold break-words transition-colors ${t.completed ? 'line-through text-gray-500' : (darkMode ? 'text-white' : 'text-slate-800')}`}>{t.title}</h4>
                                                     
                                                     {/* Badges Grid */}
-                                                    <div className="flex flex-wrap gap-2 mt-2">
+                                                    <div className="flex flex-wrap gap-2 mt-3">
                                                         {/* Category Badge */}
-                                                        <span className={`flex items-center gap-1 text-[9px] font-black uppercase px-2.5 py-0.5 rounded-full ${catInfo.bg}`}>
+                                                        <span className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg ${catInfo.bg}`}>
                                                             {catInfo.icon}
                                                             {catInfo.label}
                                                         </span>
 
                                                         {/* Priority Badge */}
-                                                        <span className={`text-[9px] font-black uppercase px-2.5 py-0.5 rounded-full ${
-                                                            t.priority === 'high' ? 'bg-red-500/10 text-red-500 border border-red-500/20' :
-                                                            t.priority === 'medium' ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20' :
-                                                            'bg-green-500/10 text-green-500 border border-green-500/20'
+                                                        <span className={`text-xs font-semibold px-2.5 py-1 rounded-lg ${
+                                                            t.priority === 'high' ? 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400' :
+                                                            t.priority === 'medium' ? 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400' :
+                                                            'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400'
                                                         }`}>
-                                                            {t.priority === 'high' ? 'Khẩn cấp' : t.priority === 'medium' ? 'Trung bình' : 'Thường'}
+                                                            {t.priority === 'high' ? 'Khẩn cấp' : t.priority === 'medium' ? 'Trung bình' : 'Thấp'}
                                                         </span>
 
                                                         {/* Due Date Badge */}
                                                         {t.dueDate && (
-                                                            <span className={`flex items-center gap-1 text-[9px] font-black px-2.5 py-0.5 rounded-full ${overdue ? 'bg-red-500/20 text-red-500 border border-red-500/30 animate-pulse' : (darkMode ? 'bg-slate-700/50 text-slate-400 border border-slate-700' : 'bg-slate-200 text-slate-600 border border-slate-300')}`}>
-                                                                {overdue ? <FaExclamationTriangle size={8} /> : <FaClock size={8} />}
+                                                            <span className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg ${overdue ? 'bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400 animate-pulse' : (darkMode ? 'bg-white/5 text-gray-300' : 'bg-gray-100 text-gray-600')}`}>
+                                                                {overdue ? <FaExclamationTriangle size={12} /> : <FaClock size={12} />}
                                                                 {t.dueDate} {t.dueTime && `@ ${t.dueTime}`}
                                                                 {overdue && ' (Quá hạn)'}
                                                             </span>
@@ -372,39 +365,30 @@ const TodoTab = ({ user, darkMode }) => {
                                                 </div>
 
                                                 {/* Action Buttons */}
-                                                <div className="flex items-center gap-1 shrink-0">
+                                                <div className="flex items-center gap-2 shrink-0">
                                                     <button
-                                                        onClick={() => handleToggleComplete(t.id)}
-                                                        className={`p-2.5 rounded-xl transition-all ${t.completed ? 'text-amber-500 hover:bg-amber-500/10' : 'text-green-500 hover:bg-green-500/10'}`}
-                                                        title={t.completed ? "Đánh dấu chưa xong" : "Hoàn thành công việc"}
+                                                        onClick={(e) => { e.stopPropagation(); toggleExpand(t.id); }}
+                                                        className={`p-2 rounded-xl transition-colors ${darkMode ? 'text-gray-400 hover:bg-white/10 hover:text-white' : 'text-gray-400 hover:bg-gray-100 hover:text-slate-800'}`}
+                                                        title="Chi tiết"
                                                     >
-                                                        <FaCheck size={12} />
+                                                        <FaInfoCircle size={16} />
                                                     </button>
                                                     <button
-                                                        onClick={() => handleDeleteTask(t.id)}
-                                                        className="p-2.5 rounded-xl text-gray-500 hover:text-red-500 hover:bg-red-500/10 transition-all"
+                                                        onClick={(e) => { e.stopPropagation(); handleDeleteTask(t.id); }}
+                                                        className="p-2 rounded-xl text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/20 transition-colors"
                                                         title="Xóa công việc"
                                                     >
-                                                        <FaTrash size={12} />
+                                                        <FaTrash size={16} />
                                                     </button>
                                                 </div>
                                             </div>
 
                                             {/* Notes / Details Toggle */}
-                                            {t.notes && (
-                                                <div className={`mt-2 pt-2 border-t ${darkMode ? 'border-slate-700/60' : 'border-gray-100'}`}>
-                                                    <button 
-                                                        onClick={() => toggleExpand(t.id)}
-                                                        className="flex items-center gap-1 text-[10px] font-bold text-indigo-400 hover:text-indigo-500"
-                                                    >
-                                                        <FaInfoCircle size={10} /> Chi tiết {isExpanded ? <FaChevronUp size={8}/> : <FaChevronDown size={8}/>}
-                                                    </button>
-                                                    
-                                                    {isExpanded && (
-                                                        <p className={`mt-2 text-xs font-medium leading-relaxed p-3 rounded-2xl whitespace-pre-wrap ${darkMode ? 'bg-slate-900/60 text-gray-300' : 'bg-slate-50 text-slate-600'}`}>
-                                                            {t.notes}
-                                                        </p>
-                                                    )}
+                                            {isExpanded && t.notes && (
+                                                <div className={`mt-2 pt-4 border-t ${darkMode ? 'border-white/10' : 'border-gray-100'}`}>
+                                                    <p className={`text-sm leading-relaxed p-4 rounded-xl whitespace-pre-wrap ${darkMode ? 'bg-black/20 text-gray-300' : 'bg-gray-50 text-slate-700'}`}>
+                                                        {t.notes}
+                                                    </p>
                                                 </div>
                                             )}
                                         </div>
