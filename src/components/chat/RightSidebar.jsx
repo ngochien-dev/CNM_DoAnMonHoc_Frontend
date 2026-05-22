@@ -56,6 +56,8 @@ const RightSidebar = ({
   handleTogglePin,
   mutedRooms = {},
   toggleMuteRoom,
+  toggleMuteRoomDuration,
+  handleToggleArchive,
   clearChatHistory,
   handleLeaveGroup,
   setShowGroupSettings,
@@ -81,6 +83,8 @@ const RightSidebar = ({
   handleExportChat,
   onOpenReportViolation
 }) => {
+  const isArchived = user?.archivedRooms?.includes(activeRoom?.id);
+
   const [expandedSections, setExpandedSections] = useState({
     chatInfo: true,
     customise: true,
@@ -89,6 +93,8 @@ const RightSidebar = ({
     privacy: true
   });
 
+  const [showMuteDropdown, setShowMuteDropdown] = useState(false);
+  const [showTopMuteDropdown, setShowTopMuteDropdown] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
   const [offlineUsersCache, setOfflineUsersCache] = useState({});
 
@@ -488,9 +494,9 @@ const RightSidebar = ({
         {/* Circular Messenger Buttons under Profile */}
         <div className="flex items-center justify-center gap-4 py-2 border-b border-slate-700/20 pb-5">
           {/* Mute/Unmute */}
-          <div className="flex flex-col items-center space-y-1">
+          <div className="relative flex flex-col items-center space-y-1">
             <button
-              onClick={() => toggleMuteRoom(activeRoom.id)}
+              onClick={() => setShowTopMuteDropdown(!showTopMuteDropdown)}
               className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 ${
                 darkMode 
                   ? 'bg-white/10 hover:bg-white/20 text-gray-200' 
@@ -503,6 +509,18 @@ const RightSidebar = ({
             <span className="text-[10px] font-medium text-slate-400 leading-tight text-center">
               {isMuted ? "Bật lại" : "Tắt âm"}
             </span>
+
+            {/* Top Dropdown Tắt thông báo */}
+            {showTopMuteDropdown && (
+              <div className={`absolute top-full mt-2 left-0 z-50 w-44 overflow-hidden rounded-xl border flex flex-col shadow-2xl ${darkMode ? 'bg-[#1e1f22] border-white/10' : 'bg-white border-gray-200'}`}>
+                  {[{ label: 'Tắt trong 1 giờ', ms: 3600000 }, { label: 'Tắt trong 4 giờ', ms: 14400000 }, { label: 'Tắt trong 24 giờ', ms: 86400000 }, { label: 'Tắt cho đến khi bật lại', ms: -1 }].map(opt => (
+                      <button key={opt.label} onClick={() => { toggleMuteRoomDuration && toggleMuteRoomDuration(activeRoom.id, opt.ms); setShowTopMuteDropdown(false); }} className={`w-full text-left px-3 py-2 text-[11px] font-medium transition-colors ${darkMode ? 'hover:bg-white/5 text-gray-300' : 'hover:bg-slate-50 text-slate-700'}`}>{opt.label}</button>
+                  ))}
+                  {isMuted && (
+                      <button onClick={() => { toggleMuteRoomDuration && toggleMuteRoomDuration(activeRoom.id, null); setShowTopMuteDropdown(false); }} className={`w-full text-left px-3 py-2 text-[11px] font-bold text-emerald-500 transition-colors ${darkMode ? 'hover:bg-white/5' : 'hover:bg-emerald-50'}`}>Bật lại thông báo</button>
+                  )}
+              </div>
+            )}
           </div>
 
           {/* Pin/Unpin Conversation */}
@@ -844,34 +862,54 @@ const RightSidebar = ({
             {expandedSections.privacy && (
               <div className="space-y-1 pb-2">
                 {/* Mute toggle option */}
-                <div 
-                  onClick={() => toggleMuteRoom(activeRoom.id)}
-                  className={`flex items-center gap-3.5 py-2 px-2.5 rounded-xl cursor-pointer transition-colors ${
-                    darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-100'
-                  }`}
-                >
-                  <FaBell className="text-slate-400 shrink-0" size={12} />
-                  <div className="flex-1 min-w-0 leading-tight">
-                    <p className={`text-[12.5px] ${darkMode ? 'text-gray-200' : 'text-slate-700'}`}>Thông báo về đoạn chat</p>
-                    <p className="text-[10px] text-slate-500">{isMuted ? "Tắt vô thời hạn" : "Đang bật thông báo"}</p>
+                <div className="relative">
+                  <div 
+                    onClick={() => setShowMuteDropdown(!showMuteDropdown)}
+                    className={`flex items-center gap-3.5 py-2 px-2.5 rounded-xl cursor-pointer transition-colors ${
+                      darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-100'
+                    }`}
+                  >
+                    {isMuted ? (
+                        <FaBellSlash className="text-emerald-500 shrink-0" size={12} />
+                    ) : (
+                        <FaBell className="text-slate-400 shrink-0" size={12} />
+                    )}
+                    <div className="flex-1 min-w-0 leading-tight">
+                      <p className={`text-[12.5px] ${darkMode ? 'text-gray-200' : 'text-slate-700'}`}>Thông báo về đoạn chat</p>
+                      <p className="text-[10px] text-slate-500">{isMuted ? "Đang tắt thông báo" : "Đang bật thông báo"}</p>
+                    </div>
+                    <FaChevronDown size={10} className={`text-slate-400 transition-transform ${showMuteDropdown ? 'rotate-180' : ''}`} />
                   </div>
+
+                  {/* Dropdown Tắt thông báo */}
+                  {showMuteDropdown && (
+                    <div className={`mt-1 ml-8 overflow-hidden rounded-xl border flex flex-col shadow-inner ${darkMode ? 'bg-black/20 border-white/5' : 'bg-slate-50 border-gray-100'}`}>
+                        {[{ label: 'Tắt trong 1 giờ', ms: 3600000 }, { label: 'Tắt trong 4 giờ', ms: 14400000 }, { label: 'Tắt trong 24 giờ', ms: 86400000 }, { label: 'Tắt cho đến khi bật lại', ms: -1 }].map(opt => (
+                            <button key={opt.label} onClick={() => { toggleMuteRoomDuration && toggleMuteRoomDuration(activeRoom.id, opt.ms); setShowMuteDropdown(false); }} className={`w-full text-left px-3 py-2 text-[11px] font-medium transition-colors ${darkMode ? 'hover:bg-white/5 text-gray-300' : 'hover:bg-white text-slate-600'}`}>{opt.label}</button>
+                        ))}
+                        {isMuted && (
+                            <button onClick={() => { toggleMuteRoomDuration && toggleMuteRoomDuration(activeRoom.id, null); setShowMuteDropdown(false); }} className={`w-full text-left px-3 py-2 text-[11px] font-bold text-emerald-500 transition-colors ${darkMode ? 'hover:bg-white/5' : 'hover:bg-white'}`}>Bật lại thông báo</button>
+                        )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Hide chat option */}
                 <div 
+                  onClick={() => handleToggleArchive && handleToggleArchive(activeRoom.id, isArchived)}
                   className={`flex items-center justify-between py-2 px-2.5 rounded-xl cursor-pointer transition-colors ${
                     darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-100'
                   }`}
                 >
                   <div className="flex items-center gap-3.5 min-w-0 leading-tight">
-                    <FaEyeSlash className="text-slate-400 shrink-0" size={12} />
+                    <FaEyeSlash className={`${isArchived ? 'text-indigo-500' : 'text-slate-400'} shrink-0`} size={12} />
                     <div>
                       <p className={`text-[12.5px] ${darkMode ? 'text-gray-200' : 'text-slate-700'}`}>Ẩn cuộc trò chuyện này</p>
-                      <p className="text-[10px] text-slate-500">Mở lại khi có tin nhắn mới</p>
+                      <p className="text-[10px] text-slate-500">{isArchived ? "Đã ẩn khỏi màn hình chính" : "Mở lại khi có tin nhắn mới"}</p>
                     </div>
                   </div>
-                  <button className="w-8 h-4.5 bg-slate-700 rounded-full transition-all relative border border-white/5 shrink-0">
-                    <div className="absolute top-0.5 left-0.5 w-3.5 h-3.5 bg-slate-400 rounded-full transition-all"></div>
+                  <button className={`w-8 h-4.5 rounded-full transition-all relative border shrink-0 ${isArchived ? 'bg-indigo-500 border-indigo-500' : (darkMode ? 'bg-slate-700 border-white/5' : 'bg-slate-300 border-gray-300')}`}>
+                    <div className={`absolute top-0.5 w-3.5 h-3.5 rounded-full transition-all ${isArchived ? 'left-4 bg-white' : 'left-0.5 bg-slate-400 dark:bg-slate-400'}`}></div>
                   </button>
                 </div>
 

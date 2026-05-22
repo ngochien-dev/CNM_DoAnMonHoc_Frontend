@@ -1989,7 +1989,9 @@ const ChatPage = ({ user, setUser }) => {
                     lastSeenMap={lastSeenMap}
                     mutedRooms={mutedRooms}
                     toggleMuteRoom={toggleMuteRoom}
+                    toggleMuteRoomDuration={toggleMuteRoomDuration}
                     handleTogglePin={handleTogglePin}
+                    handleToggleArchive={handleToggleArchive}
                     clearChatHistory={clearChatHistory}
                     handleExportChat={handleExportChat}
                     handleLeaveGroup={handleLeaveGroup}
