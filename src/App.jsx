@@ -4,6 +4,9 @@ import AuthPage from './components/auth/AuthPage';
 import ChatPage from './components/ChatPage';
 import JoinGroupPage from './components/chat/JoinGroupPage';
 import { CallProvider } from './context/CallContext';
+import { GroupCallProvider } from './context/GroupCallContext';
+import IncomingGroupCallModal from './components/group-call/IncomingGroupCallModal';
+import GroupCallOverlay from './components/group-call/GroupCallOverlay';
 
 function normalizeUserSession(session) {
     if (!session) return null;
@@ -39,11 +42,22 @@ function App() {
     return (
         <CallProvider user={user}>
             <Router>
-                <Routes>
-                    <Route path="/" element={!user ? <AuthPage onLogin={handleLogin} /> : <Navigate to="/chat" />} />
-                    <Route path="/chat" element={user ? <ChatPage user={user} setUser={setUser} /> : <Navigate to="/" />} />
-                    <Route path="/join/:token" element={<JoinGroupPage user={user} />} />
-                </Routes>
+                {user ? (
+                    <GroupCallProvider user={user}>
+                        <Routes>
+                            <Route path="/" element={<Navigate to="/chat" />} />
+                            <Route path="/chat" element={<ChatPage user={user} setUser={setUser} />} />
+                            <Route path="/join/:token" element={<JoinGroupPage user={user} />} />
+                        </Routes>
+                        <IncomingGroupCallModal />
+                        <GroupCallOverlay />
+                    </GroupCallProvider>
+                ) : (
+                    <Routes>
+                        <Route path="/" element={<AuthPage onLogin={handleLogin} />} />
+                        <Route path="*" element={<Navigate to="/" />} />
+                    </Routes>
+                )}
             </Router>
         </CallProvider>
     );
