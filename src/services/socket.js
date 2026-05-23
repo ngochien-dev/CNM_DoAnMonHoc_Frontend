@@ -28,6 +28,26 @@ function describeSocket(socket = socketInstance) {
     };
 }
 
+export function buildSocketAuth() {
+    const token = getStoredToken();
+    const session = getStoredSession();
+    return {
+        token,
+        sessionId: session?.sessionId || null,
+    };
+}
+
+export function describeAuth(auth = {}) {
+    const token = auth.token || '';
+    return {
+        hasToken: Boolean(token),
+        tokenLength: token.length,
+        tokenPreview: token ? `${token.slice(0, 6)}...${token.slice(-4)}` : null,
+        sessionId: auth.sessionId || null,
+        hasSessionId: Boolean(auth.sessionId),
+    };
+}
+
 function attachSocketDebugListeners(socket) {
     if (socket[SOCKET_DEBUG_FLAG]) return;
 
@@ -51,6 +71,7 @@ function attachSocketDebugListeners(socket) {
         warnSocket('Socket connection error.', {
             socketId: socket.id || null,
             message: error?.message || 'Unknown socket error',
+            auth: describeAuth(socket.auth),
         });
     });
 
@@ -77,19 +98,17 @@ function attachSocketDebugListeners(socket) {
 }
 
 function buildSocket() {
-    logSocket('Creating socket instance.', {
-        url: SOCKET_URL,
-        hasToken: Boolean(getStoredToken()),
-        hasSessionId: Boolean(getStoredSession()?.sessionId),
-    });
+    const auth = buildSocketAuth();
 
     const socket = io(SOCKET_URL, {
         autoConnect: false,
         transports: ['websocket'],
-        auth: {
-            token: getStoredToken(),
-            sessionId: getStoredSession()?.sessionId || null,
-        },
+        auth,
+    });
+
+    logSocket('Creating socket instance.', {
+        url: SOCKET_URL,
+        auth: describeAuth(auth),
     });
 
     attachSocketDebugListeners(socket);
@@ -101,10 +120,15 @@ export function getSocket() {
         socketInstance = buildSocket();
     }
 
-    socketInstance.auth = {
-        token: getStoredToken(),
-        sessionId: getStoredSession()?.sessionId || null,
-    };
+    const auth = buildSocketAuth();
+    socketInstance.auth = auth;
+
+    logSocket('Refreshing socket auth.', {
+        socketId: socketInstance.id || null,
+        connected: socketInstance.connected,
+        active: socketInstance.active,
+        auth: describeAuth(auth),
+    });
 
     return socketInstance;
 }
@@ -116,9 +140,12 @@ export function getSocketDebugSnapshot() {
 export function connectSocket() {
     const socket = getSocket();
     if (!socket.connected) {
+        socket.auth = buildSocketAuth();
+
         logSocket('Connecting socket.', {
             alreadyActive: socket.active,
             url: SOCKET_URL,
+            auth: describeAuth(socket.auth),
         });
         socket.connect();
     } else {

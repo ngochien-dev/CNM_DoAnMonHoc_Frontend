@@ -15,6 +15,7 @@ const FriendsTab = ({
   onlineUsers,
   handleStartDM,
   handleOpenProfile,
+  callHistory = [],
   startCall,
   isCallBusy,
   darkMode,
@@ -174,12 +175,54 @@ const FriendsTab = ({
     return result;
   }, [friends, localSearch, selectedTag, friendTags, sortOrder, onlineUsers, detailsCache]);
 
+  const recentCallHistory = useMemo(() => {
+    return (callHistory || []).slice(0, 4).map((call) => {
+      const peerUsername =
+        call.callerUsername === user.username ? call.calleeUsername : call.callerUsername;
+      const peerInfo = onlineUsers[peerUsername] || detailsCache[peerUsername];
+
+      return {
+        ...call,
+        peerUsername,
+        peerDisplayName: peerInfo?.displayName || peerUsername,
+      };
+    });
+  }, [callHistory, detailsCache, onlineUsers, user.username]);
   const startFriendCall = (friendUsername) => {
     if (!startCall || isCallBusy) return;
     const dmRoomId = `dm_${[user.username, friendUsername].sort().join("_")}`;
     startCall(friendUsername, dmRoomId);
   };
 
+  const formatCallStatus = (status) => {
+    const labels = {
+      ended: "Da ket thuc",
+      rejected: "Bi tu choi",
+      missed: "Bi nho",
+      cancelled: "Da huy",
+      timeout: "Het thoi gian",
+      failed: "That bai",
+      in_call: "Dang goi",
+      ringing: "Dang do chuong",
+      outgoing: "Dang goi",
+      incoming: "Dang nhan",
+    };
+
+    return labels[status] || status || "Khong ro";
+  };
+
+  const formatCallTime = (value) => {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+
+    return date.toLocaleString("vi-VN", {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
   const renderMiniUser = (u, status, incoming = false) => {
     const uname = typeof u === 'string' ? u : u.S;
     const info = onlineUsers[uname] || detailsCache[uname];
@@ -257,7 +300,7 @@ const FriendsTab = ({
                     {selectedTag === tag && <FaCheck size={10} className="opacity-80"/>}
                   </button>
                   {tag !== "All" && (
-                    <div className="absolute -top-2 -right-2 hidden group-hover/tag:flex gap-0.5 shadow-md rounded-md p-0.5 border z-10 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'}">
+                    <div className={`absolute -top-2 -right-2 hidden group-hover/tag:flex gap-0.5 shadow-md rounded-md p-0.5 border z-10 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'}`}>
                       <button onClick={() => { setEditingTag(tag); setTagInput(tag); }} className="p-1 text-blue-500 hover:bg-blue-50 rounded transition-colors"><FaEdit size={10} /></button>
                       <button onClick={() => deleteTag(tag)} className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors"><FaTrashAlt size={10} /></button>
                     </div>
@@ -303,6 +346,39 @@ const FriendsTab = ({
           </div>
 
           <div className="flex-1 pb-10">
+            {recentCallHistory.length > 0 && (
+              <section className={`mb-8 rounded-2xl border p-4 ${darkMode ? 'bg-[#1e293b] border-white/10' : 'bg-gray-50 border-gray-200 shadow-sm'}`}>
+                <p className="text-xs font-semibold text-cyan-500 mb-4 uppercase tracking-wider">Lịch sử cuộc gọi gần đây</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                  {recentCallHistory.map((call) => (
+                    <div key={call.callId || `${call.peerUsername}-${call.createdAt}`} className={`p-3 rounded-xl border flex flex-col justify-between ${darkMode ? 'bg-black/20 border-white/5' : 'bg-white border-gray-100'}`}>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-cyan-500/10 text-cyan-500 flex items-center justify-center shrink-0">
+                          <FaVideo size={14} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className={`text-xs font-semibold truncate ${darkMode ? 'text-white' : 'text-slate-800'}`}>
+                            {call.peerDisplayName}
+                          </p>
+                          <p className="text-[10px] text-gray-500">{formatCallTime(call.createdAt)}</p>
+                        </div>
+                      </div>
+                      <div className="mt-3 flex items-center justify-between gap-2">
+                        <span className="text-[10px] text-cyan-500 font-medium">{formatCallStatus(call.status)}</span>
+                        <button
+                          onClick={() => startFriendCall(call.peerUsername)}
+                          disabled={isCallBusy}
+                          className={`px-2.5 py-1.5 rounded-lg text-[10px] font-semibold transition-all ${isCallBusy ? 'bg-gray-100 text-gray-400 cursor-not-allowed dark:bg-white/5' : 'bg-cyan-600 text-white hover:bg-cyan-500 shadow-sm'}`}
+                        >
+                          Gọi lại
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
             {processedFriends.length === 0 ? (
                 <div className="h-full min-h-[300px] flex flex-col items-center justify-center opacity-40">
                   <FaUserFriends size={80} className="mb-4 text-gray-400"/>

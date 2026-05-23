@@ -61,6 +61,7 @@ import useDrafts from '../hooks/useDrafts';
 import useFCM from '../hooks/useFCM';
 
 import useCall from '../context/useCall';
+import { useGroupCall } from '../context/GroupCallContext';
 import { getSocket, connectSocket, disconnectSocket } from '../services/socket';
 import {
     encryptText,
@@ -205,6 +206,11 @@ const ChatPage = ({ user, setUser }) => {
 
     // Tích hợp hook cuộc gọi
     const { startCall, isCallBusy, callHistoryVersion } = useCall();
+
+    const {
+        startGroupCall,
+        isInGroupCall,
+    } = useGroupCall();
 
     // Ref trỏ đến loadRoomMessages để dùng trong onSyncComplete callback (tránh forward reference)
     const loadRoomMessagesRef = useRef(null);
@@ -745,6 +751,78 @@ const ChatPage = ({ user, setUser }) => {
     const handleVideoCall = (targetUsername = activeRoom?.name) => {
         if (!targetUsername || isCallBusy) return;
         startCall(targetUsername, activeRoom?.isDM ? activeRoom.id : undefined);
+    };
+
+    // Hàm xử lý gọi video nhóm
+    const handleGroupVideoCall = async () => {
+        console.groupCollapsed('[GroupCall][ChatPage] CLICK group video button');
+        console.debug('activeRoom:', activeRoom);
+        console.debug('user:', user);
+        console.debug('isCallBusy:', isCallBusy);
+        console.debug('isInGroupCall:', isInGroupCall);
+        console.debug('allGroups count:', allGroups.length);
+        console.groupEnd();
+
+        if (!activeRoom || activeRoom.isDM) {
+            console.warn('[GroupCall][ChatPage] Không phải phòng nhóm, bỏ qua gọi nhóm', {
+                activeRoom,
+            });
+            return;
+        }
+
+        if (isCallBusy || isInGroupCall) {
+            console.warn('[GroupCall][ChatPage] Đang bận call, không bắt đầu group call mới', {
+                isCallBusy,
+                isInGroupCall,
+            });
+            return;
+        }
+
+        const currentG = allGroups.find(g => g.groupId === activeRoom.id);
+
+        console.groupCollapsed('[GroupCall][ChatPage] RESOLVE current group');
+        console.debug('activeRoomId:', activeRoom.id);
+        console.debug('currentGroup:', currentG);
+        try {
+          console.debug('currentGroup JSON:', JSON.stringify(currentG, null, 2));
+        } catch (error) {
+          console.debug('currentGroup JSON failed:', error);
+        }
+        console.groupEnd();
+
+        if (!currentG) {
+            console.warn('[GroupCall][ChatPage] Không tìm thấy group hiện tại', {
+                activeRoomId: activeRoom.id,
+                allGroupsCount: allGroups.length,
+            });
+            return;
+        }
+
+        const groupMembers = Array.isArray(currentG.members) ? currentG.members : [];
+
+        const participants = groupMembers
+            .map(member => {
+                if (typeof member === 'string') return member;
+                return member?.username || member?.userName || member?.id || member?.userId || '';
+            })
+            .filter(Boolean);
+
+        const uniqueParticipants = Array.from(new Set(participants));
+
+        console.groupCollapsed('[GroupCall][ChatPage] START group video call');
+        console.debug('groupId:', activeRoom.id);
+        console.debug('groupName:', activeRoom.name);
+        console.debug('currentUsername:', user?.username);
+        console.debug('raw members:', groupMembers);
+        console.debug('participants:', uniqueParticipants);
+        try {
+          console.debug('participants JSON:', JSON.stringify(uniqueParticipants, null, 2));
+        } catch (error) {
+          console.debug('participants JSON failed:', error);
+        }
+        console.groupEnd();
+
+        await startGroupCall(activeRoom.id, uniqueParticipants);
     };
 
     const handleUpdateSuccess = (updatedData) => {
@@ -1643,6 +1721,8 @@ const ChatPage = ({ user, setUser }) => {
                             setIsRightSidebarVisible={setIsRightSidebarVisible}
                             handleApprove={handleApprove}
                             handleVideoCall={handleVideoCall}
+                            handleGroupVideoCall={handleGroupVideoCall}
+                            isInGroupCall={isInGroupCall}
                             isSidebarVisible={isSidebarVisible}
                             setIsSidebarVisible={setIsSidebarVisible}
                             setShowMediaGallery={setShowMediaGallery}
@@ -2000,6 +2080,8 @@ const ChatPage = ({ user, setUser }) => {
                     setShowMediaGallery={setShowMediaGallery}
                     setShowWallpaperModal={setShowWallpaperModal}
                     handleVideoCall={handleVideoCall}
+                    handleGroupVideoCall={handleGroupVideoCall}
+                    isInGroupCall={isInGroupCall}
                     isCallBusy={isCallBusy}
                     setShowSearch={setShowSearch}
                     showSearch={showSearch}

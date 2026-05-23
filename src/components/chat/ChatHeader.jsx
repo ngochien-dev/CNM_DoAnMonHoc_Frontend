@@ -39,6 +39,8 @@ const ChatHeader = ({
     setIsRightSidebarVisible,
     handleApprove,
     handleVideoCall,
+    handleGroupVideoCall,
+    isInGroupCall,
     isSidebarVisible,
     setIsSidebarVisible,
     setShowMediaGallery,
@@ -77,13 +79,40 @@ const ChatHeader = ({
                     ) : <span className="text-sm"># {activeRoom.name}</span>}
                 </div>
                 <div className="flex items-center gap-4">
-                    {/* NÚT GỌI VIDEO - Chỉ hiện ở DM và không phải Cloud */}
-                    {activeRoom.isDM && !isCloudActive && (
+                    {/* Nút gọi video: DM dùng call 1-1, group dùng group call */}
+                    {!isCloudActive && (
                         <button
-                            onClick={() => handleVideoCall()}
-                            disabled={isCallBusy}
-                            className={`p-1.5 rounded-lg transition-all ${isCallBusy ? 'text-gray-600' : 'text-cyan-400 hover:bg-cyan-500/10'}`}
-                            title="Gọi Video"
+                            onClick={() => {
+                                console.groupCollapsed('[GroupCall][ChatHeader] CLICK video button');
+                                console.debug('activeRoom:', activeRoom);
+                                console.debug('isDM:', activeRoom?.isDM);
+                                console.debug('isCloudActive:', isCloudActive);
+                                console.debug('isCallBusy:', isCallBusy);
+                                console.debug('isInGroupCall:', isInGroupCall);
+                                console.debug('isMember:', isMember);
+                                console.groupEnd();
+
+                                if (activeRoom.isDM) {
+                                    handleVideoCall?.();
+                                } else {
+                                    handleGroupVideoCall?.();
+                                }
+                            }}
+                            disabled={isCallBusy || isInGroupCall || (!activeRoom.isDM && !isMember)}
+                            className={`p-1.5 rounded-lg transition-all ${
+                                isCallBusy || isInGroupCall || (!activeRoom.isDM && !isMember)
+                                    ? 'text-gray-600 cursor-not-allowed'
+                                    : activeRoom.isDM
+                                        ? 'text-cyan-400 hover:bg-cyan-500/10'
+                                        : 'text-emerald-400 hover:bg-emerald-500/10'
+                            }`}
+                            title={
+                                activeRoom.isDM
+                                    ? 'Gọi video'
+                                    : isInGroupCall
+                                        ? 'Đang trong cuộc gọi nhóm'
+                                        : 'Gọi video nhóm'
+                            }
                         >
                             <FaVideo size={18} />
                         </button>
