@@ -44,9 +44,13 @@ const FriendsTab = ({
 
   useEffect(() => {
     const fetchMissing = async () => {
-      const needs = [...(user.sentRequests || []), ...(friendRequests || [])];
+      const rawFriends = friends || [];
+      const friendUsernames = rawFriends.map(f => typeof f === 'string' ? f : f.S);
+      const needs = [...(user.sentRequests || []), ...(friendRequests || []), ...friendUsernames];
+      
       const missing = needs.filter((u) => !detailsCache[u] && !onlineUsers[u]);
       if (missing.length === 0) return;
+      
       const newCache = { ...detailsCache };
       for (const uname of missing) {
         try {
@@ -57,7 +61,7 @@ const FriendsTab = ({
       setDetailsCache(newCache);
     };
     fetchMissing();
-  }, [user.sentRequests, friendRequests]);
+  }, [user.sentRequests, friendRequests, friends]);
 
   // --- 3. LOGIC TÌM KIẾM ĐÍCH DANH & KẾT BẠN ---
   useEffect(() => {

@@ -1814,7 +1814,7 @@ const ChatPage = ({ user, setUser }) => {
                                     const latestPin = pinnedMsgs[pinnedMsgs.length - 1];
 
                                     return (
-                                        <div className="relative z-[150] shrink-0">
+                                        <div className="relative z-40 shrink-0">
                                             {/* Collapsed Main Pinned Banner */}
                                             <div className={`px-6 py-2.5 flex items-center justify-between gap-4 border-b transition-all duration-300 ${darkMode ? 'bg-[#0f172a]/95 border-white/5 text-indigo-200 backdrop-blur-md' : 'bg-indigo-50 border-indigo-100 text-indigo-900 shadow-sm'
                                                 }`}>
@@ -2031,6 +2031,14 @@ const ChatPage = ({ user, setUser }) => {
                     <Home user={user} onlineUsers={onlineUsers} allGroups={allGroups} darkMode={darkMode} onSwitchTab={(tab) => {
                         if (tab === 'friends') setShowFriendsTab(true);
                         if (tab === 'discovery') setShowDiscoveryTab(true);
+                        if (tab === 'social') setShowSocialFeed(true);
+                        if (tab === 'todo') setShowTodoTab(true);
+                        if (tab === 'callHistory') setShowCallHistoryTab(true);
+                        if (tab === 'archived') setShowArchivedTab(true);
+                        if (tab === 'ai') setShowAITab(true);
+                        if (tab === 'cloudDrive') setShowCloudDriveTab(true);
+                        if (tab === 'game') setShowGameCenter(true);
+                        if (tab === 'admin' && user?.role === 'admin') setIsAdminMode(true);
                     }} />
                 )}
             </div>
@@ -2061,7 +2069,9 @@ const ChatPage = ({ user, setUser }) => {
                     lastSeenMap={lastSeenMap}
                     mutedRooms={mutedRooms}
                     toggleMuteRoom={toggleMuteRoom}
+                    toggleMuteRoomDuration={toggleMuteRoomDuration}
                     handleTogglePin={handleTogglePin}
+                    handleToggleArchive={handleToggleArchive}
                     clearChatHistory={clearChatHistory}
                     handleExportChat={handleExportChat}
                     handleLeaveGroup={handleLeaveGroup}
@@ -2114,7 +2124,7 @@ const ChatPage = ({ user, setUser }) => {
             />
 
             {showStickerPicker && <div className="absolute bottom-24 left-6 z-50"><StickerPicker onSelect={handleSendSticker} darkMode={darkMode} onClose={() => setShowStickerPicker(false)} /></div>}
-            {showMediaGallery && activeRoom && <MediaGallery roomId={activeRoom.id} darkMode={darkMode} onClose={() => setShowMediaGallery(false)} />}
+            {showMediaGallery && activeRoom && <MediaGallery roomId={activeRoom.id} darkMode={darkMode} onClose={() => setShowMediaGallery(false)} initialTab={typeof showMediaGallery === 'string' ? showMediaGallery : 'media'} onNavigateToMessage={(msgId) => { scrollToMessage(msgId); setShowMediaGallery(false); }} />}
             <CreateChat user={user} isOpen={showGroupCreator} onClose={() => setShowGroupCreator(false)} onCreateGroup={handleCreateGroup} darkMode={darkMode} isPublicMode={isPublicGroupCreator} />
 
             {/* Modal Báo Cáo Tin Nhắn Vi Phạm */}

@@ -5,6 +5,8 @@ import {
 } from 'react-icons/fa';
 import StoryBar from '../social/StoryBar';
 import { disconnectSocket } from '../../services/socket';
+import api from '../../services/api';
+import { useState, useEffect } from 'react';
 
 const ConversationSidebar = ({
     user, setUser, onlineUsers, allGroups, messages, activeRoom, darkMode,
@@ -16,6 +18,26 @@ const ConversationSidebar = ({
     unreadCounts, handleSwitchRoom, handleStartDM, handleOpenProfile,
     setActiveRoomMenu, getRecentChatUsers
 }) => {
+    const [offlineUsersCache, setOfflineUsersCache] = useState({});
+
+    useEffect(() => {
+        const fetchMissingAvatars = async () => {
+            const dms = getRecentChatUsers();
+            const friends = user?.friends || [];
+            const needed = [...new Set([...dms, ...friends])].filter(u => u !== user.username && !onlineUsers[u] && !offlineUsersCache[u]);
+            if (needed.length === 0) return;
+
+            try {
+                const results = await Promise.all(needed.map(u => api.get(`/users/${u}`).catch(() => null)));
+                const newCache = { ...offlineUsersCache };
+                results.forEach((res, i) => {
+                    if (res?.data) newCache[needed[i]] = res.data;
+                });
+                setOfflineUsersCache(newCache);
+            } catch (err) {}
+        };
+        fetchMissingAvatars();
+    }, [messages, user?.friends, onlineUsers]);
 
     // 1. Các hàm Helper xử lý logic tin nhắn cuối cùng
     const getLastMessage = (roomId, isDM, otherUsername) => {
@@ -138,7 +160,7 @@ const ConversationSidebar = ({
                         ) : (
                             <div className="relative shrink-0" onClick={(e) => { e.stopPropagation(); handleOpenProfile(r.name); }}>
                                 <div className="w-11 h-11 rounded-full bg-slate-700 flex items-center justify-center text-white text-xs font-bold uppercase overflow-hidden border border-white/10">
-                                    {onlineUsers[r.name]?.avatar ? <img src={onlineUsers[r.name].avatar} className="w-full h-full object-cover" alt="" /> : r.name[0]}
+                                    {(onlineUsers[r.name]?.avatar || offlineUsersCache[r.name]?.avatar) ? <img src={onlineUsers[r.name]?.avatar || offlineUsersCache[r.name]?.avatar} className="w-full h-full object-cover" alt="" /> : r.name[0]}
                                 </div>
                                 <FaCircle className={`absolute -bottom-0.5 -right-0.5 text-[10px] border-2 ${darkMode ? 'border-[#1e293b]' : 'border-white'} ${onlineUsers[r.name] ? 'text-green-500' : 'text-gray-400'}`} />
                             </div>

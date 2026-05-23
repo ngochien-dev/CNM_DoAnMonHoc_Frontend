@@ -23,6 +23,8 @@ import {
   FaSignOutAlt,
   FaExclamationTriangle,
   FaClock,
+  FaChartBar,
+  FaCalendarAlt,
   FaEyeSlash,
   FaVideo,
   FaCopy,
@@ -39,9 +41,9 @@ import api from "../../services/api";
 
 const RightSidebar = ({
   user,
-  onlineUsers = {},
+  onlineUsers,
   activeRoom,
-  allGroups = [],
+  allGroups,
   handleOpenProfile,
   handleStartDM,
   darkMode,
@@ -49,19 +51,19 @@ const RightSidebar = ({
   handleKick,
   handleToggleRole,
   lastSeenMap,
-
+  
   // Handlers and states
   handleTogglePin,
   mutedRooms = {},
   toggleMuteRoom,
+  toggleMuteRoomDuration,
+  handleToggleArchive,
   clearChatHistory,
   handleLeaveGroup,
   setShowGroupSettings,
   setShowInviteModal,
   setShowMediaGallery,
   setShowWallpaperModal,
-  selfDestructTimer = 0,
-  setSelfDestructTimer,
   handleVideoCall,
   isCallBusy,
   setShowSearch,
@@ -81,6 +83,8 @@ const RightSidebar = ({
   handleExportChat,
   onOpenReportViolation
 }) => {
+  const isArchived = user?.archivedRooms?.includes(activeRoom?.id);
+
   const [expandedSections, setExpandedSections] = useState({
     chatInfo: true,
     customise: true,
@@ -89,6 +93,8 @@ const RightSidebar = ({
     privacy: true
   });
 
+  const [showMuteDropdown, setShowMuteDropdown] = useState(false);
+  const [showTopMuteDropdown, setShowTopMuteDropdown] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
   const [offlineUsersCache, setOfflineUsersCache] = useState({});
 
@@ -99,7 +105,7 @@ const RightSidebar = ({
       const friendsList = user?.friends || [];
       const membersList = currentGroup?.members || [];
       const allNeeded = [...new Set([...friendsList, ...membersList])];
-
+      
       const missing = allNeeded.filter(uname => !onlineUsers[uname] && !offlineUsersCache[uname]);
       if (missing.length === 0) return;
 
@@ -376,32 +382,17 @@ const RightSidebar = ({
     return `${Math.floor(hours / 24)} ngày trước`;
   };
 
-  const getSelfDestructTimerLabel = () => {
-    if (selfDestructTimer === 60) return "1 phút";
-    if (selfDestructTimer === 3600) return "1 giờ";
-    if (selfDestructTimer === 86400) return "1 ngày";
-    return "Tắt";
-  };
-
-  const handleCycleSelfDestruct = () => {
-    if (!setSelfDestructTimer) return;
-    const options = [0, 60, 3600, 86400];
-    const currentIdx = options.includes(selfDestructTimer) ? options.indexOf(selfDestructTimer) : 0;
-    const nextIdx = (currentIdx + 1) % options.length;
-    setSelfDestructTimer(options[nextIdx]);
-  };
-
   const renderFriends = () => {
-    const sortedFriends = [...(user?.friends || [])].sort(
+    const sortedFriends = [...(user.friends || [])].sort(
       (a, b) => !!onlineUsers[b] - !!onlineUsers[a]
     );
     return (
       <div className="flex flex-col h-full space-y-4">
-        <div className="flex items-center justify-between pb-3 border-b border-slate-700/50">
-          <p className="text-[10px] font-black uppercase tracking-[3px] text-indigo-400 italic">
-            Danh sách đồng minh ({user?.friends?.length || 0})
+        <div className="flex items-center justify-between pb-3 border-b border-slate-700/20">
+          <p className={`text-[12.5px] font-semibold tracking-wide ${darkMode ? 'text-gray-300' : 'text-slate-700'}`}>
+            Danh sách bạn bè ({user.friends?.length || 0})
           </p>
-          <FaUserFriends className="text-indigo-500/60" size={14} />
+          <FaUserFriends className="text-indigo-400" size={14} />
         </div>
         <div className="flex-1 overflow-y-auto space-y-2.5 scrollbar-hide">
           {sortedFriends.map((fName) => {
@@ -409,15 +400,15 @@ const RightSidebar = ({
             const cachedInfo = offlineUsersCache[fName];
             const displayAvatar = onlineUsers[fName]?.avatar || cachedInfo?.avatar;
             const displayName = onlineUsers[fName]?.displayName || cachedInfo?.displayName || fName;
-
+            
             return (
               <div
                 key={fName}
                 className={`group flex items-center justify-between p-3 rounded-2xl cursor-pointer transition-all duration-300 ${
                   darkMode 
-                    ? 'hover:bg-white/5 bg-slate-900/20 border border-white/5 hover:border-white/10' 
-                    : 'hover:bg-slate-100 bg-white border border-gray-100 shadow-sm'
-                } ${!isOnline && "opacity-70 grayscale-[20%]"}`}
+                    ? 'hover:bg-white/5 bg-[#1e293b]/50 border border-slate-700/50 hover:border-slate-600' 
+                    : 'hover:bg-slate-50 bg-white border border-gray-200 shadow-sm'
+                } ${!isOnline && "opacity-75 grayscale-[20%]"}`}
               >
                 <div
                   className="flex items-center gap-3 min-w-0"
@@ -425,8 +416,8 @@ const RightSidebar = ({
                 >
                   <div className="relative shrink-0">
                     <div
-                      className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-white shadow-md uppercase border ${
-                        isOnline ? "border-emerald-500/50 bg-indigo-600" : (darkMode ? "border-slate-600 bg-slate-700" : "border-slate-300 bg-slate-400")
+                      className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white shadow-sm uppercase border ${
+                        isOnline ? "border-emerald-500/30 bg-indigo-500" : (darkMode ? "border-slate-600 bg-slate-600" : "border-slate-300 bg-slate-400")
                       }`}
                     >
                       {displayAvatar ? (
@@ -440,23 +431,23 @@ const RightSidebar = ({
                       )}
                     </div>
                     <FaCircle
-                      className={`absolute -bottom-0.5 -right-0.5 text-[8px] border ${
+                      className={`absolute -bottom-0.5 -right-0.5 text-[10px] border-2 ${
                         darkMode ? "border-[#0f172a]" : "border-white"
-                      } ${isOnline ? "text-emerald-500" : "text-gray-500"}`}
+                      } ${isOnline ? "text-emerald-500" : "text-gray-400"}`}
                     />
                   </div>
                   <div className="truncate">
-                    <p className={`text-xs font-black uppercase italic tracking-tighter truncate ${darkMode ? 'text-white' : 'text-slate-800'}`}>
+                    <p className={`text-sm font-semibold truncate ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>
                       {displayName}
                     </p>
-                    <p className="text-[8px] font-bold tracking-widest text-slate-500">
-                      {isOnline ? "ĐANG ONLINE" : (formatLastSeen(lastSeenMap?.[fName]) || "OFFLINE")}
+                    <p className={`text-[10px] font-medium tracking-wide mt-0.5 ${isOnline ? "text-emerald-500" : "text-slate-500"}`}>
+                      {isOnline ? "Đang trực tuyến" : (formatLastSeen(lastSeenMap?.[fName]) || "Ngoại tuyến")}
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={() => handleStartDM(fName)}
-                  className="opacity-0 group-hover:opacity-100 p-2 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 rounded-xl transition-all"
+                  className={`opacity-0 group-hover:opacity-100 p-2.5 rounded-xl transition-all ${darkMode ? 'text-indigo-400 hover:text-white hover:bg-indigo-500' : 'text-indigo-600 hover:text-white hover:bg-indigo-500'}`}
                 >
                   <FaCommentDots size={14} />
                 </button>
@@ -503,9 +494,9 @@ const RightSidebar = ({
         {/* Circular Messenger Buttons under Profile */}
         <div className="flex items-center justify-center gap-4 py-2 border-b border-slate-700/20 pb-5">
           {/* Mute/Unmute */}
-          <div className="flex flex-col items-center space-y-1">
+          <div className="relative flex flex-col items-center space-y-1">
             <button
-              onClick={() => toggleMuteRoom(activeRoom.id)}
+              onClick={() => setShowTopMuteDropdown(!showTopMuteDropdown)}
               className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 ${
                 darkMode 
                   ? 'bg-white/10 hover:bg-white/20 text-gray-200' 
@@ -518,17 +509,26 @@ const RightSidebar = ({
             <span className="text-[10px] font-medium text-slate-400 leading-tight text-center">
               {isMuted ? "Bật lại" : "Tắt âm"}
             </span>
+
+            {/* Top Dropdown Tắt thông báo */}
+            {showTopMuteDropdown && (
+              <div className={`absolute top-full mt-2 left-0 z-50 w-44 overflow-hidden rounded-xl border flex flex-col shadow-2xl ${darkMode ? 'bg-[#1e1f22] border-white/10' : 'bg-white border-gray-200'}`}>
+                  {[{ label: 'Tắt trong 1 giờ', ms: 3600000 }, { label: 'Tắt trong 4 giờ', ms: 14400000 }, { label: 'Tắt trong 24 giờ', ms: 86400000 }, { label: 'Tắt cho đến khi bật lại', ms: -1 }].map(opt => (
+                      <button key={opt.label} onClick={() => { toggleMuteRoomDuration && toggleMuteRoomDuration(activeRoom.id, opt.ms); setShowTopMuteDropdown(false); }} className={`w-full text-left px-3 py-2 text-[11px] font-medium transition-colors ${darkMode ? 'hover:bg-white/5 text-gray-300' : 'hover:bg-slate-50 text-slate-700'}`}>{opt.label}</button>
+                  ))}
+                  {isMuted && (
+                      <button onClick={() => { toggleMuteRoomDuration && toggleMuteRoomDuration(activeRoom.id, null); setShowTopMuteDropdown(false); }} className={`w-full text-left px-3 py-2 text-[11px] font-bold text-emerald-500 transition-colors ${darkMode ? 'hover:bg-white/5' : 'hover:bg-emerald-50'}`}>Bật lại thông báo</button>
+                  )}
+              </div>
+            )}
           </div>
 
           {/* Pin/Unpin Conversation */}
           <div className="flex flex-col items-center space-y-1">
             <button
-              onClick={() => handleTogglePin?.(activeRoom.id, isPinned)}
-              disabled={!handleTogglePin}
+              onClick={() => handleTogglePin(activeRoom.id, isPinned)}
               className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 ${
-                !handleTogglePin
-                  ? 'bg-white/5 text-slate-600 cursor-not-allowed opacity-35'
-                  : isPinned
+                isPinned
                   ? 'bg-indigo-600 text-white hover:bg-indigo-700'
                   : darkMode 
                     ? 'bg-white/10 hover:bg-white/20 text-gray-200' 
@@ -551,8 +551,8 @@ const RightSidebar = ({
               className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 ${
                 isDM || !isMember
                   ? 'bg-white/5 text-slate-600 cursor-not-allowed opacity-35'
-                  : darkMode
-                    ? 'bg-white/10 hover:bg-white/20 text-gray-200 hover:scale-105'
+                  : darkMode 
+                    ? 'bg-white/10 hover:bg-white/20 text-gray-200 hover:scale-105' 
                     : 'bg-slate-200/80 hover:bg-slate-300/80 text-slate-700 hover:scale-105'
               }`}
               title={isDM ? "Không thể thêm thành viên vào DM" : "Thêm thành viên"}
@@ -572,8 +572,8 @@ const RightSidebar = ({
               className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 ${
                 isDM || !canManage
                   ? 'bg-white/5 text-slate-600 cursor-not-allowed opacity-35'
-                  : darkMode
-                    ? 'bg-white/10 hover:bg-white/20 text-gray-200 hover:scale-105'
+                  : darkMode 
+                    ? 'bg-white/10 hover:bg-white/20 text-gray-200 hover:scale-105' 
                     : 'bg-slate-200/80 hover:bg-slate-300/80 text-slate-700 hover:scale-105'
               }`}
               title={isDM ? "Cài đặt không khả dụng cho DM" : "Cài đặt nhóm"}
@@ -606,7 +606,7 @@ const RightSidebar = ({
             {expandedSections.chatInfo && (
               <div className="space-y-1 pb-2">
                 <div 
-                  onClick={() => setShowMediaGallery(true)}
+                  onClick={() => setShowMediaGallery('pinned')}
                   className={`flex items-center gap-3.5 py-2.5 px-2 rounded-xl cursor-pointer transition-colors ${
                     darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-100'
                   }`}
@@ -615,18 +615,23 @@ const RightSidebar = ({
                   <span className={`text-[12.5px] ${darkMode ? 'text-gray-200' : 'text-slate-700'}`}>Xem tin nhắn đã ghim</span>
                 </div>
                 <div 
-                  onClick={handleCycleSelfDestruct}
+                  onClick={() => setShowMediaGallery('polls')}
                   className={`flex items-center gap-3.5 py-2.5 px-2 rounded-xl cursor-pointer transition-colors ${
                     darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-100'
                   }`}
                 >
-                  <FaClock size={12} className="text-slate-400" />
-                  <div className="flex-1 flex justify-between items-center pr-2">
-                    <span className={`text-[12.5px] ${darkMode ? 'text-gray-200' : 'text-slate-700'}`}>Hẹn giờ tự hủy tin nhắn</span>
-                    <span className="text-[11px] font-black text-orange-400 uppercase tracking-widest">{getSelfDestructTimerLabel()}</span>
-                  </div>
+                  <FaChartBar size={12} className="text-slate-400" />
+                  <span className={`text-[12.5px] ${darkMode ? 'text-gray-200' : 'text-slate-700'}`}>Lịch sử bình chọn</span>
                 </div>
-
+                <div 
+                  onClick={() => setShowMediaGallery('events')}
+                  className={`flex items-center gap-3.5 py-2.5 px-2 rounded-xl cursor-pointer transition-colors ${
+                    darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-100'
+                  }`}
+                >
+                  <FaCalendarAlt size={12} className="text-slate-400" />
+                  <span className={`text-[12.5px] ${darkMode ? 'text-gray-200' : 'text-slate-700'}`}>Lịch sử sự kiện nhóm</span>
+                </div>
               </div>
             )}
           </div>
@@ -810,7 +815,7 @@ const RightSidebar = ({
             {expandedSections.media && (
               <div className="space-y-1 pb-2">
                 <div 
-                  onClick={() => setShowMediaGallery(true)}
+                  onClick={() => setShowMediaGallery('media')}
                   className={`flex items-center gap-3.5 py-2.5 px-2 rounded-xl cursor-pointer transition-colors ${
                     darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-100'
                   }`}
@@ -819,7 +824,7 @@ const RightSidebar = ({
                   <span className={`text-[12.5px] ${darkMode ? 'text-gray-200' : 'text-slate-700'}`}>Ảnh / Video</span>
                 </div>
                 <div 
-                  onClick={() => setShowMediaGallery(true)}
+                  onClick={() => setShowMediaGallery('files')}
                   className={`flex items-center gap-3.5 py-2.5 px-2 rounded-xl cursor-pointer transition-colors ${
                     darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-100'
                   }`}
@@ -828,7 +833,7 @@ const RightSidebar = ({
                   <span className={`text-[12.5px] ${darkMode ? 'text-gray-200' : 'text-slate-700'}`}>Tập tin / Files</span>
                 </div>
                 <div 
-                  onClick={() => setShowMediaGallery(true)}
+                  onClick={() => setShowMediaGallery('links')}
                   className={`flex items-center gap-3.5 py-2.5 px-2 rounded-xl cursor-pointer transition-colors ${
                     darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-100'
                   }`}
@@ -857,34 +862,54 @@ const RightSidebar = ({
             {expandedSections.privacy && (
               <div className="space-y-1 pb-2">
                 {/* Mute toggle option */}
-                <div 
-                  onClick={() => toggleMuteRoom(activeRoom.id)}
-                  className={`flex items-center gap-3.5 py-2 px-2.5 rounded-xl cursor-pointer transition-colors ${
-                    darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-100'
-                  }`}
-                >
-                  <FaBell className="text-slate-400 shrink-0" size={12} />
-                  <div className="flex-1 min-w-0 leading-tight">
-                    <p className={`text-[12.5px] ${darkMode ? 'text-gray-200' : 'text-slate-700'}`}>Thông báo về đoạn chat</p>
-                    <p className="text-[10px] text-slate-500">{isMuted ? "Tắt vô thời hạn" : "Đang bật thông báo"}</p>
+                <div className="relative">
+                  <div 
+                    onClick={() => setShowMuteDropdown(!showMuteDropdown)}
+                    className={`flex items-center gap-3.5 py-2 px-2.5 rounded-xl cursor-pointer transition-colors ${
+                      darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-100'
+                    }`}
+                  >
+                    {isMuted ? (
+                        <FaBellSlash className="text-emerald-500 shrink-0" size={12} />
+                    ) : (
+                        <FaBell className="text-slate-400 shrink-0" size={12} />
+                    )}
+                    <div className="flex-1 min-w-0 leading-tight">
+                      <p className={`text-[12.5px] ${darkMode ? 'text-gray-200' : 'text-slate-700'}`}>Thông báo về đoạn chat</p>
+                      <p className="text-[10px] text-slate-500">{isMuted ? "Đang tắt thông báo" : "Đang bật thông báo"}</p>
+                    </div>
+                    <FaChevronDown size={10} className={`text-slate-400 transition-transform ${showMuteDropdown ? 'rotate-180' : ''}`} />
                   </div>
+
+                  {/* Dropdown Tắt thông báo */}
+                  {showMuteDropdown && (
+                    <div className={`mt-1 ml-8 overflow-hidden rounded-xl border flex flex-col shadow-inner ${darkMode ? 'bg-black/20 border-white/5' : 'bg-slate-50 border-gray-100'}`}>
+                        {[{ label: 'Tắt trong 1 giờ', ms: 3600000 }, { label: 'Tắt trong 4 giờ', ms: 14400000 }, { label: 'Tắt trong 24 giờ', ms: 86400000 }, { label: 'Tắt cho đến khi bật lại', ms: -1 }].map(opt => (
+                            <button key={opt.label} onClick={() => { toggleMuteRoomDuration && toggleMuteRoomDuration(activeRoom.id, opt.ms); setShowMuteDropdown(false); }} className={`w-full text-left px-3 py-2 text-[11px] font-medium transition-colors ${darkMode ? 'hover:bg-white/5 text-gray-300' : 'hover:bg-white text-slate-600'}`}>{opt.label}</button>
+                        ))}
+                        {isMuted && (
+                            <button onClick={() => { toggleMuteRoomDuration && toggleMuteRoomDuration(activeRoom.id, null); setShowMuteDropdown(false); }} className={`w-full text-left px-3 py-2 text-[11px] font-bold text-emerald-500 transition-colors ${darkMode ? 'hover:bg-white/5' : 'hover:bg-white'}`}>Bật lại thông báo</button>
+                        )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Hide chat option */}
                 <div 
+                  onClick={() => handleToggleArchive && handleToggleArchive(activeRoom.id, isArchived)}
                   className={`flex items-center justify-between py-2 px-2.5 rounded-xl cursor-pointer transition-colors ${
                     darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-100'
                   }`}
                 >
                   <div className="flex items-center gap-3.5 min-w-0 leading-tight">
-                    <FaEyeSlash className="text-slate-400 shrink-0" size={12} />
+                    <FaEyeSlash className={`${isArchived ? 'text-indigo-500' : 'text-slate-400'} shrink-0`} size={12} />
                     <div>
                       <p className={`text-[12.5px] ${darkMode ? 'text-gray-200' : 'text-slate-700'}`}>Ẩn cuộc trò chuyện này</p>
-                      <p className="text-[10px] text-slate-500">Mở lại khi có tin nhắn mới</p>
+                      <p className="text-[10px] text-slate-500">{isArchived ? "Đã ẩn khỏi màn hình chính" : "Mở lại khi có tin nhắn mới"}</p>
                     </div>
                   </div>
-                  <button className="w-8 h-4.5 bg-slate-700 rounded-full transition-all relative border border-white/5 shrink-0">
-                    <div className="absolute top-0.5 left-0.5 w-3.5 h-3.5 bg-slate-400 rounded-full transition-all"></div>
+                  <button className={`w-8 h-4.5 rounded-full transition-all relative border shrink-0 ${isArchived ? 'bg-indigo-500 border-indigo-500' : (darkMode ? 'bg-slate-700 border-white/5' : 'bg-slate-300 border-gray-300')}`}>
+                    <div className={`absolute top-0.5 w-3.5 h-3.5 rounded-full transition-all ${isArchived ? 'left-4 bg-white' : 'left-0.5 bg-slate-400 dark:bg-slate-400'}`}></div>
                   </button>
                 </div>
 
