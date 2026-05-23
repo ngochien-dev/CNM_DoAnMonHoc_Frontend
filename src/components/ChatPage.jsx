@@ -54,6 +54,7 @@ import ReportMessageModal from './modals/ReportMessageModal';
 import ReportViolationModal from './modals/ReportViolationModal';
 import InviteMemberModal from './modals/InviteMemberModal';
 import ConversationSidebar from './chat/ConversationSidebar';
+import InChatAIPanel from './chat/InChatAIPanel';
 import ChatInput from './chat/ChatInput';
 import useChatSocket from '../hooks/useChatSocket';
 import useE2EE from '../hooks/useE2EE';
@@ -81,7 +82,14 @@ const ChatPage = ({ user, setUser }) => {
     const [onlineUsers, setOnlineUsers] = useState({});
     const [allGroups, setAllGroups] = useState([]);
     const [activeRoom, setActiveRoom] = useState(null);
+    const [lastContextRoom, setLastContextRoom] = useState(null);
     const isCloudActive = activeRoom?.id === `dm_${user?.username}_${user?.username}`;
+
+    useEffect(() => {
+        if (activeRoom && activeRoom.id !== 'ai_agent_room') {
+            setLastContextRoom(activeRoom);
+        }
+    }, [activeRoom]);
     const [unreadCounts, setUnreadCounts] = useState({});
     const [callHistory, setCallHistory] = useState([]); // State cho lịch sử cuộc gọi
     const [typingUsers, setTypingUsers] = useState([]); // Danh sách người đang gõ trong phòng hiện tại
@@ -637,6 +645,7 @@ const ChatPage = ({ user, setUser }) => {
     // P0: Pagination — load messages for a specific room
     const loadRoomMessages = useCallback(async (roomId, before = null) => {
         if (!roomId || loadingMessages) return;
+        if (roomId === 'ai_agent_room') return;
         setLoadingMessages(true);
         try {
             // Nếu đang offline, đọc từ IndexedDB cache ngay lập tức
@@ -1687,8 +1696,25 @@ const ChatPage = ({ user, setUser }) => {
                 ) : isAdminMode ? (
                     <AdminStats stats={stats} darkMode={darkMode} />
                 ) : activeRoom ? (
-                    <>
-                        <ChatHeader
+                    activeRoom.id === 'ai_agent_room' ? (
+                        <InChatAIPanel
+                            darkMode={darkMode}
+                            activeRoom={activeRoom}
+                            lastContextRoom={lastContextRoom}
+                            onPasteToInput={(text) => {
+                                if (lastContextRoom) {
+                                    if (lastContextRoom.isDM && lastContextRoom.id !== `dm_${user.username}_${user.username}`) {
+                                        handleStartDM(lastContextRoom.name);
+                                    } else {
+                                        handleSwitchRoom(lastContextRoom);
+                                    }
+                                }
+                                setMsgInput(text);
+                            }}
+                        />
+                    ) : (
+                        <>
+                            <ChatHeader
                             activeRoom={activeRoom}
                             darkMode={darkMode}
                             isCloudActive={isCloudActive}
@@ -2027,6 +2053,7 @@ const ChatPage = ({ user, setUser }) => {
                             </>
                         )}
                     </>
+                )
                 ) : (
                     <Home user={user} onlineUsers={onlineUsers} allGroups={allGroups} darkMode={darkMode} onSwitchTab={(tab) => {
                         if (tab === 'friends') setShowFriendsTab(true);
