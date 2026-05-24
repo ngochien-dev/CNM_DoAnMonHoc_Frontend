@@ -1,7 +1,8 @@
 import React from 'react';
 import {
     FaSearch, FaTimes, FaUserPlus, FaUserFriends, FaChevronDown,
-    FaFolderPlus, FaCog, FaCloud, FaCircle, FaThumbtack, FaEllipsisH, FaSignOutAlt
+    FaFolderPlus, FaCog, FaCloud, FaCircle, FaThumbtack, FaEllipsisH, FaSignOutAlt,
+    FaRobot
 } from 'react-icons/fa';
 import StoryBar from '../social/StoryBar';
 import { disconnectSocket } from '../../services/socket';
@@ -98,10 +99,12 @@ const ConversationSidebar = ({
     const publicGroups = allGroups.filter(g => g.isPublic && (g.members?.includes(user.username) || g.owner === user.username));
     const privateGroups = allGroups.filter(g => !g.isPublic && (g.members?.includes(user.username) || g.owner === user.username));
 
+    const aiRoomItem = { id: 'ai_agent_room', name: 'Trợ lý AI Agent', isDM: true, isAI: true, type: 'personal' };
     const cloudRoomItem = { id: `dm_${user.username}_${user.username}`, name: user.username, isDM: true, isCloud: true, type: 'personal' };
     const filteredDms = dms.filter(name => name !== user.username);
 
     const allRoomItems = [
+        aiRoomItem,
         cloudRoomItem,
         ...filteredDms.map(name => ({ id: `dm_${[user.username, name].sort().join("_")}`, name, isDM: true, type: 'personal' })),
         ...publicGroups.map(g => ({ id: g.groupId, name: g.groupName, type: 'groups' })),
@@ -125,6 +128,7 @@ const ConversationSidebar = ({
     if (roomSearchQuery.trim()) {
         const query = roomSearchQuery.toLowerCase();
         filtered = filtered.filter(r => {
+            if (r.isAI) return 'ai assistant trợ lý'.includes(query) || r.name.toLowerCase().includes(query);
             if (r.isCloud) return 'cloud'.includes(query);
             if (r.isDM) return r.name.toLowerCase().includes(query) || (onlineUsers[r.name]?.displayName || '').toLowerCase().includes(query);
             return r.name.toLowerCase().includes(query);
@@ -138,22 +142,37 @@ const ConversationSidebar = ({
     const renderRoom = (r) => {
         const isPinned = pinnedRooms.includes(r.id);
         const isCloudRoom = r.id === `dm_${user.username}_${user.username}`;
-        const isActive = activeRoom?.id === r.id || (r.isDM && activeRoom?.name === r.name && activeRoom?.isDM);
+        const isAIRoom = r.id === 'ai_agent_room';
+        const isActive = activeRoom?.id === r.id || (r.isDM && activeRoom?.name === r.name && activeRoom?.isDM && !isAIRoom);
         const unread = unreadCounts[r.id] || 0;
         const groupObj = !r.isDM ? allGroups.find(g => g.groupId === r.id) : null;
         const groupAvatar = groupObj?.avatar;
-        const lastMsg = getLastMessage(r.id, r.isDM, r.name);
+        const lastMsg = isAIRoom ? null : getLastMessage(r.id, r.isDM, r.name);
         const timeStr = lastMsg ? formatRelativeTime(lastMsg.createdAt) : '';
 
         return (
             <div
                 key={r.id}
-                onClick={() => isCloudRoom ? handleSwitchRoom({ id: r.id, name: r.name, isDM: true, isCloud: true }) : (r.isDM ? handleStartDM(r.name) : handleSwitchRoom({ id: r.id, name: r.name }))}
+                onClick={() => {
+                    if (isAIRoom) {
+                        handleSwitchRoom({ id: r.id, name: r.name, isAI: true });
+                    } else if (isCloudRoom) {
+                        handleSwitchRoom({ id: r.id, name: r.name, isDM: true, isCloud: true });
+                    } else if (r.isDM) {
+                        handleStartDM(r.name);
+                    } else {
+                        handleSwitchRoom({ id: r.id, name: r.name });
+                    }
+                }}
                 className={`group p-3 rounded-2xl flex items-center gap-3 cursor-pointer mb-1 relative transition-all duration-300 border ${isActive ? 'bg-gradient-to-r from-[#5865f2] to-[#4752c4] text-white shadow-lg border-transparent' : (darkMode ? 'hover:bg-white/5 border-transparent text-gray-300 bg-transparent' : 'hover:bg-slate-100 border-transparent text-slate-700 bg-transparent')}`}
             >
                 <div className="relative shrink-0">
                     {r.isDM ? (
-                        isCloudRoom ? (
+                        isAIRoom ? (
+                            <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white border border-white/10 shrink-0 shadow-md">
+                                <FaRobot size={16} className="animate-pulse text-indigo-100" />
+                            </div>
+                        ) : isCloudRoom ? (
                             <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-cyan-400 to-indigo-500 flex items-center justify-center text-white border border-white/10 shrink-0 shadow-md">
                                 <FaCloud size={16} className="animate-pulse text-cyan-100" />
                             </div>
@@ -175,32 +194,34 @@ const ConversationSidebar = ({
                 <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-baseline mb-1">
                         <h4 className={`text-xs font-black truncate ${isActive ? 'text-white' : (darkMode ? 'text-gray-100' : 'text-slate-800')}`}>
-                            {isCloudRoom ? <span>Cloud của tôi</span> : (r.isDM ? (onlineUsers[r.name]?.displayName || `@${r.name}`) : r.name)}
+                            {isAIRoom ? <span>Trợ lý AI Agent</span> : isCloudRoom ? <span>Cloud của tôi</span> : (r.isDM ? (onlineUsers[r.name]?.displayName || `@${r.name}`) : r.name)}
                         </h4>
                         {timeStr && <span className={`text-[9px] font-bold tracking-tight shrink-0 ml-2 ${isActive ? 'text-white/80' : (darkMode ? 'text-gray-400' : 'text-slate-400')}`}>{timeStr}</span>}
                     </div>
 
                     <div className="flex justify-between items-center gap-2">
                         <p className={`text-[11px] truncate flex-1 font-semibold ${isActive ? 'text-white/80' : (darkMode ? 'text-gray-400' : 'text-slate-500')}`}>
-                            {renderLastMessageText(lastMsg, r.isDM)}
+                            {isAIRoom ? 'Hỏi trợ lý AI bất kỳ điều gì...' : renderLastMessageText(lastMsg, r.isDM)}
                         </p>
                         <div className="flex items-center gap-1.5 shrink-0">
                             {unread > 0 && <span className="px-1.5 py-0.5 bg-red-500 text-white text-[8px] flex items-center justify-center rounded-full font-black animate-bounce shrink-0 min-w-4 shadow-sm shadow-red-500/30">{unread}</span>}
                             {isPinned && !isActive && <FaThumbtack size={9} className="text-indigo-400 rotate-45 shrink-0" />}
-                            <div className="opacity-0 group-hover:opacity-100 flex items-center transition-opacity duration-200">
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        const rect = e.currentTarget.getBoundingClientRect();
-                                        let yPos = rect.bottom + window.scrollY + 4;
-                                        if (rect.bottom + 320 > window.innerHeight) yPos = rect.top + window.scrollY - 320 - 4;
-                                        setActiveRoomMenu({ roomId: r.id, isPinned, name: r.name, isDM: r.isDM, x: rect.right - 220, y: yPos });
-                                    }}
-                                    className={`p-1.5 rounded-full transition-colors ${isActive ? 'hover:bg-white/20 text-white' : 'hover:bg-slate-200 dark:hover:bg-white/10 text-gray-400'}`}
-                                >
-                                    <FaEllipsisH size={12} />
-                                </button>
-                            </div>
+                            {!isAIRoom && (
+                                <div className="opacity-0 group-hover:opacity-100 flex items-center transition-opacity duration-200">
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            const rect = e.currentTarget.getBoundingClientRect();
+                                            let yPos = rect.bottom + window.scrollY + 4;
+                                            if (rect.bottom + 320 > window.innerHeight) yPos = rect.top + window.scrollY - 320 - 4;
+                                            setActiveRoomMenu({ roomId: r.id, isPinned, name: r.name, isDM: r.isDM, x: rect.right - 220, y: yPos });
+                                        }}
+                                        className={`p-1.5 rounded-full transition-colors ${isActive ? 'hover:bg-white/20 text-white' : 'hover:bg-slate-200 dark:hover:bg-white/10 text-gray-400'}`}
+                                    >
+                                        <FaEllipsisH size={12} />
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
