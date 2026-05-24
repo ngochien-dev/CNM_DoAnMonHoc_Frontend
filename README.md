@@ -1,83 +1,107 @@
-# 🌐 OTT Project — Frontend Application & Architecture Documentation
+# 🌐 OTT Project — Frontend Architecture & Documentation
 
-**Version**: 7.0 | **Status**: Production-Ready
+**Version**: 7.0 | **Last Updated**: 2026-05-24 | **Status**: Production-Ready
 
-Tài liệu này cung cấp chi tiết về kiến trúc giao diện, chức năng của từng thư mục, khối thành phần (Component) và hướng dẫn triển khai phía Frontend của nền tảng OTT (One-to-One Messaging & Video Call Platform).
-
----
-
-## 🎨 Tổng quan Kiến trúc (Frontend Architecture)
-
-Ứng dụng phía Client được xây dựng trên nền tảng **React.js** kết hợp với bộ công cụ đóng gói siêu tốc **Vite** và phong cách thiết kế giao diện hiện đại, linh hoạt sử dụng **Tailwind CSS**.
-Hệ thống kết nối thời gian thực qua **Socket.IO** và xử lý gọi video/audio ngang hàng qua **WebRTC**.
-
-**Tech Stack**: React 19 + Vite + Tailwind CSS + Socket.IO Client + Firebase + Recharts
+Tài liệu này cung cấp chi tiết về kiến trúc giao diện, chức năng của từng thư mục, khối thành phần (Component) và hướng dẫn triển khai phía Frontend của nền tảng OTT (One-to-One Messaging, Social & Video Call Platform).
 
 ---
 
-## 📂 Cấu trúc Thư mục Chi tiết (Directory Breakdown)
+## 🎯 Tổng quan Kiến trúc (Overview)
 
-### `src/components/`
-Thư mục lõi chứa toàn bộ các khối giao diện (UI Components) của ứng dụng, được tổ chức theo các phân hệ chức năng:
+Ứng dụng phía Client được xây dựng trên nền tảng **React.js** kết hợp với bộ công cụ đóng gói siêu tốc **Vite** và phong cách thiết kế giao diện hiện đại **Tailwind CSS**. Hệ thống hỗ trợ đa nền tảng, thiết kế Responsive, Dark/Light mode và mã hóa đầu cuối (E2EE).
 
-#### 🔐 `auth/` (Xác thực & Tài khoản)
-- **`AuthPage.jsx`**: Màn hình bọc toàn bộ luồng giao diện đăng ký, đăng nhập và xác thực.
-- **`LoginPage.jsx`**: Giao diện đăng nhập với cơ chế hiển thị lỗi rõ ràng.
-- **`Register.jsx`**: Giao diện đăng ký tài khoản mới hỗ trợ tải lên ảnh đại diện.
-- **`OTPVerify.jsx`**: Giao diện nhập và xác thực mã OTP khi người dùng quên mật khẩu.
+**Tech Stack**: 
+- **Core Framework**: React 19 + Vite
+- **Styling**: Tailwind CSS + Framer Motion (Animations)
+- **Real-time**: Socket.IO Client + WebRTC
+- **State Management**: React Hooks + Context API
+- **Data Visualization**: Recharts
+- **Icons & Emoji**: React-Icons (Fi & Fa) + Emoji Picker React
+- **Cloud/Backend Integration**: Firebase + Axios
 
-#### 📞 `call/` & `calls/` (Cuộc gọi thoại & Video WebRTC)
-- **`CallControls.jsx`**: Thanh công cụ điều khiển cuộc gọi (Tắt micro, Tắt camera, Chia sẻ màn hình, Kết thúc cuộc gọi).
-- **`CallOverlay.jsx`**: Giao diện hiển thị luồng Video/Audio của các thành viên trong cuộc gọi.
-- **`IncomingCallModal.jsx` / `OutgoingCallModal.jsx`**: Hộp thoại thông báo khi có cuộc gọi đến/đi kèm chuông báo (Cho phép Nhận/Từ chối hoặc hiển thị trạng thái chờ).
-- **`CallHistoryTab.jsx`**: Thẻ hiển thị lịch sử các cuộc gọi thoại/video gần đây.
+---
 
-#### 💬 `chat/` (Hệ thống Nhắn tin)
-- **`Home.jsx`**: Giao diện trung tâm chào mừng sau khi đăng nhập thành công.
-- **`Sidebar.jsx`**: Thanh bên trái quản lý danh sách bạn bè và các cuộc trò chuyện cá nhân gần đây.
-- **`RightSidebar.jsx`**: Thanh thông tin bên phải hiển thị chi tiết về nhóm hoặc hồ sơ người đang chat, cùng các thiết lập tin nhắn tự hủy.
-- **`RoomSidebar.jsx`**: Thanh danh sách các phòng/kênh chat con thuộc một Server nhóm.
-- **`SearchBar.jsx`**: Thanh tìm kiếm chung ở khu vực trên cùng.
-- **`MessageSearch.jsx`**: Khối giao diện tìm kiếm nội dung tin nhắn trong phòng trò chuyện.
-- **`SearchDropdown.jsx`**: Khối danh sách thả xuống hiển thị kết quả tìm kiếm theo thời gian thực.
-- **`ServerSidebar.jsx`**: Thanh menu biểu tượng cực trái liệt kê các Server nhóm mà người dùng tham gia.
-- **`ArchivedChatsTab.jsx`**: Quản lý danh sách các phòng chat đã được lưu trữ (archived).
-- **`CloudDriveTab.jsx`**: Tính năng lưu trữ đám mây cá nhân để lưu và tải tài liệu/phương tiện.
+## 📂 Cấu trúc Thư mục (Directory Structure)
 
-#### 👥 `friends/` (Quản lý Bạn bè)
-- **`FriendsTab.jsx`**: Giao diện chuyên dụng quản lý danh sách bạn bè, hiển thị trạng thái hoạt động (Online/Offline) và danh sách lời mời kết bạn chờ duyệt, kết hợp hiển thị lịch sử cuộc gọi gần đây.
+Dưới đây là chi tiết vai trò của từng thư mục trong `src/components/`, được phân chia theo logic nghiệp vụ rõ ràng:
 
-#### 🌟 `social/` (Mạng xã hội - Posts & Stories)
-- **`SocialFeed.jsx`**: Bảng tin hiển thị các bài viết từ bạn bè/cộng đồng, hỗ trợ tương tác cảm xúc (Like), bình luận (Comment kèm ảnh), và hiển thị hình ảnh phóng to qua Lightbox.
-- **`StoryBar.jsx` / `StoryViewer.jsx`**: Thanh danh sách và trình xem tin nhắn hình ảnh tự hủy (Stories) trong vòng 24h.
+### 1. 🔐 `auth/` (Xác thực & Tài khoản)
+Quản lý toàn bộ luồng đăng nhập, đăng ký và bảo mật.
 
-#### 🎮 `games/` & `todo/` (Tiện ích Mở rộng)
-- **`GameCenter.jsx`**: Trung tâm chứa các trò chơi nhỏ (Mini-games) giải trí tích hợp trực tiếp trên nền tảng.
-- **`TodoTab.jsx`**: Trình quản lý công việc (Todo List) và ghi chú cá nhân của người dùng với các tùy chọn phân loại, mức độ ưu tiên và hạn chót.
+| Component | Chức năng chính |
+|-----------|----------------|
+| **`AuthPage.jsx`** | Màn hình bọc toàn bộ luồng giao diện đăng ký, đăng nhập và xác thực. |
+| **`LoginPage.jsx`** | Giao diện đăng nhập với cơ chế hiển thị lỗi rõ ràng. |
+| **`Register.jsx`** | Giao diện đăng ký tài khoản mới hỗ trợ tải lên ảnh đại diện. |
+| **`OTPVerify.jsx`** | Giao diện nhập và xác thực mã OTP qua Email khi quên mật khẩu. |
 
-#### 📊 `statistics/` (Bảng điều khiển Quản trị - Admin Dashboard)
-- **`AdminStats.jsx`**: Bảng điều khiển trực quan cao cấp dành riêng cho Quản trị viên. Trang bị các thẻ số liệu động, biểu đồ theo dõi lưu lượng tin nhắn (sử dụng `recharts`), quản lý người dùng (Khóa/Mở khóa, reset mật khẩu) và kiểm duyệt tin nhắn bị báo cáo (Dismiss, Delete, Ban).
+### 2. 💬 `chat/` (Hệ thống Nhắn tin Cốt lõi)
+Nơi chứa các Component khổng lồ và quan trọng nhất của ứng dụng nhắn tin.
 
-#### 👤 `user/` (Hồ sơ Người dùng)
-- **`ProfileView.jsx` / `ProfileEdit.jsx`**: Xem và cập nhật thông tin cá nhân (Tên hiển thị, điện thoại, bio, địa chỉ, ảnh đại diện).
-- **`ChangePassword.jsx`**: Khối giao diện cập nhật mật khẩu mới.
-- **`UserProfileModal.jsx`**: Hộp thoại/Trang xem thông tin chi tiết của người dùng khác kèm quản lý phiên đăng nhập và cài đặt bảo mật 2 lớp (2FA).
+| Component | Chức năng chính |
+|-----------|----------------|
+| **`Home.jsx`** | Bảng điều khiển trung tâm (Dashboard) với phong cách Glassmorphism thanh lịch. |
+| **`Sidebar.jsx`** & **`SidebarNav.jsx`** | Thanh điều hướng bên trái và thanh tính năng (Menu icons). |
+| **`RightSidebar.jsx`** | Thanh thông tin bên phải (quản lý nhóm, tin nhắn tự hủy, ẩn cuộc trò chuyện). |
+| **`MessageItem.jsx`** | Khối hiển thị tin nhắn đa định dạng (Text, Hình ảnh, Video, Tài liệu, Polls). |
+| **`ChatInput.jsx`** | Khung soạn thảo tin nhắn, đính kèm file, chọn Emoji và thả Sticker. |
+| **`MessageSearch.jsx`** & **`GlobalSearch.jsx`** | Công cụ tìm kiếm nội dung tin nhắn và tìm kiếm người dùng toàn cục. |
+| **`E2EEDecryptor.jsx`** | Khối giao diện chuyên dụng để giải mã tin nhắn (Mã hóa đầu cuối). |
+| **`LinkPreview.jsx`** | Khối preview hiển thị tiêu đề và ảnh thu nhỏ khi gửi một URL (Rich Link). |
+| **`WaveformVoicePlayer.jsx`** | Trình phát tin nhắn thoại (Audio) dạng sóng âm thanh trực quan. |
+| **`ThreadSidebar.jsx`**| Hỗ trợ tính năng trả lời tin nhắn rẽ nhánh (Thread) tương tự Slack. |
+| **`CloudDriveTab.jsx`** | Tính năng lưu trữ đám mây cá nhân để lưu/tải tài liệu. |
+| **`ArchivedChatsTab.jsx`**| Quản lý danh sách các phòng chat đã được Lưu trữ (Archived). |
 
-#### 🤖 Giao diện Cấp cao (Core Views)
-- **`ChatPage.jsx`**: Giao diện gốc bọc toàn bộ luồng hoạt động sau khi đăng nhập. Quản lý kết nối Socket.IO toàn cục, lắng nghe các sự kiện thời gian thực (tin nhắn mới, trạng thái đang gõ, lời mời kết bạn) và đặc biệt là xử lý tín hiệu ngắt kết nối bắt buộc (`force_logout`).
-- **`ChatbotWidget.jsx`**: Tiện ích dạng bong bóng nổi ở góc màn hình hỗ trợ người dùng trò chuyện nhanh với Trợ lý AI.
+### 3. 📞 `call/` & `group-call/` (WebRTC Calls)
+Hệ thống gọi thoại và gọi hình ảnh ngang hàng P2P không độ trễ.
 
-### `src/context/` & `src/hooks/`
-- **`CallContext.jsx` / `useWebRTC.js`**: Context và Hook chịu trách nhiệm quản lý vòng đời của một cuộc gọi thoại/video WebRTC (khởi tạo `RTCPeerConnection`, xử lý luồng MediaStream âm thanh/hình ảnh, truyền phát tín hiệu kết nối).
-- **`callContextShared.js`** & **`useCall.js`**: Hook và các cấu hình chia sẻ trạng thái cuộc gọi.
+| Component | Chức năng chính |
+|-----------|----------------|
+| **`CallControls.jsx`** | Thanh công cụ điều khiển (Mở/Tắt Micro, Camera, Chia sẻ Màn hình - Screen Share). |
+| **`CallOverlay.jsx`** | Giao diện hiển thị luồng Video/Audio của các thành viên. |
+| **`IncomingCallModal.jsx`**| Hộp thoại thông báo khi có cuộc gọi đến kèm âm thanh chuông báo. |
+| **`CallHistoryTab.jsx`**| Thẻ hiển thị lịch sử các cuộc gọi gần đây (Missed, Incoming, Outgoing, Thời lượng gọi). |
 
-### `src/services/`
-- **`api.js`**: Cấu hình đối tượng HTTP client bằng Axios, tự động đính kèm `Bearer Token` vào mọi truy vấn và xử lý lỗi xác thực (tự động đăng xuất khi token hết hạn).
-- **`socket.js`**: Khởi tạo và chia sẻ phiên kết nối Socket.IO duy nhất toàn cục.
-- **`offlineDB.js`**: Cấu hình cơ sở dữ liệu IndexedDB cho việc hoạt động và đồng bộ offline.
+### 4. 🌟 `social/` (Mạng xã hội & Tương tác)
+Hệ sinh thái Mạng xã hội thu nhỏ tương tự Zalo Nhật Ký / Facebook.
 
-### `src/utils/`
-- **`mediaError.js`**: Phân tích và đưa ra thông báo thân thiện cho các lỗi liên quan đến thiết bị phần cứng (Camera, Micro).
+| Component | Chức năng chính |
+|-----------|----------------|
+| **`SocialFeed.jsx`** | Bảng tin (Timeline) hiển thị bài viết, thả cảm xúc, bình luận kèm ảnh tĩnh/động. |
+| **`StoryBar.jsx`** | Thanh danh sách hiển thị các Story (tin 24h) ở đầu trang. |
+| **`StoryViewer.jsx`** | Trình xem Story toàn màn hình hỗ trợ tự động nhảy sang story kế tiếp. |
+
+### 5. 🤖 `function/`, `games/` & `todo/` (Tiện ích Mở rộng)
+Các tính năng nâng cao giữ chân người dùng (Retention).
+
+| Component | Chức năng chính |
+|-----------|----------------|
+| **`AIAssistantsTab.jsx`**| Quản lý danh sách các Bot trợ lý AI thông minh (Tích hợp Gemini). |
+| **`InChatAIPanel.jsx`** | Tích hợp AI thẳng vào khung chat nhóm để hỗ trợ dịch thuật, phân tích. |
+| **`GameCenter.jsx`** | Trung tâm Mini-games giải trí trực tiếp mà không cần rời ứng dụng. |
+| **`TodoTab.jsx`** | Trình quản lý công việc (Todo List) có đánh dấu mức độ ưu tiên và hạn chót. |
+
+### 6. 📊 `statistics/` & `user/` (Quản trị & Hồ sơ)
+| Component | Chức năng chính |
+|-----------|----------------|
+| **`AdminStats.jsx`** | Dashboard Quản trị viên sử dụng `recharts` (Biểu đồ lưu lượng 7 ngày, Phân bổ data, Banning). |
+| **`ProfileView.jsx`** | Giao diện hiển thị hồ sơ cá nhân và trạng thái hoạt động (Online/Offline/Last Seen). |
+| **`ProfileEdit.jsx`** | Form cập nhật thông tin cá nhân (Tên, Bio, Avatar). |
+| **`ChangePassword.jsx`**| Giao diện đổi mật khẩu an toàn. |
+
+---
+
+## 🧩 Context & Services (State Management)
+
+Hệ thống quản lý trạng thái phân tán không dùng Redux mà dùng Context API siêu nhẹ.
+
+| Thư mục | Tệp tin | Vai trò |
+|---------|---------|---------|
+| **`src/context/`** | `CallContext.jsx` | Quản lý vòng đời `RTCPeerConnection`, `MediaStream` (Camera/Mic) và luồng tín hiệu WebRTC. |
+| **`src/services/`** | `api.js` | Cấu hình Axios, tự động chèn `Bearer Token`, tự động văng lỗi khi 401 Unauthorized. |
+| **`src/services/`** | `socket.js` | Khởi tạo phiên kết nối Socket.IO duy nhất toàn cục (Singleton pattern) để tối ưu RAM. |
+| **`src/services/`** | `offlineDB.js`| Cấu hình `IndexedDB` cho tính năng caching dữ liệu hoạt động ngoại tuyến. |
 
 ---
 
@@ -85,19 +109,25 @@ Thư mục lõi chứa toàn bộ các khối giao diện (UI Components) của 
 
 ### 1. Yêu cầu hệ thống
 - **Node.js**: Phiên bản 18.x trở lên.
+- **Trình duyệt**: Khuyến nghị Chrome, Edge, Safari bản mới nhất (Bắt buộc để hỗ trợ chuẩn WebRTC).
 
 ### 2. Cài đặt các gói phụ thuộc
 Di chuyển vào thư mục frontend và tiến hành cài đặt:
 ```bash
-cd frontend
+cd CNM_DoAnMonHoc_Frontend
 npm install
 ```
 
 ### 3. Cấu hình Biến môi trường
-Tạo tệp `.env` tại thư mục gốc của `frontend` để trỏ tới API Backend:
+Tạo tệp `.env` tại thư mục gốc của `frontend` để trỏ tới API Backend. Hãy sao chép từ `.env.example`:
 ```env
 VITE_API_URL=http://localhost:3001
-# Bổ sung các cấu hình API Keys (Firebase) nếu có
+VITE_SOCKET_URL=http://localhost:3001
+
+# Cấu hình Firebase (Nếu tích hợp tính năng Notification Push)
+VITE_FIREBASE_API_KEY=xxx
+VITE_FIREBASE_AUTH_DOMAIN=xxx
+VITE_FIREBASE_PROJECT_ID=xxx
 ```
 
 ### 4. Khởi chạy Ứng dụng
@@ -110,6 +140,7 @@ Trình duyệt sẽ tự động chạy tại: `http://localhost:5173`
 - **Đóng gói Sản phẩm (Build for Production)**:
 ```bash
 npm run build
+# Sau đó copy thư mục 'dist' vào server Nginx hoặc Apache.
 ```
 
 ---
@@ -117,7 +148,8 @@ npm run build
 ## 💎 Điểm nhấn Trải nghiệm (UI/UX Highlights)
 
 > [!TIP]
-> - **Giao diện Tối/Sáng (Dark/Light Mode)**: Hỗ trợ chuyển đổi giao diện mượt mà, bảo vệ mắt người dùng.
-> - **Đồ họa Trực quan Cao cấp**: Sự kết hợp giữa `recharts` cho thống kê và thư viện biểu tượng phong phú `react-icons` mang lại một thiết kế đẳng cấp, chuyên nghiệp.
-> - **Phản hồi Thời gian thực**: Tự động thông báo (Toast) mỗi khi có tin nhắn, lời mời kết bạn hoặc cuộc gọi đến.
-> - **Tích hợp Đa Tiện ích**: Không chỉ nhắn tin, app tích hợp cả mạng xã hội (Stories, Posts), GameCenter, TodoTab, và AI Chatbot mang lại trải nghiệm toàn diện.
+> - **Giao diện Tối/Sáng (Dark/Light Mode)**: Hỗ trợ chuyển đổi giao diện cực mượt mà, lưu trạng thái bằng LocalStorage.
+> - **Đồ họa Trực quan Cao cấp**: Sử dụng bộ **Feather Icons** thanh lịch và **Glassmorphism** tạo cảm giác không gian đa chiều (3D).
+> - **Real-time Feedback**: Hiển thị Toast mượt mà mỗi khi có tin nhắn tới và thanh tiến trình (Loading Skeleton) che giấu độ trễ của API.
+> - **Bảo mật tối thượng (E2EE)**: Tích hợp hiệu ứng giải mã tin nhắn hiển thị trực quan cho người dùng về sự an toàn của dữ liệu.
+> - **Rich Text & Waveform**: Cho phép bôi đậm, thả biểu tượng cảm xúc, và đặc biệt là phát âm thanh Voice Message với đồ thị hình sin đẹp mắt.
