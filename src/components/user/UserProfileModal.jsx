@@ -1,24 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-    FaTimes,
-    FaUserEdit,
-    FaCamera,
-    FaShieldAlt,
-    FaCommentDots,
-    FaUserPlus,
-    FaUserMinus,
-    FaLock,
-    FaVideo,
-    FaMobileAlt,
-    FaDesktop,
-    FaTrash,
-    FaUserCircle,
-    FaHistory,
-    FaBan,
+    FaTimes, FaUserEdit, FaCamera, FaShieldAlt, FaCommentDots,
+    FaUserPlus, FaUserMinus, FaLock, FaVideo, FaMobileAlt, FaDesktop,
+    FaTrash, FaUserCircle, FaHistory, FaBan, FaChartBar
 } from 'react-icons/fa';
 import ProfileView from './ProfileView';
 import ProfileEdit from './ProfileEdit';
 import ChangePassword from './ChangePassword';
+import UserStats from './UserStats';
 import api from '../../services/api';
 import useCall from '../../context/useCall';
 
@@ -291,13 +280,13 @@ const UserProfileModal = ({
     );
 
     return (
-        <div className={`fixed inset-0 z-[1000] overflow-y-auto ${darkMode ? 'bg-[#0f172a]' : 'bg-slate-50'}`}>
+        <div className={`w-full h-full flex flex-col overflow-y-auto ${darkMode ? 'bg-[#0f172a]' : 'bg-slate-50'}`}>
             {!viewingUser ? (
-                <div className="flex items-center justify-center min-h-screen">
+                <div className="flex items-center justify-center flex-1">
                     <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
                 </div>
             ) : (
-                <div className="w-full min-h-screen flex flex-col">
+                <div className="w-full flex flex-col min-h-full">
                     <div className="w-full h-64 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 relative shrink-0 overflow-hidden">
                         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.25),transparent_35%)]"></div>
                         <button
@@ -443,6 +432,10 @@ const UserProfileModal = ({
                                         <button onClick={() => setActiveTab('edit')} className={tabButtonClass('edit')}>
                                             Chỉnh sửa hồ sơ
                                         </button>
+                                        <button onClick={() => setActiveTab('stats')} className={`${tabButtonClass('stats')} flex items-center gap-2`}>
+                                            <FaChartBar />
+                                            Thống kê
+                                        </button>
                                         <button onClick={() => setActiveTab('security')} className={tabButtonClass('security')}>
                                             Bảo mật
                                         </button>
@@ -467,6 +460,10 @@ const UserProfileModal = ({
                                         handleUpdate={handleUpdate}
                                         darkMode={darkMode}
                                     />
+                                )}
+
+                                {activeTab === 'stats' && isMe && (
+                                    <UserStats username={currentUser.username} darkMode={darkMode} />
                                 )}
 
                                 {activeTab === 'security' && isMe && (
