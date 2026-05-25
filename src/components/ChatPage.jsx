@@ -41,6 +41,7 @@ import GameCenter from './games/GameCenter';
 import TodoTab from './todo/TodoTab';
 import CallHistoryTab from './calls/CallHistoryTab';
 import ArchivedChatsTab from './chat/ArchivedChatsTab';
+import StrangerChatTab from './chat/StrangerChatTab';
 import AIAssistantsTab from './chat/AIAssistantsTab';
 import CloudDriveTab from './chat/CloudDriveTab';
 import SidebarNav from './chat/SidebarNav';
@@ -105,6 +106,7 @@ const ChatPage = ({ user, setUser }) => {
     const [showAITab, setShowAITab] = useState(false);
     const [showCloudDriveTab, setShowCloudDriveTab] = useState(false);
     const [showGameCenter, setShowGameCenter] = useState(false);
+    const [showStrangerTab, setShowStrangerTab] = useState(false);
     const [showSocialFeed, setShowSocialFeed] = useState(false);
     const [isAdminMode, setIsAdminMode] = useState(false);
     const [showSearch, setShowSearch] = useState(false);
@@ -1592,6 +1594,8 @@ const ChatPage = ({ user, setUser }) => {
                     setShowCloudDriveTab={setShowCloudDriveTab}
                     showGameCenter={showGameCenter}
                     setShowGameCenter={setShowGameCenter}
+                    showStrangerTab={showStrangerTab}
+                    setShowStrangerTab={setShowStrangerTab}
                     isAdminMode={isAdminMode}
                     setIsAdminMode={setIsAdminMode}
                     setShowSoundSettings={setShowSoundSettings}
@@ -1633,6 +1637,8 @@ const ChatPage = ({ user, setUser }) => {
                         onStartDM={handleStartDM}
                         darkMode={darkMode}
                     />
+                ) : showStrangerTab ? (
+                    <StrangerChatTab darkMode={darkMode} user={user} />
                 ) : showFriendsTab ? (
                     // Tích hợp thêm callHistory vào FriendsTab
                     <FriendsTab
