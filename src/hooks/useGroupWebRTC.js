@@ -52,6 +52,8 @@ export default function useGroupWebRTC(options = {}) {
   const remoteStreamsRef = useRef({});
   const localStreamRef = useRef(null);
   const isCleaningUpRef = useRef(false);
+  const screenStreamRef = useRef(null);
+  const isScreenSharingRef = useRef(false);
 
   const callbacksRef = useRef({
     onSendOffer,
@@ -68,6 +70,8 @@ export default function useGroupWebRTC(options = {}) {
   const [videoEnabled, setVideoEnabled] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
   const [error, setError] = useState(null);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const videoEnabledRef = useRef(true);
 
   useEffect(() => {
     callbacksRef.current = {
@@ -181,31 +185,37 @@ export default function useGroupWebRTC(options = {}) {
     }
 
     const existingSenders = peerConnection.getSenders();
+    // Guard theo kind (không theo track.id) để peer mới join nhận đúng track khi đang screen share
+    const existingKinds = new Set(
+      existingSenders.map((s) => s.track?.kind).filter(Boolean)
+    );
 
-    currentLocalStream.getTracks().forEach((track) => {
-      const alreadyAdded = existingSenders.some(
-        (sender) => sender.track && sender.track.id === track.id
-      );
-
-      if (alreadyAdded) {
-        log("Skip duplicate local track", {
-          username,
-          trackId: track.id,
-          kind: track.kind,
-        });
-        return;
-      }
-
-      peerConnection.addTrack(track, currentLocalStream);
-
-      log("Added local track to peer", {
+    // Audio luôn từ localStreamRef
+    const audioTrack = currentLocalStream.getAudioTracks()[0];
+    if (audioTrack && !existingKinds.has('audio')) {
+      peerConnection.addTrack(audioTrack, currentLocalStream);
+      log("Added audio track to peer", {
         username,
-        trackId: track.id,
-        kind: track.kind,
-        enabled: track.enabled,
-        readyState: track.readyState,
+        trackId: audioTrack.id,
+        enabled: audioTrack.enabled,
       });
-    });
+    }
+
+    // Video: dùng screen track nếu đang share, không thì dùng camera track
+    const videoTrack = isScreenSharingRef.current
+      ? screenStreamRef.current?.getVideoTracks()[0]
+      : currentLocalStream.getVideoTracks()[0];
+
+    if (videoTrack && !existingKinds.has('video')) {
+      peerConnection.addTrack(videoTrack, currentLocalStream);
+      log("Added video track to peer", {
+        username,
+        trackId: videoTrack.id,
+        kind: videoTrack.kind,
+        isScreen: isScreenSharingRef.current,
+        enabled: videoTrack.enabled,
+      });
+    }
   }, []);
 
   const createPeerConnection = useCallback(
@@ -600,6 +610,16 @@ export default function useGroupWebRTC(options = {}) {
 
       log("Cleaning up all group WebRTC resources");
 
+      // Dừng screen stream nếu đang share
+      if (screenStreamRef.current) {
+        screenStreamRef.current.getTracks().forEach((t) => {
+          try { t.stop(); } catch (_) { /* ignore */ }
+        });
+        screenStreamRef.current = null;
+      }
+      isScreenSharingRef.current = false;
+      setIsScreenSharing(false);
+
       Object.keys(peerConnectionsRef.current).forEach((username) => {
         const peerConnection = peerConnectionsRef.current[username];
 
@@ -733,6 +753,7 @@ export default function useGroupWebRTC(options = {}) {
       });
 
       setVideoEnabled(nextEnabled);
+      videoEnabledRef.current = nextEnabled;
 
       log("Video toggled", {
         videoEnabled: nextEnabled,
@@ -745,6 +766,101 @@ export default function useGroupWebRTC(options = {}) {
       return false;
     }
   }, [reportError]);
+
+  // ─── Group Screen Share ───────────────────────────────────────────────
+
+  const replaceOutgoingVideoTrackForAllPeers = useCallback(async (track) => {
+    const results = await Promise.allSettled(
+      Object.entries(peerConnectionsRef.current || {}).map(async ([username, pc]) => {
+        if (!pc || pc.connectionState === 'closed') return;
+
+        const sender = pc.getSenders().find((s) => s.track && s.track.kind === 'video');
+        if (!sender) {
+          console.warn('[GroupScreenShare] No video sender for peer:', username);
+          return;
+        }
+        await sender.replaceTrack(track);
+        console.debug('[GroupScreenShare] Replaced video track for peer:', username, {
+          trackLabel: track?.label,
+        });
+      })
+    );
+
+    results.forEach((result, i) => {
+      if (result.status === 'rejected') {
+        console.error('[GroupScreenShare] replaceTrack failed for one peer:', result.reason);
+      }
+    });
+  }, []);
+
+  const startScreenShare = useCallback(async () => {
+    if (isScreenSharingRef.current) return;
+
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      console.warn('[GroupScreenShare] Trình duyệt không hỗ trợ chia sẻ màn hình.');
+      return;
+    }
+
+    let screenStream;
+    try {
+      screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+    } catch (err) {
+      if (err.name === 'NotAllowedError' || err.name === 'AbortError') {
+        console.debug('[GroupScreenShare] User cancelled screen share picker.', { errorName: err.name });
+        return;
+      }
+      console.error('[GroupScreenShare] getDisplayMedia failed:', err);
+      return;
+    }
+
+    const screenTrack = screenStream.getVideoTracks()[0];
+    if (!screenTrack) {
+      console.warn('[GroupScreenShare] No video track in screen stream.');
+      screenStream.getTracks().forEach((t) => t.stop());
+      return;
+    }
+
+    screenStreamRef.current = screenStream;
+    isScreenSharingRef.current = true;
+    setIsScreenSharing(true);
+
+    await replaceOutgoingVideoTrackForAllPeers(screenTrack);
+
+    // Handle browser's native "Stop sharing" button
+    screenTrack.onended = () => {
+      stopScreenShare();
+    };
+
+    console.debug('[GroupScreenShare] Screen sharing started.', {
+      trackLabel: screenTrack.label,
+      peerCount: Object.keys(peerConnectionsRef.current).length,
+    });
+  }, [replaceOutgoingVideoTrackForAllPeers]);
+
+  const stopScreenShare = useCallback(async () => {
+    // Stop screen tracks
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach((t) => t.stop());
+      screenStreamRef.current = null;
+    }
+
+    isScreenSharingRef.current = false;
+    setIsScreenSharing(false);
+
+    // Restore camera track cho tất cả peers
+    const cameraTrack = localStreamRef.current?.getVideoTracks()?.[0];
+    if (cameraTrack) {
+      // Tôn trọng trạng thái video hiện tại
+      cameraTrack.enabled = videoEnabledRef.current;
+      await replaceOutgoingVideoTrackForAllPeers(cameraTrack);
+      console.debug('[GroupScreenShare] Restored camera track for all peers.', {
+        cameraEnabled: videoEnabledRef.current,
+        trackLabel: cameraTrack.label,
+      });
+    } else {
+      console.warn('[GroupScreenShare] stopScreenShare: no camera track to restore.');
+    }
+  }, [replaceOutgoingVideoTrackForAllPeers]);
 
   const replaceLocalStreamTracks = useCallback(
     async (newStream) => {
@@ -863,6 +979,7 @@ export default function useGroupWebRTC(options = {}) {
     audioEnabled,
     videoEnabled,
     isInitialized,
+    isScreenSharing,
     error,
 
     initLocalStream,
@@ -875,6 +992,8 @@ export default function useGroupWebRTC(options = {}) {
     cleanupAllPeers,
     toggleAudio,
     toggleVideo,
+    startScreenShare,
+    stopScreenShare,
     replaceLocalStreamTracks,
     getRemoteStream,
     getPeerConnection,

@@ -51,8 +51,11 @@ const CallOverlay = ({
     remoteStream,
     isMicEnabled,
     isCameraEnabled,
+    isScreenSharing,
     onToggleMic,
     onToggleCamera,
+    onStartScreenShare,
+    onStopScreenShare,
     onEndCall,
     connectionLabel,
     connectionState,
@@ -176,8 +179,11 @@ const CallOverlay = ({
                             <CallControls
                                 isMicEnabled={isMicEnabled}
                                 isCameraEnabled={isCameraEnabled}
+                                isScreenSharing={isScreenSharing}
                                 onToggleMic={onToggleMic}
                                 onToggleCamera={onToggleCamera}
+                                onStartScreenShare={onStartScreenShare}
+                                onStopScreenShare={onStopScreenShare}
                                 onEndCall={onEndCall}
                             />
                         </div>
