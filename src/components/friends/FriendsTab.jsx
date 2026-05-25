@@ -346,7 +346,7 @@ const FriendsTab = ({
           </div>
 
           <div className="flex-1 pb-10">
-            {recentCallHistory.length > 0 && (
+            {/* {recentCallHistory.length > 0 && (
               <section className={`mb-8 rounded-2xl border p-4 ${darkMode ? 'bg-[#1e293b] border-white/10' : 'bg-gray-50 border-gray-200 shadow-sm'}`}>
                 <p className="text-xs font-semibold text-cyan-500 mb-4 uppercase tracking-wider">Lịch sử cuộc gọi gần đây</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
@@ -377,7 +377,7 @@ const FriendsTab = ({
                   ))}
                 </div>
               </section>
-            )}
+            )} */}
 
             {processedFriends.length === 0 ? (
                 <div className="h-full min-h-[300px] flex flex-col items-center justify-center opacity-40">
