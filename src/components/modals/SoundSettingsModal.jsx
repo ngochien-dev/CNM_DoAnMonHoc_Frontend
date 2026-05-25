@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { FaTimes, FaSun, FaMoon, FaVolumeUp, FaPalette } from 'react-icons/fa';
+import { FaTimes, FaSun, FaMoon, FaVolumeUp, FaPalette, FaSignOutAlt } from 'react-icons/fa';
 
-const SoundSettingsModal = ({ isOpen, onClose, darkMode, setDarkMode, playNotificationSound }) => {
+const SoundSettingsModal = ({ isOpen, onClose, darkMode, setDarkMode, playNotificationSound, onLogout }) => {
     const [notificationSound, setNotificationSound] = useState(localStorage.getItem('alertSound') || 'telegram');
 
     if (!isOpen) return null;
@@ -89,6 +89,16 @@ const SoundSettingsModal = ({ isOpen, onClose, darkMode, setDarkMode, playNotifi
                             </button>
                         ))}
                     </div>
+                </div>
+                {/* Đăng xuất */}
+                <div className="mt-8 border-t pt-6 border-gray-200 dark:border-white/10">
+                    <button
+                        onClick={() => onLogout?.()}
+                        className={`w-full p-4 rounded-2xl border text-center transition-all duration-200 flex items-center justify-center gap-2 font-bold ${darkMode ? 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500 hover:text-white' : 'bg-red-50 border-red-200 text-red-600 hover:bg-red-500 hover:text-white'}`}
+                    >
+                        <FaSignOutAlt size={18} />
+                        Đăng xuất tài khoản
+                    </button>
                 </div>
             </div>
         </div>

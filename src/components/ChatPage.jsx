@@ -843,6 +843,12 @@ const ChatPage = ({ user, setUser }) => {
     };
 
     const handleOpenProfile = (uname) => setProfileModal({ isOpen: true, username: uname });
+    
+    const handleLogout = () => {
+        disconnectSocket();
+        localStorage.removeItem('user_session');
+        setUser(null);
+    };
 
     const handleOpenReportModal = (msg) => {
         setReportingMessage(msg);
@@ -1640,6 +1646,7 @@ const ChatPage = ({ user, setUser }) => {
                     handleSwitchRoom={handleSwitchRoom}
                     setStats={setStats}
                     isCloudActive={isCloudActive}
+                    handleOpenProfile={handleOpenProfile}
                 />
             </div>
 
@@ -1672,6 +1679,7 @@ const ChatPage = ({ user, setUser }) => {
                         currentUser={user}
                         onStartDM={handleStartDM}
                         darkMode={darkMode}
+                        onLogout={handleLogout}
                     />
                 ) : showStrangerTab ? (
                     <StrangerChatTab darkMode={darkMode} user={user} />
@@ -2280,6 +2288,7 @@ const ChatPage = ({ user, setUser }) => {
                 activeRoom={activeRoom}
                 darkMode={darkMode}
             />
+
             {/* Group Settings Modal */}
             <GroupSettingsModal
                 isOpen={showGroupSettings}
@@ -2322,6 +2331,7 @@ const ChatPage = ({ user, setUser }) => {
                 darkMode={darkMode}
                 setDarkMode={setDarkMode}
                 playNotificationSound={playNotificationSound}
+                onLogout={handleLogout}
             />
 
             {/* Canvas Paint Pad (Bảng vẽ phác thảo trực tuyến) */}

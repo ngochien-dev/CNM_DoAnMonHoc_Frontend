@@ -318,17 +318,6 @@ const ConversationSidebar = ({
                 )}
             </div>
 
-            {/* Thông tin tài khoản ở đáy cột */}
-            <div onClick={() => handleOpenProfile(user.username)} className={`h-16 flex items-center px-3 cursor-pointer border-t transition-colors shrink-0 ${darkMode ? 'bg-[#020617] border-white/5' : 'bg-white border-gray-200 hover:bg-slate-50 shadow-sm'}`}>
-                <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-black shadow-lg overflow-hidden border border-white/20">
-                    {user.avatar ? <img src={user.avatar} className="w-full h-full object-cover" alt="" /> : user.displayName[0]}
-                </div>
-                <div className="ml-3 truncate flex-1 leading-tight">
-                    <div className="text-sm font-black truncate uppercase italic tracking-tighter">{user.displayName}</div>
-                    <div className="text-[9px] text-green-500 font-black uppercase tracking-widest flex items-center gap-1"><FaCircle size={6} /> Online</div>
-                </div>
-                <button onClick={(e) => { e.stopPropagation(); disconnectSocket(); localStorage.removeItem('user_session'); setUser(null); }} className="relative z-10 p-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-500/10 transition-all active:scale-90" title="Đăng xuất"><FaSignOutAlt size={16} /></button>
-            </div>
         </div>
     );
 };

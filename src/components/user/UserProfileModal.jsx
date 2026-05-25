@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
     FaTimes, FaUserEdit, FaCamera, FaShieldAlt, FaCommentDots,
     FaUserPlus, FaUserMinus, FaLock, FaVideo, FaMobileAlt, FaDesktop,
-    FaTrash, FaUserCircle, FaHistory, FaBan, FaChartBar
+    FaTrash, FaUserCircle, FaHistory, FaBan, FaChartBar, FaSignOutAlt
 } from 'react-icons/fa';
 import ProfileView from './ProfileView';
 import ProfileEdit from './ProfileEdit';
@@ -31,6 +31,7 @@ const UserProfileModal = ({
     onStartDM,
     onUpdateSuccess,
     darkMode = true,
+    onLogout
 }) => {
     const [viewingUser, setViewingUser] = useState(null);
     const [activeTab, setActiveTab] = useState('view');
@@ -449,7 +450,7 @@ const UserProfileModal = ({
 
                             <div className={`w-full p-6 md:p-8 rounded-[2rem] border ${darkMode ? 'bg-[#1e293b]/80 border-slate-700/50 backdrop-blur-xl text-white' : 'bg-white border-slate-200 text-slate-900'} shadow-2xl`}>
                                 {activeTab === 'view' && (
-                                    <ProfileView viewingUser={viewingUser} darkMode={darkMode} />
+                                    <ProfileView viewingUser={viewingUser} darkMode={darkMode} isMe={isMe} onLogout={onLogout} />
                                 )}
 
                                 {activeTab === 'edit' && isMe && (
