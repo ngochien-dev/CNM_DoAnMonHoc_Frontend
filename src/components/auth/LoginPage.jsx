@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { FaUserAstronaut, FaEye, FaEyeSlash } from 'react-icons/fa';
 
-const Login = ({ form, setForm, setView }) => {
+const Login = ({ form, setForm, setView, handleUnlockAccount }) => {
     const [showPassword, setShowPassword] = useState(false);
 
     return (
@@ -35,9 +35,12 @@ const Login = ({ form, setForm, setView }) => {
                 </button>
             </div>
 
-            <div className="flex justify-start px-1">
+            <div className="flex justify-between px-1">
                 <button type="button" onClick={() => setView('forgot')} className="text-[10px] font-black uppercase tracking-widest text-gray-500 hover:text-purple-400 transition-colors">
                     Trợ giúp mật khẩu?
+                </button>
+                <button type="button" onClick={handleUnlockAccount} className="text-[10px] font-black uppercase tracking-widest text-gray-500 hover:text-green-400 transition-colors">
+                    Mở khóa tài khoản?
                 </button>
             </div>
         </div>
