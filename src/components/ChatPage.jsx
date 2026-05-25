@@ -986,10 +986,87 @@ const ChatPage = ({ user, setUser }) => {
     };
 
     const handleLeaveGroup = async () => {
-        if (window.confirm(`Bạn có chắc chắn muốn rời khỏi vũ trụ này?`)) {
-            await api.post('/groups/remove-member', { groupId: activeRoom.id, targetUsername: user.username });
-            handleSwitchRoom(null);
-            loadData();
+        const currentGroup = allGroups.find(g => g.groupId === activeRoom?.id);
+        if (!currentGroup) return;
+
+        if (currentGroup.owner === user.username) {
+            const otherMembers = (currentGroup.members || []).filter(m => m !== user.username);
+            
+            if (otherMembers.length === 0) {
+                Swal.fire({
+                    title: 'Giải tán nhóm?',
+                    text: 'Nhóm chỉ còn mình bạn. Rời đi đồng nghĩa với việc giải tán nhóm. Bạn có chắc chắn không?',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#ef4444',
+                    cancelButtonColor: '#64748b',
+                    confirmButtonText: 'Giải tán nhóm',
+                    cancelButtonText: 'Hủy'
+                }).then(async (result) => {
+                    if (result.isConfirmed) {
+                        await api.post('/groups/manage', { groupId: activeRoom.id, action: 'delete' });
+                        handleSwitchRoom(null);
+                        setShowGroupSettings(false);
+                        loadData();
+                    }
+                });
+                return;
+            }
+
+            const inputOptions = {};
+            otherMembers.forEach(m => {
+                inputOptions[m] = onlineUsers[m]?.displayName || m;
+            });
+
+            const { value: newOwner } = await Swal.fire({
+                title: 'Chuyển quyền Trưởng nhóm',
+                text: 'Bạn là trưởng nhóm. Vui lòng chọn người kế nhiệm trước khi rời đi!',
+                input: 'select',
+                inputOptions: inputOptions,
+                inputPlaceholder: '-- Chọn trưởng nhóm mới --',
+                showCancelButton: true,
+                confirmButtonColor: '#3b82f6',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Chuyển quyền & Rời nhóm',
+                cancelButtonText: 'Hủy',
+                inputValidator: (value) => {
+                    if (!value) {
+                        return 'Bạn phải chọn một người làm trưởng nhóm mới!';
+                    }
+                }
+            });
+
+            if (newOwner) {
+                try {
+                    await api.post('/groups/transfer-ownership', { groupId: activeRoom.id, newOwner });
+                    await api.post('/groups/remove-member', { groupId: activeRoom.id, targetUsername: user.username });
+                    
+                    toast.success('Đã chuyển quyền và rời nhóm.');
+                    handleSwitchRoom(null);
+                    setShowGroupSettings(false);
+                    loadData();
+                } catch (err) {
+                    toast.error('Có lỗi xảy ra khi rời nhóm!');
+                }
+            }
+        } else {
+            Swal.fire({
+                title: 'Rời nhóm?',
+                text: 'Bạn có chắc chắn muốn rời khỏi nhóm này?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Rời nhóm',
+                cancelButtonText: 'Hủy'
+            }).then(async (result) => {
+                if (result.isConfirmed) {
+                    await api.post('/groups/remove-member', { groupId: activeRoom.id, targetUsername: user.username });
+                    handleSwitchRoom(null);
+                    setShowGroupSettings(false);
+                    loadData();
+                }
+            });
         }
     };
 
