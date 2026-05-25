@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     FaChevronLeft, FaCloud, FaVideo,
     FaLock, FaSignOutAlt, FaCog, FaUserPlus,
-    FaChevronRight, FaUsers, FaUserCheck, FaTimes
+    FaChevronRight, FaUsers, FaUserCheck, FaTimes, FaMagic
 } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
+import api from '../../services/api';
 
 const ChatHeader = ({
     activeRoom,
@@ -44,8 +45,25 @@ const ChatHeader = ({
     isSidebarVisible,
     setIsSidebarVisible,
     setShowMediaGallery,
+    onSummarize,
     socket
 }) => {
+    const [targetUserInfo, setTargetUserInfo] = useState(null);
+
+    useEffect(() => {
+        if (activeRoom && activeRoom.isDM && activeRoom.name && !isCloudActive) {
+            // First check if they are in onlineUsers to avoid unnecessary fetch
+            if (onlineUsers && onlineUsers[activeRoom.name]?.displayName) {
+                setTargetUserInfo(onlineUsers[activeRoom.name]);
+            } else {
+                setTargetUserInfo(null);
+                api.get(`/users/${activeRoom.name}`)
+                    .then(res => setTargetUserInfo(res.data))
+                    .catch(() => setTargetUserInfo(null));
+            }
+        }
+    }, [activeRoom, isCloudActive, onlineUsers]);
+
     return (
         <>
             <div className={`h-12 flex items-center justify-between px-6 shrink-0 shadow-sm font-black backdrop-blur-md uppercase italic tracking-tighter border-b ${darkMode ? 'border-white/5 bg-white/2' : 'border-gray-200 bg-white/80'}`}>
@@ -58,10 +76,10 @@ const ChatHeader = ({
                             </div>
                         ) : (
                             <div className="w-7 h-7 rounded-full bg-indigo-600/20 flex items-center justify-center text-indigo-400 text-xs font-black overflow-hidden border border-indigo-500/10 shrink-0 shadow-inner">
-                                {onlineUsers[activeRoom.name]?.avatar ? (
-                                    <img src={onlineUsers[activeRoom.name].avatar} className="w-full h-full object-cover" alt="" />
+                                {onlineUsers[activeRoom.name]?.avatar || targetUserInfo?.avatar ? (
+                                    <img src={onlineUsers[activeRoom.name]?.avatar || targetUserInfo?.avatar} className="w-full h-full object-cover" alt="" />
                                 ) : (
-                                    activeRoom.name.substring(0, 2).toUpperCase()
+                                    (targetUserInfo?.displayName || activeRoom.name).substring(0, 2).toUpperCase()
                                 )}
                             </div>
                         )
@@ -75,10 +93,19 @@ const ChatHeader = ({
                         </div>
                     )}
                     {activeRoom.isDM ? (
-                        isCloudActive ? <span className="text-cyan-400 text-sm tracking-wide font-extrabold normal-case">☁ Cloud của tôi</span> : <span className="text-indigo-400 text-sm">@ {activeRoom.name}</span>
-                    ) : <span className="text-sm"># {activeRoom.name}</span>}
+                        isCloudActive ? <span className="text-cyan-400 text-sm tracking-wide font-extrabold normal-case">☁ Cloud của tôi</span> : <span className="text-indigo-400 text-sm font-bold">@ {onlineUsers[activeRoom.name]?.displayName || targetUserInfo?.displayName || activeRoom.name}</span>
+                    ) : <span className="text-sm font-bold"># {activeRoom.name}</span>}
                 </div>
                 <div className="flex items-center gap-4">
+                    {/* Summarize button */}
+                    <button 
+                        onClick={onSummarize}
+                        className="text-amber-400 hover:bg-amber-500/10 p-1.5 rounded-lg transition-all animate-pulse shadow-sm"
+                        title="Tóm tắt hội thoại bằng AI"
+                    >
+                        <FaMagic size={18} />
+                    </button>
+
                     {/* Nút gọi video: DM dùng call 1-1, group dùng group call */}
                     {!isCloudActive && (
                         <button

@@ -11,6 +11,7 @@ import {
     FaEllipsisH, FaEllipsisV, FaEye, FaEyeSlash, FaExclamationTriangle, FaCheck, FaBell, FaBellSlash, FaClock
 } from 'react-icons/fa';
 import { Toaster, toast } from 'react-hot-toast';
+import Swal from 'sweetalert2';
 import StoryBar from './social/StoryBar';
 import StoryViewer from './social/StoryViewer';
 
@@ -1490,6 +1491,41 @@ const ChatPage = ({ user, setUser }) => {
         }
     };
 
+    const handleSummarizeChat = async () => {
+        if (!activeRoom) return;
+        const roomMsgs = messages.filter(m => m.roomId === activeRoom.id);
+        if (roomMsgs.length === 0) {
+            toast.error("Không có tin nhắn nào để tóm tắt.");
+            return;
+        }
+
+        const recentMsgs = roomMsgs.slice(-50); // Get up to 50 recent messages
+        let chatText = recentMsgs.map(m => {
+            const sender = onlineUsers[m.senderUsername]?.displayName || m.senderUsername;
+            return `${sender}: ${m.isRevoked ? "[Đã thu hồi]" : m.text || "[Hình ảnh/File]"}`;
+        }).join('\n');
+
+        const toastId = toast.loading("✨ AI đang đọc và tóm tắt hội thoại...");
+        try {
+            const res = await api.post('/chatbot/summarize', { chatText });
+            toast.success("Đã có bản tóm tắt!", { id: toastId });
+            
+            // Show result using SweetAlert2
+            Swal.fire({
+                title: '✨ Tóm tắt Hội thoại',
+                text: res.data.summary,
+                icon: 'info',
+                confirmButtonText: 'Đóng',
+                confirmButtonColor: '#4f46e5',
+                background: darkMode ? '#1e293b' : '#ffffff',
+                color: darkMode ? '#ffffff' : '#0f172a',
+            });
+        } catch (error) {
+            console.error("Summarize error:", error);
+            toast.error("Lỗi khi tóm tắt hội thoại.", { id: toastId });
+        }
+    };
+
     const handleSendSticker = (stickerUrl) => {
         socket.emit('send_message', {
             sender: user.displayName,
@@ -1748,6 +1784,7 @@ const ChatPage = ({ user, setUser }) => {
                             setShowInviteModal={setShowInviteModal}
                             toggleMuteRoom={toggleMuteRoom}
                             mutedRooms={mutedRooms}
+                            onSummarize={handleSummarizeChat}
                             clearChatHistory={clearChatHistory}
                             isRightSidebarVisible={isRightSidebarVisible}
                             setIsRightSidebarVisible={setIsRightSidebarVisible}
