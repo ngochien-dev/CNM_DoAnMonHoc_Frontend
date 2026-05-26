@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import {
     FaUserFriends, FaGlobe, FaRobot, FaCloud, FaFolderOpen,
     FaCalendarCheck, FaPhoneAlt, FaSmileBeam, FaGamepad,
-    FaArchive, FaSun, FaMoon, FaCog, FaShieldAlt, FaPlusCircle, FaUserSecret
+    FaArchive, FaSun, FaMoon, FaCog, FaShieldAlt, FaPlusCircle, FaUserSecret, FaHome
 } from 'react-icons/fa';
 import api from '../../services/api';
 
@@ -41,7 +41,8 @@ const SidebarNav = ({
     setShowGroupCreator,
     handleSwitchRoom,
     setStats,
-    isCloudActive
+    isCloudActive,
+    handleOpenProfile
 }) => {
     // State cho Portal Tooltip
     const [tooltip, setTooltip] = useState({ text: '', top: 0, visible: false });
@@ -69,6 +70,16 @@ const SidebarNav = ({
                 document.body
             )}
 
+            {/* 0. Trang cá nhân (User Profile) */}
+            <div className="group relative flex items-center justify-center w-full mb-2"
+                 onMouseEnter={(e) => showTooltip(e, `Trang cá nhân của ${user.displayName}`)}
+                 onMouseLeave={hideTooltip}>
+                <div onClick={() => handleOpenProfile(user.username)} className={`w-12 h-12 rounded-[24px] hover:rounded-[16px] flex items-center justify-center cursor-pointer transition-all duration-300 overflow-hidden shadow-md bg-indigo-600 hover:shadow-lg border-2 border-transparent hover:border-indigo-400`}>
+                    {user.avatar ? <img src={user.avatar} className="w-full h-full object-cover" alt="" /> : <span className="font-black text-white text-lg">{user.displayName[0]}</span>}
+                </div>
+            </div>
+            <div className="w-8 h-[2px] bg-gray-600 rounded-full opacity-20 mb-2"></div>
+
             {/* 1. OTT Trang chủ */}
             <div className="group relative flex items-center justify-center w-full"
                  onMouseEnter={(e) => showTooltip(e, 'Trang chủ / Hội thoại')}
@@ -86,7 +97,9 @@ const SidebarNav = ({
                     setShowSocialFeed(false);
                     setShowStrangerTab(false);
                     setIsAdminMode(false);
-                }} className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white font-black cursor-pointer hover:rounded-xl transition-all shadow-md ${(!activeRoom && !showFriendsTab && !showDiscoveryTab && !showSocialFeed && !showTodoTab && !showCallHistoryTab && !showArchivedTab && !showAITab && !showCloudDriveTab && !showGameCenter && !showStrangerTab && !isAdminMode) ? 'bg-indigo-600 scale-110 shadow-indigo-500/50' : 'bg-gradient-to-tr from-indigo-500 to-purple-600 opacity-60 hover:opacity-100'}`}>OTT</div>
+                }} className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white font-black cursor-pointer hover:rounded-xl transition-all shadow-md ${(!activeRoom && !showFriendsTab && !showDiscoveryTab && !showSocialFeed && !showTodoTab && !showCallHistoryTab && !showArchivedTab && !showAITab && !showCloudDriveTab && !showGameCenter && !showStrangerTab && !isAdminMode) ? 'bg-indigo-600 scale-110 shadow-indigo-500/50' : 'bg-gradient-to-tr from-indigo-500 to-purple-600 opacity-60 hover:opacity-100'}`}>
+                    <FaHome size={22} />
+                </div>
             </div>
 
             {/* 2. Bạn bè */}

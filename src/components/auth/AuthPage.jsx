@@ -106,6 +106,8 @@ import Login from './LoginPage';
 import Register from './Register';
 import OTPVerify from './OTPVerify';
 import api from '../../services/api';
+import Swal from 'sweetalert2';
+import { toast } from 'react-hot-toast';
 
 const AuthPage = ({ onLogin }) => {
     const [view, setView] = useState('login');
@@ -118,6 +120,59 @@ const AuthPage = ({ onLogin }) => {
         otp: '',
         newPassword: '',
     });
+
+    const handleUnlockAccount = async () => {
+        const { value: email } = await Swal.fire({
+            title: 'Mở khóa tài khoản',
+            text: 'Vui lòng nhập Email đã đăng ký để nhận mã OTP mở khóa.',
+            input: 'email',
+            inputPlaceholder: 'Nhập email của bạn...',
+            showCancelButton: true,
+            confirmButtonText: 'Gửi mã OTP',
+            cancelButtonText: 'Hủy'
+        });
+
+        if (email) {
+            try {
+                Swal.fire({
+                    title: 'Đang gửi mã...',
+                    text: 'Vui lòng chờ trong khi hệ thống gửi mã OTP.',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+
+                await api.post('/auth/request-unlock', { email });
+                
+                const { value: otp } = await Swal.fire({
+                    title: 'Nhập mã OTP',
+                    text: `Mã xác thực đã được gửi đến ${email}.`,
+                    input: 'text',
+                    inputPlaceholder: 'Nhập mã 6 số...',
+                    showCancelButton: true,
+                    confirmButtonText: 'Xác nhận Mở khóa',
+                    cancelButtonText: 'Hủy'
+                });
+
+                if (otp) {
+                    Swal.fire({
+                        title: 'Đang xử lý...',
+                        allowOutsideClick: false,
+                        didOpen: () => {
+                            Swal.showLoading();
+                        }
+                    });
+                    await api.post('/auth/confirm-unlock', { email, otp });
+                    Swal.close();
+                    toast.success('Đã mở khóa tài khoản thành công! Bạn có thể đăng nhập.');
+                }
+            } catch (err) {
+                Swal.close();
+                toast.error(err.response?.data?.message || 'Có lỗi xảy ra!');
+            }
+        }
+    };
 
     const handleSubmit = async (event) => {
         event.preventDefault();
@@ -169,7 +224,22 @@ const AuthPage = ({ onLogin }) => {
                 setView('login');
             }
         } catch (error) {
-            alert(error.response?.data?.message || 'Loi he thong!');
+            if (error.response?.data?.isSelfLocked) {
+                Swal.fire({
+                    title: 'Tài khoản bị khóa',
+                    text: error.response.data.message,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Mở khóa ngay',
+                    cancelButtonText: 'Đóng'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        handleUnlockAccount();
+                    }
+                });
+            } else {
+                toast.error(error.response?.data?.message || 'Lỗi hệ thống!');
+            }
         } finally {
             setIsLoading(false);
         }
@@ -196,7 +266,7 @@ const AuthPage = ({ onLogin }) => {
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-6">
-                    {view === 'login' && <Login form={form} setForm={setForm} setView={setView} />}
+                    {view === 'login' && <Login form={form} setForm={setForm} setView={setView} handleUnlockAccount={handleUnlockAccount} />}
                     {view === 'register' && <Register form={form} setForm={setForm} />}
                     {(view === 'verify' || view === 'forgot' || view === 'reset' || view === 'verify2fa') && (
                         <OTPVerify view={view} form={form} setForm={setForm} />

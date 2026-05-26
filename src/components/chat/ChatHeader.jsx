@@ -110,18 +110,22 @@ const ChatHeader = ({
                     {!isCloudActive && (
                         <button
                             onClick={() => {
-                                console.groupCollapsed('[GroupCall][ChatHeader] CLICK video button');
-                                console.debug('activeRoom:', activeRoom);
-                                console.debug('isDM:', activeRoom?.isDM);
-                                console.debug('isCloudActive:', isCloudActive);
-                                console.debug('isCallBusy:', isCallBusy);
-                                console.debug('isInGroupCall:', isInGroupCall);
-                                console.debug('isMember:', isMember);
-                                console.groupEnd();
-
                                 if (activeRoom.isDM) {
+                                    // 1-1 call branch
+                                    console.groupCollapsed('[CALL][ChatHeader] CLICK video button 1-1');
+                                    console.debug('activeRoom:', activeRoom);
+                                    console.debug('isCloudActive:', isCloudActive);
+                                    console.debug('isCallBusy:', isCallBusy);
+                                    console.groupEnd();
                                     handleVideoCall?.();
                                 } else {
+                                    // Group call branch
+                                    console.groupCollapsed('[GroupCall][ChatHeader] CLICK video button group');
+                                    console.debug('activeRoom:', activeRoom);
+                                    console.debug('isCloudActive:', isCloudActive);
+                                    console.debug('isInGroupCall:', isInGroupCall);
+                                    console.debug('isMember:', isMember);
+                                    console.groupEnd();
                                     handleGroupVideoCall?.();
                                 }
                             }}

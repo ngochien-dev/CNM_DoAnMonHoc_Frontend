@@ -102,12 +102,12 @@ function buildSocket() {
 
     const socket = io(SOCKET_URL, {
         autoConnect: false,
-        transports: ['websocket'],
         auth,
     });
 
     logSocket('Creating socket instance.', {
         url: SOCKET_URL,
+        transports: 'default',
         auth: describeAuth(auth),
     });
 

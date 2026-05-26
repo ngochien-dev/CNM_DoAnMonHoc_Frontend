@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
     FaTimes, FaUserEdit, FaCamera, FaShieldAlt, FaCommentDots,
     FaUserPlus, FaUserMinus, FaLock, FaVideo, FaMobileAlt, FaDesktop,
-    FaTrash, FaUserCircle, FaHistory, FaBan, FaChartBar
+    FaTrash, FaUserCircle, FaHistory, FaBan, FaChartBar, FaSignOutAlt
 } from 'react-icons/fa';
 import ProfileView from './ProfileView';
 import ProfileEdit from './ProfileEdit';
@@ -10,6 +10,8 @@ import ChangePassword from './ChangePassword';
 import UserStats from './UserStats';
 import api from '../../services/api';
 import useCall from '../../context/useCall';
+import Swal from 'sweetalert2';
+import { toast } from 'react-hot-toast';
 
 const getCurrentSession = () => {
     try {
@@ -31,6 +33,7 @@ const UserProfileModal = ({
     onStartDM,
     onUpdateSuccess,
     darkMode = true,
+    onLogout
 }) => {
     const [viewingUser, setViewingUser] = useState(null);
     const [activeTab, setActiveTab] = useState('view');
@@ -173,20 +176,6 @@ const UserProfileModal = ({
         }
     };
 
-    const handleToggle2FA = async (enabled) => {
-        try {
-            await api.post('/users/toggle-2fa', {
-                username: currentUser.username,
-                enabled,
-            });
-
-            setViewingUser(prev => ({ ...prev, is2FAEnabled: enabled }));
-            alert(`Đã ${enabled ? 'bật' : 'tắt'} bảo mật 2 lớp thành công!`);
-        } catch (err) {
-            alert('Lỗi khi thiết lập 2FA');
-        }
-    };
-
     const handleAvatarChange = (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -253,6 +242,70 @@ const UserProfileModal = ({
             onClose?.();
         } catch (err) {
             alert(err.response?.data?.error || err.response?.data?.message || 'Thao tác thất bại!');
+        }
+    };
+
+    const handleToggle2FA = async (enable) => {
+        try {
+            await api.post('/users/toggle-2fa', { enable });
+            setViewingUser(prev => ({ ...prev, is2FAEnabled: enable }));
+            toast.success(enable ? 'Đã bật bảo mật 2 lớp' : 'Đã tắt bảo mật 2 lớp');
+        } catch (err) {
+            toast.error('Lỗi khi cập nhật 2FA');
+        }
+    };
+
+    const handleLockAccount = async () => {
+        const result = await Swal.fire({
+            title: 'Khóa tài khoản khẩn cấp?',
+            text: 'Bạn sẽ bị đăng xuất ngay lập tức. Để mở khóa, bạn cần xác thực bằng OTP gửi qua Email. Bạn có chắc chắn không?',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#ef4444',
+            cancelButtonColor: '#64748b',
+            confirmButtonText: 'Khóa ngay',
+            cancelButtonText: 'Hủy'
+        });
+
+        if (result.isConfirmed) {
+            try {
+                Swal.fire({
+                    title: 'Đang xử lý...',
+                    text: 'Vui lòng chờ trong khi hệ thống gửi OTP.',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+
+                await api.post('/auth/request-lock');
+                
+                const { value: otp } = await Swal.fire({
+                    title: 'Nhập mã OTP',
+                    text: 'Mã xác thực đã được gửi đến Email của bạn.',
+                    input: 'text',
+                    inputPlaceholder: 'Nhập mã 6 số...',
+                    showCancelButton: true,
+                    confirmButtonText: 'Xác nhận Khóa',
+                    cancelButtonText: 'Hủy'
+                });
+
+                if (otp) {
+                    Swal.fire({
+                        title: 'Đang khóa...',
+                        allowOutsideClick: false,
+                        didOpen: () => {
+                            Swal.showLoading();
+                        }
+                    });
+                    await api.post('/auth/confirm-lock', { otp });
+                    Swal.close();
+                    toast.success('Đã khóa tài khoản thành công!');
+                }
+            } catch (err) {
+                Swal.close();
+                toast.error(err.response?.data?.message || 'Có lỗi xảy ra!');
+            }
         }
     };
 
@@ -449,7 +502,7 @@ const UserProfileModal = ({
 
                             <div className={`w-full p-6 md:p-8 rounded-[2rem] border ${darkMode ? 'bg-[#1e293b]/80 border-slate-700/50 backdrop-blur-xl text-white' : 'bg-white border-slate-200 text-slate-900'} shadow-2xl`}>
                                 {activeTab === 'view' && (
-                                    <ProfileView viewingUser={viewingUser} darkMode={darkMode} />
+                                    <ProfileView viewingUser={viewingUser} darkMode={darkMode} isMe={isMe} onLogout={onLogout} />
                                 )}
 
                                 {activeTab === 'edit' && isMe && (
@@ -496,6 +549,27 @@ const UserProfileModal = ({
                                             handleChangePass={handleChangePass}
                                             darkMode={darkMode}
                                         />
+
+                                        <hr className={`border-t ${darkMode ? 'border-slate-800' : 'border-slate-200'}`} />
+
+                                        <div className={`p-5 md:p-6 rounded-3xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${darkMode ? 'bg-rose-500/10 border-rose-500/20' : 'bg-rose-50 border-rose-200'}`}>
+                                            <div>
+                                                <div className={`text-sm md:text-base font-black uppercase italic tracking-wider flex items-center gap-2 ${darkMode ? 'text-rose-400' : 'text-rose-600'}`}>
+                                                    <FaShieldAlt size={20} />
+                                                    Khóa tài khoản khẩn cấp
+                                                </div>
+                                                <div className={`text-xs md:text-sm mt-1.5 ${darkMode ? 'text-rose-400/80' : 'text-rose-600/80'}`}>
+                                                    Tự động đăng xuất mọi thiết bị. Cần OTP Email để mở khóa lại.
+                                                </div>
+                                            </div>
+
+                                            <button
+                                                onClick={handleLockAccount}
+                                                className="shrink-0 text-xs font-black uppercase tracking-widest bg-rose-500 text-white hover:bg-rose-600 px-5 py-3 rounded-2xl transition-all shadow-[0_0_15px_rgba(244,63,94,0.3)] hover:shadow-[0_0_25px_rgba(244,63,94,0.5)] flex items-center gap-2"
+                                            >
+                                                Khóa ngay
+                                            </button>
+                                        </div>
                                     </div>
                                 )}
 

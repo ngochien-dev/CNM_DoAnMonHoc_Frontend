@@ -8,10 +8,15 @@ const socket = getSocket();
 const StoryBar = ({ user, friends, onlineUsers, onOpenStory, onUploadStory, darkMode }) => {
     const [stories, setStories] = useState({});
 
+    // Dùng string key thay vì array để tránh re-fetch loop do reference thay đổi
+    const friendsKey = Array.isArray(friends) ? friends.join(',') : '';
+
     useEffect(() => {
         const fetchStories = async () => {
+            // Guard: không gọi API khi friends rỗng → tránh ?friends= gây 500
+            if (!friendsKey) return;
             try {
-                const res = await api.get(`/stories/list?friends=${friends.join(',')}`);
+                const res = await api.get(`/stories/list?friends=${friendsKey}`);
                 setStories(res.data);
             } catch (e) {
                 console.error("Story fetch error", e);
@@ -19,9 +24,11 @@ const StoryBar = ({ user, friends, onlineUsers, onOpenStory, onUploadStory, dark
         };
         if (user) fetchStories();
 
-        socket.on('stories_updated', fetchStories);
-        return () => socket.off('stories_updated', fetchStories);
-    }, [user, friends]);
+        if (socket) {
+            socket.on('stories_updated', fetchStories);
+            return () => socket.off('stories_updated', fetchStories);
+        }
+    }, [user, friendsKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const storyUsers = Object.keys(stories);
 
