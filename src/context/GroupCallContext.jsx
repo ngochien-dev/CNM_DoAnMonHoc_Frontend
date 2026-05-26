@@ -56,7 +56,7 @@ function getSocketSnapshot(socket) {
   };
 }
 
-function safeEmit(socket, eventName, payload = {}) {
+function safeEmit(socket, eventName, payload = {}, ack) {
   const snapshot = getSocketSnapshot(socket);
 
   console.groupCollapsed(`${DEBUG_PREFIX} EMIT ${eventName}`);
@@ -78,7 +78,7 @@ function safeEmit(socket, eventName, payload = {}) {
     });
   }
 
-  socket.emit(eventName, payload);
+  socket.emit(eventName, payload, ack);
   return true;
 }
 
@@ -285,6 +285,25 @@ function getPayloadTargetUsername(payload = {}) {
   );
 }
 
+function shouldInitiateRenegotiation(currentUsername, peerUsername, isRejoin = false) {
+  if (!currentUsername || !peerUsername) return false;
+  if (!isRejoin) return true;
+
+  return currentUsername.localeCompare(peerUsername) < 0;
+}
+
+function isSocketConnectFailure(err) {
+  const message = err?.message || String(err || "");
+
+  return (
+    message.includes("Socket connect timeout") ||
+    message.includes("xhr poll error") ||
+    message.includes("websocket error") ||
+    message.includes("TransportError") ||
+    message.includes("Socket reconnect failed")
+  );
+}
+
 function buildCallObject(payload = {}) {
   const call = payload.call || payload.activeGroupCall || payload;
 
@@ -314,6 +333,9 @@ export function GroupCallProvider({ children, user }) {
   const socketRef = useRef(null);
   const activeGroupCallRef = useRef(null);
   const currentUsernameRef = useRef(getCurrentUsername());
+  const pendingSignalsRef = useRef([]);
+  const participantsRef = useRef([]);
+  const isInGroupCallRef = useRef(false);
 
   const [isInGroupCall, setIsInGroupCall] = useState(false);
   const [activeGroupCall, setActiveGroupCall] = useState(null);
@@ -322,12 +344,22 @@ export function GroupCallProvider({ children, user }) {
   const [mediaStates, setMediaStates] = useState({});
   const [error, setError] = useState(null);
 
+  useEffect(() => {
+    participantsRef.current = participants;
+  }, [participants]);
+
+  useEffect(() => {
+    isInGroupCallRef.current = isInGroupCall;
+  }, [isInGroupCall]);
+
   const setActiveCallState = useCallback((call) => {
     activeGroupCallRef.current = call;
     setActiveGroupCall(call);
 
     if (call?.participants) {
-      setParticipants(normalizeParticipants(call.participants));
+      const normalizedParticipants = normalizeParticipants(call.participants);
+      participantsRef.current = normalizedParticipants;
+      setParticipants(normalizedParticipants);
     }
   }, []);
 
@@ -365,68 +397,152 @@ export function GroupCallProvider({ children, user }) {
     });
   }, []);
 
-  const sendOffer = useCallback(({ targetUsername, offer }) => {
+  const queueGroupSignal = useCallback((eventName, payload = {}, reason = "socket-disconnected") => {
+    const queuedSignal = {
+      eventName,
+      payload,
+      reason,
+      queuedAt: Date.now(),
+    };
+
+    pendingSignalsRef.current.push(queuedSignal);
+
+    log("[GroupCall] Queue signal because socket disconnected", {
+      eventName,
+      reason,
+      callId: payload.callId || null,
+      groupId: payload.groupId || null,
+      targetUsername: payload.targetUsername || null,
+      pendingCount: pendingSignalsRef.current.length,
+    });
+  }, []);
+
+  const emitGroupSignal = useCallback(
+    (eventName, payload = {}, reason = "emit-group-signal") => {
+      const socket = socketRef.current || connectSocket();
+      socketRef.current = socket;
+
+      if (!socket.connected) {
+        queueGroupSignal(eventName, payload, reason);
+        socket.auth = buildSocketAuth();
+        if (!socket.active) {
+          socket.connect();
+        }
+        return false;
+      }
+
+      safeEmit(socket, eventName, payload, (response = {}) => {
+        if (response.ok === false) {
+          warn("Group signal ack failed", {
+            eventName,
+            payload,
+            response,
+          });
+        }
+      });
+
+      return true;
+    },
+    [queueGroupSignal]
+  );
+
+  const flushPendingSignals = useCallback((reason = "flush-pending-signals") => {
     const socket = socketRef.current || connectSocket();
     socketRef.current = socket;
-    const call = activeGroupCallRef.current;
 
     if (!socket.connected) {
-      console.warn("[GroupCallContext] Skip offer because socket is not connected", {
-        targetUsername,
+      log("[GroupCall] Cannot flush pending signals because socket disconnected", {
+        reason,
+        pendingCount: pendingSignalsRef.current.length,
         socketSnapshot: getSocketSnapshot(socket),
       });
-      return;
+      return false;
     }
 
-    safeEmit(socket, "group-call:offer", {
+    if (pendingSignalsRef.current.length === 0) {
+      return true;
+    }
+
+    const pendingSignals = pendingSignalsRef.current.splice(0);
+
+    pendingSignals.forEach((signal) => {
+      safeEmit(socket, signal.eventName, signal.payload, (response = {}) => {
+        log("[GroupCall] Flushed pending signal", {
+          reason,
+          eventName: signal.eventName,
+          targetUsername: signal.payload?.targetUsername || null,
+          callId: signal.payload?.callId || null,
+          queuedForMs: Date.now() - signal.queuedAt,
+          response,
+        });
+
+        if (response.ok === false) {
+          warn("Flushed pending signal ack failed", {
+            signal,
+            response,
+          });
+        }
+      });
+    });
+
+    return true;
+  }, []);
+
+  const sendOffer = useCallback(({ targetUsername, offer }) => {
+    const call = activeGroupCallRef.current;
+
+    log("SEND OFFER", {
+      targetUsername,
+      callId: call?.callId || call?.id || null,
+      groupId: call?.groupId || null,
+      socketSnapshot: getSocketSnapshot(socketRef.current),
+    });
+
+    emitGroupSignal("group-call:offer", {
       callId: call?.callId || call?.id || null,
       groupId: call?.groupId || null,
       targetUsername,
       offer,
-    });
-  }, []);
+    }, "send-offer");
+  }, [emitGroupSignal]);
 
   const sendAnswer = useCallback(({ targetUsername, answer }) => {
-    const socket = socketRef.current || connectSocket();
-    socketRef.current = socket;
     const call = activeGroupCallRef.current;
 
-    if (!socket.connected) {
-      console.warn("[GroupCallContext] Skip answer because socket is not connected", {
-        targetUsername,
-        socketSnapshot: getSocketSnapshot(socket),
-      });
-      return;
-    }
+    log("SEND ANSWER", {
+      targetUsername,
+      callId: call?.callId || call?.id || null,
+      groupId: call?.groupId || null,
+      socketSnapshot: getSocketSnapshot(socketRef.current),
+    });
 
-    safeEmit(socket, "group-call:answer", {
+    emitGroupSignal("group-call:answer", {
       callId: call?.callId || call?.id || null,
       groupId: call?.groupId || null,
       targetUsername,
       answer,
-    });
-  }, []);
+    }, "send-answer");
+  }, [emitGroupSignal]);
 
   const sendIceCandidate = useCallback(({ targetUsername, candidate }) => {
-    const socket = socketRef.current || connectSocket();
-    socketRef.current = socket;
     const call = activeGroupCallRef.current;
 
-    if (!socket.connected) {
-      console.warn("[GroupCallContext] Skip ICE because socket is not connected", {
-        targetUsername,
-        socketSnapshot: getSocketSnapshot(socket),
-      });
-      return;
-    }
+    log("SEND ICE", {
+      targetUsername,
+      callId: call?.callId || call?.id || null,
+      groupId: call?.groupId || null,
+      candidateType: candidate?.type || null,
+      candidateProtocol: candidate?.protocol || null,
+      socketSnapshot: getSocketSnapshot(socketRef.current),
+    });
 
-    safeEmit(socket, "group-call:ice-candidate", {
+    emitGroupSignal("group-call:ice-candidate", {
       callId: call?.callId || call?.id || null,
       groupId: call?.groupId || null,
       targetUsername,
       candidate,
-    });
-  }, []);
+    }, "send-ice-candidate");
+  }, [emitGroupSignal]);
 
   const {
     localStream,
@@ -476,6 +592,137 @@ export function GroupCallProvider({ children, user }) {
     },
   });
 
+  const resetGroupCallState = useCallback(
+    ({ stopMedia = false } = {}) => {
+      if (stopMedia) {
+        cleanupAllPeers();
+      }
+
+      setIsInGroupCall(false);
+      setActiveCallState(null);
+      setParticipants([]);
+      setIncomingGroupCall(null);
+      setMediaStates({});
+      pendingSignalsRef.current = [];
+    },
+    [cleanupAllPeers, setActiveCallState]
+  );
+
+  const renegotiateActiveParticipants = useCallback(
+    async (reason = "renegotiate-active-participants") => {
+      const currentUsername = currentUsernameRef.current;
+      const participantUsernames = participantsRef.current
+        .map((participant) => participant.username)
+        .filter(
+          (username) =>
+            username &&
+            username !== currentUsername &&
+            shouldInitiateRenegotiation(currentUsername, username, true)
+        );
+
+      if (participantUsernames.length === 0) {
+        log("No peers selected for reconnect renegotiation", {
+          reason,
+          currentUsername,
+          participants: participantsRef.current.map((participant) => participant.username),
+        });
+        return;
+      }
+
+      log("Renegotiate peers after group call reconnect", {
+        reason,
+        currentUsername,
+        participantUsernames,
+      });
+
+      for (const username of participantUsernames) {
+        try {
+          await createOfferForUser(username);
+        } catch (err) {
+          errorLog("Failed to renegotiate peer after reconnect", {
+            reason,
+            username,
+            err,
+          });
+        }
+      }
+    },
+    [createOfferForUser]
+  );
+
+  const rejoinActiveGroupCall = useCallback(
+    (reason = "socket-connect") => {
+      const socket = socketRef.current || connectSocket();
+      socketRef.current = socket;
+
+      const call = activeGroupCallRef.current;
+      const callId = call?.callId || call?.id || null;
+      const groupId = call?.groupId || null;
+
+      if (!socket.connected) {
+        log("Cannot rejoin group call because socket is disconnected", {
+          reason,
+          callId,
+          groupId,
+          socketSnapshot: getSocketSnapshot(socket),
+        });
+        return false;
+      }
+
+      if (!callId) {
+        flushPendingSignals(`${reason}:no-active-call`);
+        return false;
+      }
+
+      log("[GroupCallContext] Rejoin group call after socket reconnect", {
+        reason,
+        callId,
+        groupId,
+        currentUsername: currentUsernameRef.current,
+        pendingSignals: pendingSignalsRef.current.length,
+      });
+
+      safeEmit(
+        socket,
+        "group-call:rejoin",
+        {
+          callId,
+          groupId,
+        },
+        async (response = {}) => {
+          log("Ack group-call:rejoin", {
+            reason,
+            callId,
+            groupId,
+            response,
+          });
+
+          if (response.ok === false) {
+            setError(response.message || "Khong the ket noi lai group call");
+            return;
+          }
+
+          const nextCall = buildCallObject(response);
+          if (nextCall.callId) {
+            setActiveCallState(nextCall);
+            setIsInGroupCall(true);
+            setIncomingGroupCall(null);
+          }
+
+          flushPendingSignals("after-group-call-rejoin");
+          await renegotiateActiveParticipants("after-group-call-rejoin");
+          log("Rejoin completed; pending signals flushed and peers renegotiated if selected", {
+            callId,
+            groupId,
+          });
+        }
+      );
+
+      return true;
+    },
+    [flushPendingSignals, renegotiateActiveParticipants, setActiveCallState]
+  );
+
   const startGroupCall = useCallback(
     async (groupId, rawParticipants = []) => {
       try {
@@ -484,7 +731,7 @@ export function GroupCallProvider({ children, user }) {
 
         await waitForSocketConnected(socket, 5000);
 
-        currentUsernameRef.current = getCurrentUsername();
+        currentUsernameRef.current = user?.username || getCurrentUsername();
 
         if (!groupId) {
           throw new Error("Thiếu groupId khi bắt đầu group call");
@@ -544,16 +791,32 @@ export function GroupCallProvider({ children, user }) {
         console.debug("payload JSON:", safeJson(startPayload));
         console.groupEnd();
 
-        safeEmit(socket, "group-call:start", startPayload);
+        safeEmit(socket, "group-call:start", startPayload, (response = {}) => {
+          log("Ack group-call:start", {
+            response,
+            groupId,
+            invitedUsernames,
+          });
+
+          if (response.ok === false) {
+            resetGroupCallState({ stopMedia: true });
+            setError(response.message || "Khong the bat dau group call");
+          }
+        });
 
         return true;
       } catch (err) {
         errorLog("startGroupCall failed", err);
-        setError(err?.message || "Không thể bắt đầu group call");
+        resetGroupCallState({ stopMedia: true });
+        setError(
+          isSocketConnectFailure(err)
+            ? "Không thể kết nối server cuộc gọi. Vui lòng kiểm tra backend."
+            : err?.message || "Không thể bắt đầu group call"
+        );
         return false;
       }
     },
-    [initLocalStream, setActiveCallState]
+    [initLocalStream, resetGroupCallState, setActiveCallState, user?.username]
   );
 
   const joinGroupCall = useCallback(
@@ -564,7 +827,7 @@ export function GroupCallProvider({ children, user }) {
 
         await waitForSocketConnected(socket, 5000);
 
-        currentUsernameRef.current = getCurrentUsername();
+        currentUsernameRef.current = user?.username || getCurrentUsername();
 
         const call = incomingGroupCall || activeGroupCallRef.current;
         const callId = callIdFromArg || call?.callId || call?.id || null;
@@ -595,16 +858,32 @@ export function GroupCallProvider({ children, user }) {
         safeEmit(socket, "group-call:join", {
           callId,
           groupId,
+        }, (response = {}) => {
+          log("Ack group-call:join", {
+            response,
+            callId,
+            groupId,
+          });
+
+          if (response.ok === false) {
+            resetGroupCallState({ stopMedia: true });
+            setError(response.message || "Khong the tham gia group call");
+          }
         });
 
         return true;
       } catch (err) {
         errorLog("joinGroupCall failed", err);
-        setError(err?.message || "Không thể tham gia group call");
+        resetGroupCallState({ stopMedia: true });
+        setError(
+          isSocketConnectFailure(err)
+            ? "Không thể kết nối server cuộc gọi. Vui lòng kiểm tra backend."
+            : err?.message || "Không thể tham gia group call"
+        );
         return false;
       }
     },
-    [incomingGroupCall, initLocalStream, setActiveCallState]
+    [incomingGroupCall, initLocalStream, resetGroupCallState, setActiveCallState, user?.username]
   );
 
   const declineGroupCall = useCallback(() => {
@@ -706,6 +985,41 @@ export function GroupCallProvider({ children, user }) {
     return nextEnabled;
   }, [audioEnabled, toggleWebRTCVideo]);
 
+  // ─── handlersRef: bridge ổn định để socket effect không phụ thuộc vào callback references ───
+  const handlersRef = useRef({});
+
+  // Effect 1: Cập nhật handlersRef khi callbacks thay đổi (KHÔNG bind socket, không gây re-bind)
+  useEffect(() => {
+    handlersRef.current = {
+      cleanupAllPeers,
+      createOfferForUser,
+      handleAnswer,
+      handleIceCandidate,
+      handleOffer,
+      flushPendingSignals,
+      renegotiateActiveParticipants,
+      rejoinActiveGroupCall,
+      removeParticipant,
+      removePeer,
+      setActiveCallState,
+      updateParticipant,
+    };
+  }, [
+    cleanupAllPeers,
+    createOfferForUser,
+    handleAnswer,
+    handleIceCandidate,
+    handleOffer,
+    flushPendingSignals,
+    renegotiateActiveParticipants,
+    rejoinActiveGroupCall,
+    removeParticipant,
+    removePeer,
+    setActiveCallState,
+    updateParticipant,
+  ]);
+
+  // Effect 2: Bind/unbind socket listeners — CHỈ depend on [user] để tránh re-bind
   useEffect(() => {
     // Guard: chỉ bind khi user/token/sessionId sẵn sàng
     const auth = buildSocketAuth();
@@ -720,7 +1034,7 @@ export function GroupCallProvider({ children, user }) {
 
     const socket = connectSocket();
     socketRef.current = socket;
-    currentUsernameRef.current = getCurrentUsername();
+    currentUsernameRef.current = user?.username || getCurrentUsername();
 
     const debugAnyGroupCallEvent = (eventName, ...args) => {
       if (String(eventName).startsWith("group-call:")) {
@@ -808,12 +1122,25 @@ export function GroupCallProvider({ children, user }) {
         return;
       }
 
-      updateParticipant(username, {
-        joined: true,
-      });
+      handlersRef.current.updateParticipant(username, { joined: true });
 
       try {
-        await createOfferForUser(username);
+        if (
+          !shouldInitiateRenegotiation(
+            currentUsernameRef.current,
+            username,
+            Boolean(payload.rejoined)
+          )
+        ) {
+          log("Skip offer for rejoined peer because peer will initiate", {
+            username,
+            currentUsername: currentUsernameRef.current,
+            rejoined: Boolean(payload.rejoined),
+          });
+          return;
+        }
+
+        await handlersRef.current.createOfferForUser(username);
       } catch (err) {
         errorLog("Failed to create offer for joined user", {
           username,
@@ -837,8 +1164,8 @@ export function GroupCallProvider({ children, user }) {
 
       if (!username) return;
 
-      removePeer(username);
-      removeParticipant(username);
+      handlersRef.current.removePeer(username);
+      handlersRef.current.removeParticipant(username);
     };
 
     const onEnded = (payload = {}) => {
@@ -846,9 +1173,9 @@ export function GroupCallProvider({ children, user }) {
         payload,
       });
 
-      cleanupAllPeers();
+      handlersRef.current.cleanupAllPeers();
       setIsInGroupCall(false);
-      setActiveCallState(null);
+      handlersRef.current.setActiveCallState(null);
       setParticipants([]);
       setIncomingGroupCall(null);
       setMediaStates({});
@@ -884,6 +1211,12 @@ export function GroupCallProvider({ children, user }) {
         targetUsername,
         currentUsername: currentUsernameRef.current,
       });
+      log("RECEIVE OFFER", {
+        fromUsername,
+        targetUsername,
+        callId: payload.callId || null,
+        offerType: offer?.type || null,
+      });
 
       if (
         targetUsername &&
@@ -903,14 +1236,12 @@ export function GroupCallProvider({ children, user }) {
       }
 
       try {
-        await handleOffer({
+        await handlersRef.current.handleOffer({
           fromUsername,
           offer,
         });
 
-        updateParticipant(fromUsername, {
-          joined: true,
-        });
+        handlersRef.current.updateParticipant(fromUsername, { joined: true });
       } catch (err) {
         errorLog("Failed to handle group offer", {
           fromUsername,
@@ -929,6 +1260,12 @@ export function GroupCallProvider({ children, user }) {
         fromUsername,
         targetUsername,
         currentUsername: currentUsernameRef.current,
+      });
+      log("RECEIVE ANSWER", {
+        fromUsername,
+        targetUsername,
+        callId: payload.callId || null,
+        answerType: answer?.type || null,
       });
 
       if (
@@ -949,14 +1286,12 @@ export function GroupCallProvider({ children, user }) {
       }
 
       try {
-        await handleAnswer({
+        await handlersRef.current.handleAnswer({
           fromUsername,
           answer,
         });
 
-        updateParticipant(fromUsername, {
-          joined: true,
-        });
+        handlersRef.current.updateParticipant(fromUsername, { joined: true });
       } catch (err) {
         errorLog("Failed to handle group answer", {
           fromUsername,
@@ -976,6 +1311,12 @@ export function GroupCallProvider({ children, user }) {
         targetUsername,
         currentUsername: currentUsernameRef.current,
       });
+      log("RECEIVE ICE", {
+        fromUsername,
+        targetUsername,
+        callId: payload.callId || null,
+        hasCandidate: Boolean(candidate),
+      });
 
       if (
         targetUsername &&
@@ -994,7 +1335,7 @@ export function GroupCallProvider({ children, user }) {
         return;
       }
 
-      await handleIceCandidate({
+      await handlersRef.current.handleIceCandidate({
         fromUsername,
         candidate,
       });
@@ -1025,9 +1366,65 @@ export function GroupCallProvider({ children, user }) {
       }));
     };
 
+    const onSocketConnect = () => {
+      log("Socket connected for group call signaling", {
+        socketId: socket.id,
+        active: socket.active,
+        connected: socket.connected,
+        activeCall: activeGroupCallRef.current,
+        isInGroupCall: isInGroupCallRef.current,
+        pendingSignals: pendingSignalsRef.current.length,
+      });
+
+      if (activeGroupCallRef.current?.callId || isInGroupCallRef.current) {
+        handlersRef.current.rejoinActiveGroupCall?.("socket-connect");
+        return;
+      }
+
+      handlersRef.current.flushPendingSignals?.("socket-connect");
+    };
+
+    const onSocketDisconnect = (reason) => {
+      log("Socket disconnected during group call signaling", {
+        reason,
+        socketId: socket.id || null,
+        activeCall: activeGroupCallRef.current,
+        isInGroupCall: isInGroupCallRef.current,
+        pendingSignals: pendingSignalsRef.current.length,
+      });
+    };
+
+    const onRejoined = (payload = {}) => {
+      const call = buildCallObject(payload);
+
+      log("Socket group-call:rejoined", {
+        payload,
+        call,
+      });
+
+      if (call.callId) {
+        setActiveCallState(call);
+        setIsInGroupCall(true);
+        setIncomingGroupCall(null);
+        setError(null);
+      }
+
+      handlersRef.current.flushPendingSignals?.("after-group-call-rejoined-event");
+    };
+
+    log("[GroupCall][Socket] bind listeners", {
+      socketId: socket.id,
+      connected: socket.connected,
+      currentUsername: currentUsernameRef.current,
+    });
+
+    socket.on("connect", onSocketConnect);
+    socket.on("disconnect", onSocketDisconnect);
     socket.on("group-call:started", onStarted);
     socket.on("group-call:incoming", onIncoming);
+    socket.on("group-call:invite", onIncoming);
     socket.on("group-call:joined", onJoined);
+    socket.on("group-call:rejoined", onRejoined);
     socket.on("group-call:user-joined", onUserJoined);
     socket.on("group-call:user-left", onUserLeft);
     socket.on("group-call:ended", onEnded);
@@ -1038,12 +1435,19 @@ export function GroupCallProvider({ children, user }) {
     socket.on("group-call:media-state", onMediaState);
 
     return () => {
-      log("Unbinding group call socket listeners");
+      log("[GroupCall][Socket] unbind listeners", {
+        socketId: socket.id,
+        currentUsername: currentUsernameRef.current,
+      });
 
       socket.offAny(debugAnyGroupCallEvent);
+      socket.off("connect", onSocketConnect);
+      socket.off("disconnect", onSocketDisconnect);
       socket.off("group-call:started", onStarted);
       socket.off("group-call:incoming", onIncoming);
+      socket.off("group-call:invite", onIncoming);
       socket.off("group-call:joined", onJoined);
+      socket.off("group-call:rejoined", onRejoined);
       socket.off("group-call:user-joined", onUserJoined);
       socket.off("group-call:user-left", onUserLeft);
       socket.off("group-call:ended", onEnded);
@@ -1053,18 +1457,7 @@ export function GroupCallProvider({ children, user }) {
       socket.off("group-call:ice-candidate", onIceCandidate);
       socket.off("group-call:media-state", onMediaState);
     };
-  }, [
-    user,
-    cleanupAllPeers,
-    createOfferForUser,
-    handleAnswer,
-    handleIceCandidate,
-    handleOffer,
-    removeParticipant,
-    removePeer,
-    setActiveCallState,
-    updateParticipant,
-  ]);
+  }, [user?.username]); // Rebind only when login user changes; handlers are read via handlersRef.
 
   const canEnd = useMemo(() => {
     const currentUsername = currentUsernameRef.current;

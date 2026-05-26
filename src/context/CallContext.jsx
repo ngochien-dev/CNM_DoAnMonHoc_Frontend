@@ -178,6 +178,19 @@ function computeRingCountdownSec(call, timeoutMs) {
     return Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
 }
 
+function getRemoteTrackSummary(remoteStreamSnapshot = null) {
+    const audioTracks = remoteStreamSnapshot?.audioTracks || 0;
+    const videoTracks = remoteStreamSnapshot?.videoTracks || 0;
+
+    return {
+        audioTracks,
+        videoTracks,
+        hasRemoteAudioTrack: audioTracks > 0,
+        hasRemoteVideoTrack: videoTracks > 0,
+        hasRemoteMediaTrack: audioTracks > 0 || videoTracks > 0,
+    };
+}
+
 export function CallProvider({ children, user }) {
     const [callState, setCallState] = useState(INITIAL_CALL_STATE);
     const [callHistoryVersion, setCallHistoryVersion] = useState(0);
@@ -195,6 +208,7 @@ export function CallProvider({ children, user }) {
     const locallyFinalizedCallsRef = useRef(new Map());
     const disconnectTimerRef = useRef(null);
     const negotiationStateRef = useRef(INITIAL_NEGOTIATION_STATE);
+    const acceptingCallIdsRef = useRef(new Set());
 
     function clearResetTimer() {
         if (!resetTimerRef.current) return;
@@ -316,6 +330,7 @@ export function CallProvider({ children, user }) {
             preservePendingInvite,
             ...getCallDebugSnapshot(),
         });
+        acceptingCallIdsRef.current.clear();
         clearAllUiTimers();
         resetNegotiationState();
         cleanupSession('reset-call-ui');
@@ -408,8 +423,16 @@ export function CallProvider({ children, user }) {
             connectionState: nextState = 'new',
             iceConnectionState: nextIceConnectionState = 'new',
             signalingState: nextSignalingState = 'stable',
+            remoteStream: remoteStreamSnapshot = null,
             reason = 'unknown',
         } = snapshot;
+        const remoteTrackSummary = getRemoteTrackSummary(remoteStreamSnapshot);
+        const hasRemoteMediaTrack = snapshot.hasRemoteMediaTrack ?? remoteTrackSummary.hasRemoteMediaTrack;
+        const hasRemoteVideoTrack = snapshot.hasRemoteVideoTrack ?? remoteTrackSummary.hasRemoteVideoTrack;
+        const isTransportConnected =
+            nextState === 'connected' ||
+            nextIceConnectionState === 'connected' ||
+            nextIceConnectionState === 'completed';
 
         logWebRTC('Peer state snapshot received in CallContext.', {
             callId,
@@ -417,15 +440,55 @@ export function CallProvider({ children, user }) {
             connectionState: nextState,
             iceConnectionState: nextIceConnectionState,
             signalingState: nextSignalingState,
+            remoteStream: remoteStreamSnapshot,
             callStatus: callStateRef.current.status,
         });
+        logWebRTC('[CALL][State] peer connection state changed', {
+            callId,
+            reason,
+            connectionState: nextState,
+            signalingState: nextSignalingState,
+            remoteStream: remoteStreamSnapshot,
+        });
+        logWebRTC('[CALL][State] ice connection state changed', {
+            callId,
+            reason,
+            iceConnectionState: nextIceConnectionState,
+            remoteStream: remoteStreamSnapshot,
+        });
 
-        if (['connected', 'connecting'].includes(nextState)) {
+        if (['connected', 'connecting'].includes(nextState) || ['connected', 'completed'].includes(nextIceConnectionState)) {
             clearDisconnectTimer();
         }
 
-        if (nextState === 'connected') {
-            setConnectionLabel('Da ket noi video');
+        if (isTransportConnected) {
+            if (!hasRemoteMediaTrack) {
+                setConnectionLabel('Dang cho media tu nguoi ben kia...');
+                warnCall('[CALL][State] connected but remote stream missing video track', {
+                    callId,
+                    reason,
+                    connectionState: nextState,
+                    iceConnectionState: nextIceConnectionState,
+                    remoteStream: remoteStreamSnapshot,
+                    hasRemoteMediaTrack,
+                    hasRemoteVideoTrack,
+                });
+                return;
+            }
+
+            if (!hasRemoteVideoTrack) {
+                warnCall('[CALL][State] connected but remote stream missing video track', {
+                    callId,
+                    reason,
+                    connectionState: nextState,
+                    iceConnectionState: nextIceConnectionState,
+                    remoteStream: remoteStreamSnapshot,
+                    hasRemoteMediaTrack,
+                    hasRemoteVideoTrack,
+                });
+            }
+
+            setConnectionLabel(hasRemoteVideoTrack ? 'Da ket noi video' : 'Da ket noi am thanh, dang cho video...');
             setCallState((previousState) =>
                 previousState.call
                     ? {
@@ -656,6 +719,13 @@ export function CallProvider({ children, user }) {
     async function startCall(peerUsername, roomId) {
         if (!user || !peerUsername || peerUsername === user.username) return;
         if (callStateRef.current.status !== 'idle') return;
+        if (pendingInviteRef.current && pendingInviteRef.current.state === 'pending') {
+            logCall('Ignore duplicate startCall click because another call is starting.', {
+                peerUsername,
+                roomId,
+            });
+            return;
+        }
 
         const requestId = buildPendingInviteId();
         pendingInviteRef.current = {
@@ -786,22 +856,74 @@ export function CallProvider({ children, user }) {
         const activeCall = callStateRef.current.call;
         if (!activeCall) return;
 
-        ensureNegotiationState(activeCall.callId);
-        logCall('Accepting incoming call.', {
-            callId: activeCall.callId,
+        const callId = activeCall.callId;
+        if (acceptingCallIdsRef.current.has(callId)) {
+            logCall('Ignore duplicate accept click for callId:', { callId });
+            return;
+        }
+        acceptingCallIdsRef.current.add(callId);
+
+        ensureNegotiationState(callId);
+        logCall('[CALL][Receiver] accept clicked', {
+            callId,
             from: activeCall.callerUsername,
             to: activeCall.calleeUsername,
-            stateBefore: callStateRef.current.status,
-            socket: getSocketDebugSnapshot(),
         });
 
+        setConnectionLabel('Đang xin quyền camera/micro...');
+        setCallState((previousState) => ({
+            ...previousState,
+            status: 'requesting-permission',
+            message: 'Đang xin quyền camera/micro...',
+        }));
+
+        logCall('[CALL][Receiver] requesting media permission', { callId });
+
+        // First notify the server that the receiver is accepting and requesting permissions
+        emitSocketEvent('accepting-call', { callId }, () => {});
+
+        try {
+            logCall('[CALL][Media] getUserMedia pending', { callId });
+            await ensureLocalStream();
+            logCall('[CALL][Media] getUserMedia granted', { callId });
+        } catch (error) {
+            logCall('[CALL][Media] getUserMedia denied', { name: error?.name, message: error?.message });
+            logCall('[CALL][Receiver] cannot answer because media permission denied', { callId });
+
+            acceptingCallIdsRef.current.delete(callId);
+            rememberLocallyFinalizedCall(callId, 'failed');
+
+            const mediaFailure = getMediaFailureDebugInfo?.(error) || null;
+            emitSocketEvent(
+                CALL_EVENTS.end,
+                {
+                    callId,
+                    reason: 'media_error',
+                    mediaError: mediaFailure,
+                },
+                () => {},
+            );
+
+            moveToTerminalState('failed', {
+                call: activeCall,
+                peer: callStateRef.current.peer,
+                direction: 'incoming',
+                message: getMediaErrorMessage(
+                    error,
+                    'Bạn cần cấp quyền camera/micro để gọi video.',
+                ),
+            });
+            return;
+        }
+
         setConnectionLabel('Dang xac nhan cuoc goi...');
-        const acceptPayload = { callId: activeCall.callId };
+        const acceptPayload = { callId };
         logCall('Sending accept-call.', {
             payload: acceptPayload,
             ...getCallDebugSnapshot(),
         });
         emitSocketEvent(CALL_EVENTS.accept, acceptPayload, (response) => {
+            acceptingCallIdsRef.current.delete(callId);
             if (!response?.ok) {
                 moveToTerminalState('failed', {
                     call: activeCall,
@@ -1245,6 +1367,23 @@ export function CallProvider({ children, user }) {
                 appliedAt: new Date().toISOString(),
             });
         } catch (error) {
+            // Phân biệt: signalingState mismatch (ignore) vs lỗi thực sự (failed)
+            const isSignalingStateError =
+                error?.message?.includes('signalingState') ||
+                error?.message?.includes('stable') ||
+                error?.message?.includes('wrong state') ||
+                error?.message?.includes('already cleaned up');
+
+            if (isSignalingStateError) {
+                // Stale answer hoặc call đã cleanup — chỉ log, không crash
+                logCall('[CALL][WebRTC] Ignore answer: signalingState mismatch or call already ended.', {
+                    callId,
+                    error: error?.message || 'signalingState error',
+                    currentStatus: callStateRef.current.status,
+                });
+                return;
+            }
+
             logWebRTC('Failed to apply remote SDP answer in CallContext.', {
                 callId,
                 error: error?.message || 'Unknown applyAnswer error',
@@ -1407,17 +1546,51 @@ export function CallProvider({ children, user }) {
             return;
         }
 
+        const isCaller = payload.call?.callerUsername === user?.username;
+        let endMessage = 'Cuoc goi da ket thuc.';
+        if (payload.reason === 'media_error') {
+            endMessage = isCaller 
+                ? 'Đối phương gặp lỗi thiết bị hoặc không cấp quyền camera/micro.' 
+                : 'Bạn không thể tham gia vì chưa cấp quyền camera/micro.';
+        } else if (payload.reason === 'disconnect') {
+            endMessage = 'Cuoc goi ket thuc do mat ket noi.';
+        } else if (payload.call?.status === 'cancelled') {
+            endMessage = 'Cuoc goi da bi huy.';
+        }
+
         moveToTerminalState(payload.call?.status === 'cancelled' ? 'cancelled' : 'ended', {
             call: payload.call,
             peer: payload.peer || callStateRef.current.peer,
             direction: callStateRef.current.direction || 'outgoing',
-            message:
-                payload.reason === 'disconnect'
-                    ? 'Cuoc goi ket thuc do mat ket noi.'
-                    : payload.call?.status === 'cancelled'
-                      ? 'Cuoc goi da bi huy.'
-                      : 'Cuoc goi da ket thuc.',
+            message: endMessage,
         });
+    });
+
+    const handleAcceptingCall = useEffectEvent((payload) => {
+        logSocket('Received accepting-call.', summarizeSocketPayload(payload));
+
+        const callId = payload.call?.callId || payload.callId;
+        const activeCallId = callStateRef.current.call?.callId || null;
+        if (!callId) {
+            logCall('Ignoring accepting-call because payload is missing callId.', summarizeSocketPayload(payload));
+            return;
+        }
+
+        if (!activeCallId || activeCallId !== callId) {
+            logCall('Ignoring accepting-call because active call does not match.', {
+                callId,
+                activeCallId,
+                currentStatus: callStateRef.current.status,
+            });
+            return;
+        }
+
+        logCall('[CALL][Caller] receiver is accepting / requesting permission', { callId });
+        setConnectionLabel('Nguoi nhan dang cap quyen camera/micro...');
+        setCallState((previousState) => ({
+            ...previousState,
+            message: 'Người nhận đang cấp quyền camera/micro...',
+        }));
     });
 
     useEffect(() => {
@@ -1443,6 +1616,7 @@ export function CallProvider({ children, user }) {
 
         socket.off(CALL_EVENTS.incoming, handleIncomingCall);
         socket.off(CALL_EVENTS.accept, handleAcceptedCall);
+        socket.off('accepting-call', handleAcceptingCall);
         socket.off('call:busy', handleBusy);
         socket.off(CALL_EVENTS.reject, handleRejected);
         socket.off('call:timeout', handleTimeout);
@@ -1454,6 +1628,7 @@ export function CallProvider({ children, user }) {
 
         socket.on(CALL_EVENTS.incoming, handleIncomingCall);
         socket.on(CALL_EVENTS.accept, handleAcceptedCall);
+        socket.on('accepting-call', handleAcceptingCall);
         socket.on('call:busy', handleBusy);
         socket.on(CALL_EVENTS.reject, handleRejected);
         socket.on('call:timeout', handleTimeout);
@@ -1463,7 +1638,7 @@ export function CallProvider({ children, user }) {
         socket.on(CALL_EVENTS.answer, handleAnswer);
         socket.on(CALL_EVENTS.iceCandidate, handleIceCandidate);
 
-        logSocket('Registered call and WebRTC listeners on socket.', {
+        logSocket('[CALL][Socket] bind listeners', {
             socketId: socket.id || null,
             connected: socket.connected,
             currentUser: user.username,
@@ -1479,12 +1654,13 @@ export function CallProvider({ children, user }) {
         });
 
         return () => {
-            logSocket('Removing call and WebRTC listeners from socket.', {
+            logSocket('[CALL][Socket] unbind listeners', {
                 currentUser: user.username,
                 socket: getSocketDebugSnapshot(),
             });
             socket.off(CALL_EVENTS.incoming, handleIncomingCall);
             socket.off(CALL_EVENTS.accept, handleAcceptedCall);
+            socket.off('accepting-call', handleAcceptingCall);
             socket.off('call:busy', handleBusy);
             socket.off(CALL_EVENTS.reject, handleRejected);
             socket.off('call:timeout', handleTimeout);
@@ -1527,11 +1703,12 @@ export function CallProvider({ children, user }) {
             {children}
 
             <IncomingCallModal
-                visible={callState.status === 'incoming'}
+                visible={callState.status === 'incoming' || callState.status === 'requesting-permission'}
                 peer={callState.peer}
                 countdownSec={ringCountdownSec}
                 onAccept={acceptIncomingCall}
                 onReject={rejectIncomingCall}
+                accepting={callState.status === 'requesting-permission'}
             />
 
             <OutgoingCallModal
@@ -1556,7 +1733,7 @@ export function CallProvider({ children, user }) {
                 onToggleMic={toggleMic}
                 onToggleCamera={toggleCamera}
                 onEndCall={() => endCall('ended')}
-                connectionLabel={callState.status === 'in-call' ? 'Da ket noi video' : connectionLabel}
+                connectionLabel={connectionLabel}
                 connectionState={connectionState}
                 callDurationSec={callDurationSec}
             />

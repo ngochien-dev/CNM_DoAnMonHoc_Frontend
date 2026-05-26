@@ -12,7 +12,7 @@ function trimTrailingSlash(rawValue = '') {
 function buildApiBaseUrl(rawValue) {
     const normalizedOrigin = trimTrailingSlash(rawValue);
     if (!normalizedOrigin) {
-        return 'http://192.168.1.13:3001/api';
+        return 'http://localhost:3001/api';
     }
 
     return normalizedOrigin.endsWith('/api') ? normalizedOrigin : `${normalizedOrigin}/api`;
@@ -35,11 +35,11 @@ const turnUrls = parseUrlList(rawTurnUrls);
 const rawApiOrigin =
     import.meta.env.VITE_API_URL ||
     import.meta.env.VITE_API_BASE_URL ||
-    'http://192.168.1.13:3001';
+    'http://localhost:3001';
 
 export const API_BASE_URL = buildApiBaseUrl(rawApiOrigin);
 export const SOCKET_URL = trimTrailingSlash(
-    import.meta.env.VITE_SOCKET_URL || rawApiOrigin || 'http://192.168.1.13:3001',
+    import.meta.env.VITE_SOCKET_URL || rawApiOrigin || 'http://localhost:3001',
 );
 
 export const DEFAULT_WEBRTC_ICE_SERVERS = [

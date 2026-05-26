@@ -120,6 +120,7 @@ function describeStream(stream) {
     return {
         exists: true,
         id: stream.id || null,
+        active: stream.active,
         audioTracks: stream.getAudioTracks().length,
         videoTracks: stream.getVideoTracks().length,
         tracks: stream.getTracks().map(describeTrack),
@@ -234,6 +235,7 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
     const connectionStateCallbackRef = useRef(onConnectionStateChange);
     const currentCallIdRef = useRef(null);
     const peerRoleRef = useRef(null);
+    const localStreamPromiseRef = useRef(null);
 
     const [localStream, setLocalStream] = useState(null);
     const [remoteStream, setRemoteStream] = useState(null);
@@ -264,6 +266,10 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
             connectionState: peerConnection?.connectionState || 'closed',
             signalingState: peerConnection?.signalingState || 'closed',
             iceConnectionState: peerConnection?.iceConnectionState || 'closed',
+            remoteStream: describeStream(remoteStreamRef.current),
+            hasRemoteMediaTrack: Boolean(remoteStreamRef.current?.getTracks().length),
+            hasRemoteVideoTrack: Boolean(remoteStreamRef.current?.getVideoTracks().length),
+            hasRemoteAudioTrack: Boolean(remoteStreamRef.current?.getAudioTracks().length),
             reason,
         };
 
@@ -276,11 +282,31 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
     function createRemoteStream() {
         const stream = new MediaStream();
         remoteStreamRef.current = stream;
-        setRemoteStream(stream);
         logWebRTC('Created remote media stream container.', {
             callId: currentCallIdRef.current,
         });
         return stream;
+    }
+
+    function publishRemoteStream(stream, reason = 'remote-stream-updated', peerConnection = peerConnectionRef.current) {
+        remoteStreamRef.current = stream;
+
+        const publishedStream = stream ? new MediaStream(stream.getTracks()) : null;
+        setRemoteStream(publishedStream);
+
+        logWebRTC('[CALL][WebRTC] remote stream updated', {
+            callId: currentCallIdRef.current,
+            role: peerRoleRef.current,
+            reason,
+            videoTracks: stream?.getVideoTracks().length || 0,
+            audioTracks: stream?.getAudioTracks().length || 0,
+            active: Boolean(stream?.active),
+            remoteStream: describeStream(stream),
+        });
+
+        if (peerConnection) {
+            emitPeerState(reason, peerConnection);
+        }
     }
 
     function clearPendingCandidates(reason = 'clear-pending-candidates') {
@@ -346,7 +372,15 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
                 reason,
                 remoteStream: describeStream(remoteStreamRef.current),
             });
-            remoteStreamRef.current.getTracks().forEach((track) => track.stop());
+            remoteStreamRef.current.getTracks().forEach((track) => {
+                logWebRTC('[CALL][Cleanup] stopped remote track', {
+                    id: track.id,
+                    kind: track.kind,
+                    callId: currentCallIdRef.current,
+                    reason,
+                });
+                track.stop();
+            });
             remoteStreamRef.current = null;
         }
 
@@ -359,6 +393,7 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
     }
 
     function destroyLocalStream() {
+        localStreamPromiseRef.current = null;
         if (!localStreamRef.current) return;
 
         logWebRTC('Stopping local media tracks.', {
@@ -366,7 +401,14 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
             localStream: describeStream(localStreamRef.current),
         });
 
-        localStreamRef.current.getTracks().forEach((track) => track.stop());
+        localStreamRef.current.getTracks().forEach((track) => {
+            track.stop();
+            logWebRTC('[CALL][Cleanup] stopped local track', {
+                id: track.id,
+                kind: track.kind,
+                callId: currentCallIdRef.current,
+            });
+        });
         localStreamRef.current = null;
         setLocalStream(null);
         setIsMicEnabled(true);
@@ -374,12 +416,19 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
     }
 
     async function ensureLocalStream() {
-        if (localStreamRef.current) {
-            logMedia('Reusing existing local media stream.', {
+        if (localStreamRef.current && localStreamRef.current.active) {
+            logMedia('Reusing existing active local media stream.', {
                 callId: currentCallIdRef.current,
                 localStream: describeStream(localStreamRef.current),
             });
             return localStreamRef.current;
+        }
+
+        if (localStreamPromiseRef.current) {
+            logMedia('Awaiting existing pending local media stream promise.', {
+                callId: currentCallIdRef.current,
+            });
+            return localStreamPromiseRef.current;
         }
 
         const constraints = {
@@ -407,44 +456,50 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
             throw prerequisiteError;
         }
 
-        let stream;
-        try {
-            logMedia('Calling navigator.mediaDevices.getUserMedia.', {
+        localStreamPromiseRef.current = (async () => {
+            let stream;
+            try {
+                logMedia('Calling navigator.mediaDevices.getUserMedia.', {
+                    callId: currentCallIdRef.current,
+                    constraints,
+                });
+
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+            } catch (error) {
+                const normalizedError = normalizeGetUserMediaError(error);
+                const devicesAfterFailure = await enumerateMediaDevicesSnapshot('after-getUserMedia-error');
+                normalizedError.mediaDebug = {
+                    environment: environmentSnapshot,
+                    constraints,
+                    devicesBefore,
+                    devicesAfterFailure,
+                    originalError: describeError(error),
+                    vietnameseReason: mapMediaErrorToVietnamese(error),
+                };
+                errorMedia('getUserMedia failed.', normalizedError, {
+                    callId: currentCallIdRef.current,
+                });
+                localStreamPromiseRef.current = null;
+                throw normalizedError;
+            }
+
+            localStreamRef.current = stream;
+            setLocalStream(stream);
+            setIsMicEnabled(true);
+            setIsCameraEnabled(true);
+            localStreamPromiseRef.current = null;
+
+            const devicesAfterSuccess = await enumerateMediaDevicesSnapshot('after-getUserMedia-success');
+            logMedia('Local media stream is ready.', {
                 callId: currentCallIdRef.current,
-                constraints,
+                localStream: describeStream(stream),
+                devicesAfterSuccess,
             });
 
-            stream = await navigator.mediaDevices.getUserMedia(constraints);
-        } catch (error) {
-            const normalizedError = normalizeGetUserMediaError(error);
-            const devicesAfterFailure = await enumerateMediaDevicesSnapshot('after-getUserMedia-error');
-            normalizedError.mediaDebug = {
-                environment: environmentSnapshot,
-                constraints,
-                devicesBefore,
-                devicesAfterFailure,
-                originalError: describeError(error),
-                vietnameseReason: mapMediaErrorToVietnamese(error),
-            };
-            errorMedia('getUserMedia failed.', normalizedError, {
-                callId: currentCallIdRef.current,
-            });
-            throw normalizedError;
-        }
+            return stream;
+        })();
 
-        localStreamRef.current = stream;
-        setLocalStream(stream);
-        setIsMicEnabled(true);
-        setIsCameraEnabled(true);
-
-        const devicesAfterSuccess = await enumerateMediaDevicesSnapshot('after-getUserMedia-success');
-        logMedia('Local media stream is ready.', {
-            callId: currentCallIdRef.current,
-            localStream: describeStream(stream),
-            devicesAfterSuccess,
-        });
-
-        return stream;
+        return localStreamPromiseRef.current;
     }
 
     function createPeerConnection({ callId, onIceCandidate, role } = {}) {
@@ -493,10 +548,28 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
         };
 
         peerConnection.ontrack = (event) => {
+            const streamCount = event.streams?.length || 0;
+            const streamIds = Array.from(event.streams || []).map((streamItem) => streamItem.id);
+            logWebRTC('[CALL][WebRTC] ontrack fired', {
+                callId: currentCallIdRef.current,
+                role: peerRoleRef.current,
+                kind: event.track?.kind || null,
+                trackId: event.track?.id || null,
+                muted: event.track?.muted ?? null,
+                readyState: event.track?.readyState || null,
+                streamCount,
+                streamIds,
+            });
+
             const stream = event.streams?.[0];
             const remoteMediaStream = remoteStreamRef.current || createRemoteStream();
+            const tracksToAttach = stream ? [...stream.getTracks()] : [];
 
-            if (!stream) {
+            if (event.track && !tracksToAttach.some((track) => track.id === event.track.id)) {
+                tracksToAttach.push(event.track);
+            }
+
+            if (tracksToAttach.length === 0) {
                 logWebRTC('Received ontrack event without media stream.', {
                     callId: currentCallIdRef.current,
                     role: peerRoleRef.current,
@@ -507,12 +580,14 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
                 return;
             }
 
-            stream.getTracks().forEach((track) => {
+            tracksToAttach.forEach((track) => {
                 const hasTrack = remoteMediaStream.getTracks().some((existingTrack) => existingTrack.id === track.id);
                 if (!hasTrack) {
                     remoteMediaStream.addTrack(track);
                 }
             });
+
+            publishRemoteStream(remoteMediaStream, 'remote-track-updated', peerConnection);
 
             logWebRTC('Remote track attached.', {
                 callId: currentCallIdRef.current,
@@ -549,6 +624,14 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
 
         if (localStreamRef.current) {
             localStreamRef.current.getTracks().forEach((track) => {
+                logWebRTC('[CALL][WebRTC] adding local track', {
+                    callId: currentCallIdRef.current,
+                    role: peerRoleRef.current,
+                    kind: track.kind,
+                    id: track.id,
+                    enabled: track.enabled,
+                    readyState: track.readyState,
+                });
                 peerConnection.addTrack(track, localStreamRef.current);
             });
 
@@ -594,6 +677,11 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
 
             try {
                 await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                logWebRTC('[CALL][ICE] candidate added', {
+                    callId: currentCallIdRef.current,
+                    queued: true,
+                    candidate: describeCandidate(candidate),
+                });
                 logWebRTC('Applied queued remote ICE candidate.', {
                     callId: currentCallIdRef.current,
                     candidate: describeCandidate(candidate),
@@ -612,6 +700,12 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
                 });
             }
         }
+
+        logWebRTC('[CALL][ICE] flushed pending candidates', {
+            callId: currentCallIdRef.current,
+            reason,
+            pendingCount: pendingCandidatesRef.current.length,
+        });
     }
 
     async function createOffer({ callId, onIceCandidate } = {}) {
@@ -622,6 +716,12 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
             callId,
             onIceCandidate,
             role: 'caller',
+        });
+
+        logWebRTC('[CALL][WebRTC] local tracks added before offer', {
+            callId: currentCallIdRef.current,
+            localStream: describeStream(localStreamRef.current),
+            senderTracks: peerConnection.getSenders().filter((sender) => sender.track).map((sender) => describeTrack(sender.track)),
         });
 
         logWebRTC('Creating SDP offer.', {
@@ -654,6 +754,12 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
             callId,
             onIceCandidate,
             role: 'callee',
+        });
+
+        logWebRTC('[CALL][WebRTC] local tracks added before answer', {
+            callId: currentCallIdRef.current,
+            localStream: describeStream(localStreamRef.current),
+            senderTracks: peerConnection.getSenders().filter((sender) => sender.track).map((sender) => describeTrack(sender.track)),
         });
 
         logWebRTC('Applying remote offer.', {
@@ -697,11 +803,11 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
 
         const peerConnection = peerConnectionRef.current;
         if (!peerConnection) {
-            const error = new Error('Peer connection is not available when applying the remote answer.');
-            logWebRTC('Cannot apply remote answer because peer connection is missing.', {
+            // Peer connection đã bị cleanup (call đã kết thúc) — ignore thay vì throw
+            logWebRTC('Ignoring applyAnswer because peerConnection is null (call already cleaned up).', {
                 callId: currentCallIdRef.current,
             });
-            throw error;
+            return;
         }
 
         if (peerConnection.remoteDescription?.type === 'answer' && peerConnection.signalingState === 'stable') {
@@ -717,7 +823,7 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
                 `Cannot apply remote answer while signalingState is ${peerConnection.signalingState}.`,
             );
 
-            logWebRTC('Rejected remote answer because signaling state is unexpected.', {
+            logWebRTC('[CALL][WebRTC] Ignore answer because signalingState is not have-local-offer.', {
                 callId: currentCallIdRef.current,
                 signalingState: peerConnection.signalingState,
                 localDescription: describeSessionDescription(peerConnection.localDescription),
@@ -752,9 +858,21 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
 
         setActiveCallContext(callId, 'incoming-ice-candidate');
 
+        logWebRTC('[CALL][ICE] candidate received', {
+            callId: currentCallIdRef.current,
+            candidate: describeCandidate(candidate),
+        });
+
         const peerConnection = peerConnectionRef.current;
         if (!peerConnection || !peerConnection.remoteDescription) {
             pendingCandidatesRef.current.push(candidate);
+            logWebRTC('[CALL][ICE] queued candidate because remoteDescription missing', {
+                callId: currentCallIdRef.current,
+                hasPeerConnection: Boolean(peerConnection),
+                remoteDescriptionReady: Boolean(peerConnection?.remoteDescription),
+                pendingCount: pendingCandidatesRef.current.length,
+                candidate: describeCandidate(candidate),
+            });
             logWebRTC('Queued remote ICE candidate because remoteDescription is not ready.', {
                 callId: currentCallIdRef.current,
                 hasPeerConnection: Boolean(peerConnection),
@@ -768,6 +886,11 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
 
         try {
             await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+            logWebRTC('[CALL][ICE] candidate added', {
+                callId: currentCallIdRef.current,
+                queued: false,
+                candidate: describeCandidate(candidate),
+            });
             logWebRTC('Applied remote ICE candidate.', {
                 callId: currentCallIdRef.current,
                 candidate: describeCandidate(candidate),

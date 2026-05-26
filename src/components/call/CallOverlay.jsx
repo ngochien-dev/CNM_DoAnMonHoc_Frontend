@@ -7,14 +7,34 @@ const CALL_DEBUG_ENABLED =
 
 function attachStream(videoElement, stream, muted = false) {
     if (!videoElement) return;
-    if (videoElement.srcObject === stream) return;
+    if (videoElement.srcObject === stream) {
+        videoElement.muted = muted;
+        return;
+    }
 
     videoElement.srcObject = stream || null;
     videoElement.muted = muted;
 
     if (stream) {
-        videoElement.play().catch(() => {});
+        videoElement.play?.().catch((error) => {
+            if (CALL_DEBUG_ENABLED) {
+                console.warn('[CALL][UI] video play failed', {
+                    muted,
+                    error: error?.message || 'Unknown video play error',
+                });
+            }
+        });
     }
+}
+
+function logUi(message, context = {}) {
+    if (!CALL_DEBUG_ENABLED) return;
+    console.debug(message, context);
+}
+
+function warnUi(message, context = {}) {
+    if (!CALL_DEBUG_ENABLED) return;
+    console.warn(message, context);
 }
 
 function describeStream(stream) {
@@ -22,9 +42,11 @@ function describeStream(stream) {
     return {
         exists: true,
         id: stream.id || null,
+        active: stream.active,
         audioTracks: stream.getAudioTracks().length,
         videoTracks: stream.getVideoTracks().length,
         tracks: stream.getTracks().map((track) => ({
+            id: track.id,
             kind: track.kind,
             label: track.label || '',
             enabled: track.enabled,
@@ -60,28 +82,44 @@ const CallOverlay = ({
 }) => {
     const localVideoRef = useRef(null);
     const remoteVideoRef = useRef(null);
+    const hasRemoteMediaTracks = Boolean(remoteStream?.getTracks().length);
+    const hasRemoteVideoTracks = Boolean(remoteStream?.getVideoTracks().length);
+    const displayedConnectionState =
+        connectionState === 'connected' && !hasRemoteMediaTracks ? 'waiting-media' : connectionState;
 
     useEffect(() => {
+        if (!visible) return;
+
         attachStream(localVideoRef.current, localStream, true);
-        if (visible && CALL_DEBUG_ENABLED) {
-            console.debug('[CALL][FRONTEND]', 'CallOverlay local stream attached/updated.', {
+        if (localStream) {
+            logUi('[CALL][UI] attached local stream to video element', {
                 status,
                 peerUsername: peer?.username || null,
                 localStream: describeStream(localStream),
             });
         }
-    }, [localStream]);
+    }, [visible, localStream, status, peer?.username]);
 
     useEffect(() => {
+        if (!visible) return;
+
         attachStream(remoteVideoRef.current, remoteStream, false);
-        if (visible && CALL_DEBUG_ENABLED) {
-            console.debug('[CALL][FRONTEND]', 'CallOverlay remote stream attached/updated.', {
+        if (remoteStream) {
+            const remoteStreamSummary = describeStream(remoteStream);
+            logUi('[CALL][UI] attached remote stream to video element', {
                 status,
                 peerUsername: peer?.username || null,
-                remoteStream: describeStream(remoteStream),
+                remoteStream: remoteStreamSummary,
             });
+            if (remoteStreamSummary.videoTracks === 0) {
+                warnUi('[CALL][UI] remote video has no video tracks', {
+                    status,
+                    peerUsername: peer?.username || null,
+                    remoteStream: remoteStreamSummary,
+                });
+            }
         }
-    }, [remoteStream]);
+    }, [visible, remoteStream, status, peer?.username]);
 
     useEffect(() => {
         if (!visible || !CALL_DEBUG_ENABLED) return;
@@ -95,7 +133,27 @@ const CallOverlay = ({
             localStream: describeStream(localStream),
             remoteStream: describeStream(remoteStream),
         });
-    }, [visible, status, peer?.username, connectionLabel, connectionState, isMicEnabled, isCameraEnabled]);
+    }, [visible, status, peer?.username, connectionLabel, connectionState, isMicEnabled, isCameraEnabled, localStream, remoteStream]);
+
+    function handleRemoteMetadataLoaded() {
+        logUi('[CALL][UI] remote video metadata loaded', {
+            status,
+            peerUsername: peer?.username || null,
+            videoWidth: remoteVideoRef.current?.videoWidth || 0,
+            videoHeight: remoteVideoRef.current?.videoHeight || 0,
+            remoteStream: describeStream(remoteVideoRef.current?.srcObject),
+        });
+    }
+
+    function handleRemoteVideoPlaying() {
+        logUi('[CALL][UI] remote video playing', {
+            status,
+            peerUsername: peer?.username || null,
+            videoWidth: remoteVideoRef.current?.videoWidth || 0,
+            videoHeight: remoteVideoRef.current?.videoHeight || 0,
+            remoteStream: describeStream(remoteVideoRef.current?.srcObject),
+        });
+    }
 
     if (!visible) return null;
 
@@ -115,7 +173,7 @@ const CallOverlay = ({
 
                     <div className="text-right">
                         <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.2em] text-slate-200">
-                            <span>{connectionState}</span>
+                            <span>{displayedConnectionState}</span>
                             <span className="w-2 h-2 rounded-full bg-cyan-400" />
                         </div>
                         <p className="mt-3 text-3xl font-black tracking-tight">{formatDuration(callDurationSec)}</p>
@@ -124,8 +182,15 @@ const CallOverlay = ({
 
                 <div className="flex-1 px-6 pb-6 grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
                     <div className="relative rounded-[32px] overflow-hidden border border-white/10 bg-slate-950/80 shadow-[0_30px_80px_rgba(0,0,0,0.45)]">
-                        <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover bg-slate-900" />
-                        {!remoteStream && (
+                        <video
+                            ref={remoteVideoRef}
+                            autoPlay
+                            playsInline
+                            onLoadedMetadata={handleRemoteMetadataLoaded}
+                            onPlaying={handleRemoteVideoPlaying}
+                            className="w-full h-full object-cover bg-slate-900"
+                        />
+                        {!hasRemoteVideoTracks && (
                             <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6">
                                 <div className="w-24 h-24 rounded-[28px] bg-cyan-500/10 text-cyan-300 flex items-center justify-center text-3xl font-black uppercase mb-6">
                                     {(peer?.displayName || peer?.username || '?').slice(0, 2)}
