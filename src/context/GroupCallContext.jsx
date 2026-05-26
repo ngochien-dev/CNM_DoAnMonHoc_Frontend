@@ -706,6 +706,35 @@ export function GroupCallProvider({ children, user }) {
     return nextEnabled;
   }, [audioEnabled, toggleWebRTCVideo]);
 
+  // ─── handlersRef: bridge ổn định để socket effect không phụ thuộc vào callback references ───
+  const handlersRef = useRef({});
+
+  // Effect 1: Cập nhật handlersRef khi callbacks thay đổi (KHÔNG bind socket, không gây re-bind)
+  useEffect(() => {
+    handlersRef.current = {
+      cleanupAllPeers,
+      createOfferForUser,
+      handleAnswer,
+      handleIceCandidate,
+      handleOffer,
+      removeParticipant,
+      removePeer,
+      setActiveCallState,
+      updateParticipant,
+    };
+  }, [
+    cleanupAllPeers,
+    createOfferForUser,
+    handleAnswer,
+    handleIceCandidate,
+    handleOffer,
+    removeParticipant,
+    removePeer,
+    setActiveCallState,
+    updateParticipant,
+  ]);
+
+  // Effect 2: Bind/unbind socket listeners — CHỈ depend on [user] để tránh re-bind
   useEffect(() => {
     // Guard: chỉ bind khi user/token/sessionId sẵn sàng
     const auth = buildSocketAuth();
@@ -808,12 +837,10 @@ export function GroupCallProvider({ children, user }) {
         return;
       }
 
-      updateParticipant(username, {
-        joined: true,
-      });
+      handlersRef.current.updateParticipant(username, { joined: true });
 
       try {
-        await createOfferForUser(username);
+        await handlersRef.current.createOfferForUser(username);
       } catch (err) {
         errorLog("Failed to create offer for joined user", {
           username,
@@ -837,8 +864,8 @@ export function GroupCallProvider({ children, user }) {
 
       if (!username) return;
 
-      removePeer(username);
-      removeParticipant(username);
+      handlersRef.current.removePeer(username);
+      handlersRef.current.removeParticipant(username);
     };
 
     const onEnded = (payload = {}) => {
@@ -846,9 +873,9 @@ export function GroupCallProvider({ children, user }) {
         payload,
       });
 
-      cleanupAllPeers();
+      handlersRef.current.cleanupAllPeers();
       setIsInGroupCall(false);
-      setActiveCallState(null);
+      handlersRef.current.setActiveCallState(null);
       setParticipants([]);
       setIncomingGroupCall(null);
       setMediaStates({});
@@ -903,14 +930,12 @@ export function GroupCallProvider({ children, user }) {
       }
 
       try {
-        await handleOffer({
+        await handlersRef.current.handleOffer({
           fromUsername,
           offer,
         });
 
-        updateParticipant(fromUsername, {
-          joined: true,
-        });
+        handlersRef.current.updateParticipant(fromUsername, { joined: true });
       } catch (err) {
         errorLog("Failed to handle group offer", {
           fromUsername,
@@ -949,14 +974,12 @@ export function GroupCallProvider({ children, user }) {
       }
 
       try {
-        await handleAnswer({
+        await handlersRef.current.handleAnswer({
           fromUsername,
           answer,
         });
 
-        updateParticipant(fromUsername, {
-          joined: true,
-        });
+        handlersRef.current.updateParticipant(fromUsername, { joined: true });
       } catch (err) {
         errorLog("Failed to handle group answer", {
           fromUsername,
@@ -994,7 +1017,7 @@ export function GroupCallProvider({ children, user }) {
         return;
       }
 
-      await handleIceCandidate({
+      await handlersRef.current.handleIceCandidate({
         fromUsername,
         candidate,
       });
@@ -1025,6 +1048,12 @@ export function GroupCallProvider({ children, user }) {
       }));
     };
 
+    log("[GroupCall][Socket] bind listeners", {
+      socketId: socket.id,
+      connected: socket.connected,
+      currentUsername: currentUsernameRef.current,
+    });
+
     socket.on("group-call:started", onStarted);
     socket.on("group-call:incoming", onIncoming);
     socket.on("group-call:joined", onJoined);
@@ -1038,7 +1067,10 @@ export function GroupCallProvider({ children, user }) {
     socket.on("group-call:media-state", onMediaState);
 
     return () => {
-      log("Unbinding group call socket listeners");
+      log("[GroupCall][Socket] unbind listeners", {
+        socketId: socket.id,
+        currentUsername: currentUsernameRef.current,
+      });
 
       socket.offAny(debugAnyGroupCallEvent);
       socket.off("group-call:started", onStarted);
@@ -1053,18 +1085,8 @@ export function GroupCallProvider({ children, user }) {
       socket.off("group-call:ice-candidate", onIceCandidate);
       socket.off("group-call:media-state", onMediaState);
     };
-  }, [
-    user,
-    cleanupAllPeers,
-    createOfferForUser,
-    handleAnswer,
-    handleIceCandidate,
-    handleOffer,
-    removeParticipant,
-    removePeer,
-    setActiveCallState,
-    updateParticipant,
-  ]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]); // CHỈ depend on [user] — handlers truy cập qua handlersRef để tránh re-bind
 
   const canEnd = useMemo(() => {
     const currentUsername = currentUsernameRef.current;
