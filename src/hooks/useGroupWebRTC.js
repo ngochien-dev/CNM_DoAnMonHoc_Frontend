@@ -18,6 +18,40 @@ function errorLog(...args) {
   console.error(DEBUG_PREFIX, ...args);
 }
 
+function describeTrack(track) {
+  if (!track) return null;
+
+  return {
+    id: track.id,
+    kind: track.kind,
+    label: track.label || "",
+    enabled: track.enabled,
+    muted: track.muted,
+    readyState: track.readyState,
+  };
+}
+
+function describeStream(stream) {
+  if (!stream) {
+    return {
+      exists: false,
+      id: null,
+      audioTracks: 0,
+      videoTracks: 0,
+      tracks: [],
+    };
+  }
+
+  return {
+    exists: true,
+    id: stream.id || null,
+    active: stream.active,
+    audioTracks: stream.getAudioTracks().length,
+    videoTracks: stream.getVideoTracks().length,
+    tracks: stream.getTracks().map(describeTrack),
+  };
+}
+
 function normalizeSessionDescription(description) {
   if (!description) return null;
 
@@ -52,6 +86,7 @@ export default function useGroupWebRTC(options = {}) {
   const remoteStreamsRef = useRef({});
   const localStreamRef = useRef(null);
   const isCleaningUpRef = useRef(false);
+  const pendingIceCandidatesRef = useRef({});
 
   const callbacksRef = useRef({
     onSendOffer,
@@ -102,19 +137,73 @@ export default function useGroupWebRTC(options = {}) {
     }
   }, []);
 
-  const setRemoteStreamForUser = useCallback((username, stream) => {
-    remoteStreamsRef.current[username] = stream;
+  const setRemoteStreamForUser = useCallback((username, stream, reason = "remote-stream-updated") => {
+    const publishedStream = stream ? new MediaStream(stream.getTracks()) : null;
+
+    remoteStreamsRef.current[username] = publishedStream;
+
+    log("Remote stream stored", {
+      username,
+      key: username,
+      reason,
+      remoteStream: describeStream(publishedStream),
+      remoteStreamKeys: Object.keys({
+        ...remoteStreamsRef.current,
+        [username]: publishedStream,
+      }),
+    });
 
     setRemoteStreams((prev) => ({
       ...prev,
-      [username]: stream,
+      [username]: publishedStream,
     }));
 
     if (callbacksRef.current.onRemoteStream) {
       callbacksRef.current.onRemoteStream({
         username,
-        stream,
+        stream: publishedStream,
       });
+    }
+  }, []);
+
+  const flushPendingIceCandidates = useCallback(async (username, peerConnection, reason) => {
+    const pendingCandidates = pendingIceCandidatesRef.current[username] || [];
+
+    if (!pendingCandidates.length) return;
+
+    if (!peerConnection?.remoteDescription) {
+      warn("Cannot flush ICE candidates before remoteDescription", {
+        username,
+        reason,
+        pendingCount: pendingCandidates.length,
+      });
+      return;
+    }
+
+    log("Flushing queued ICE candidates", {
+      username,
+      reason,
+      pendingCount: pendingCandidates.length,
+    });
+
+    pendingIceCandidatesRef.current[username] = [];
+
+    for (const candidate of pendingCandidates) {
+      try {
+        const iceCandidate = normalizeIceCandidate(candidate);
+        await peerConnection.addIceCandidate(iceCandidate);
+        log("Queued ICE candidate added", {
+          username,
+          candidateType: iceCandidate.type,
+          candidateProtocol: iceCandidate.protocol,
+        });
+      } catch (err) {
+        warn("Failed to add queued ICE candidate", {
+          username,
+          reason,
+          message: err?.message,
+        });
+      }
     }
   }, []);
 
@@ -163,8 +252,17 @@ export default function useGroupWebRTC(options = {}) {
         })),
       });
 
+      log("getUserMedia success", {
+        localStream: describeStream(stream),
+      });
+
       return stream;
     } catch (err) {
+      errorLog("getUserMedia failed", {
+        name: err?.name,
+        message: err?.message,
+        constraint: err?.constraint || err?.constraintName || null,
+      });
       reportError("Không thể mở camera/micro cho group call", err);
       throw err;
     }
@@ -198,12 +296,13 @@ export default function useGroupWebRTC(options = {}) {
 
       peerConnection.addTrack(track, currentLocalStream);
 
-      log("Added local track to peer", {
+      log("addTrack", {
         username,
         trackId: track.id,
         kind: track.kind,
         enabled: track.enabled,
         readyState: track.readyState,
+        localStreamId: currentLocalStream.id,
       });
     });
   }, []);
@@ -245,11 +344,14 @@ export default function useGroupWebRTC(options = {}) {
         };
 
         peerConnection.ontrack = (event) => {
-          log("Remote track received", {
+          log("ontrack from peer", {
             username,
             trackId: event.track?.id,
             kind: event.track?.kind,
+            muted: event.track?.muted,
+            readyState: event.track?.readyState,
             streamCount: event.streams?.length || 0,
+            streamIds: Array.from(event.streams || []).map((streamItem) => streamItem.id),
           });
 
           let stream = remoteStreamsRef.current[username];
@@ -258,19 +360,36 @@ export default function useGroupWebRTC(options = {}) {
             stream = new MediaStream();
           }
 
-          if (event.streams && event.streams[0]) {
-            stream = event.streams[0];
-          } else if (event.track) {
-            const alreadyExists = stream
-              .getTracks()
-              .some((track) => track.id === event.track.id);
+          const tracksToAttach = event.streams?.[0]
+            ? [...event.streams[0].getTracks()]
+            : [];
 
-            if (!alreadyExists) {
-              stream.addTrack(event.track);
-            }
+          if (
+            event.track &&
+            !tracksToAttach.some((track) => track.id === event.track.id)
+          ) {
+            tracksToAttach.push(event.track);
           }
 
-          setRemoteStreamForUser(username, stream);
+          if (tracksToAttach.length === 0) {
+            warn("ontrack fired without attachable tracks", {
+              username,
+              eventTrack: describeTrack(event.track),
+            });
+            return;
+          }
+
+          tracksToAttach.forEach((track) => {
+            const alreadyExists = stream
+              .getTracks()
+              .some((existingTrack) => existingTrack.id === track.id);
+
+            if (!alreadyExists) {
+              stream.addTrack(track);
+            }
+          });
+
+          setRemoteStreamForUser(username, stream, "ontrack");
         };
 
         peerConnection.onconnectionstatechange = () => {
@@ -410,6 +529,8 @@ export default function useGroupWebRTC(options = {}) {
           signalingState: peerConnection.signalingState,
         });
 
+        await flushPendingIceCandidates(fromUsername, peerConnection, "after-remote-offer");
+
         const answer = await peerConnection.createAnswer();
 
         await peerConnection.setLocalDescription(answer);
@@ -435,7 +556,7 @@ export default function useGroupWebRTC(options = {}) {
         throw err;
       }
     },
-    [addLocalTracksToPeer, createPeerConnection, initLocalStream, reportError]
+    [addLocalTracksToPeer, createPeerConnection, flushPendingIceCandidates, initLocalStream, reportError]
   );
 
   const handleAnswer = useCallback(
@@ -481,6 +602,8 @@ export default function useGroupWebRTC(options = {}) {
           signalingState: peerConnection.signalingState,
           connectionState: peerConnection.connectionState,
         });
+
+        await flushPendingIceCandidates(fromUsername, peerConnection, "after-remote-answer");
       } catch (err) {
         reportError("Không thể xử lý answer group call", err, {
           fromUsername,
@@ -488,7 +611,7 @@ export default function useGroupWebRTC(options = {}) {
         throw err;
       }
     },
-    [reportError]
+    [flushPendingIceCandidates, reportError]
   );
 
   const handleIceCandidate = useCallback(
@@ -510,8 +633,27 @@ export default function useGroupWebRTC(options = {}) {
         const peerConnection = peerConnectionsRef.current[fromUsername];
 
         if (!peerConnection) {
+          pendingIceCandidatesRef.current[fromUsername] = [
+            ...(pendingIceCandidatesRef.current[fromUsername] || []),
+            candidate,
+          ];
           warn("No peer connection found for ICE candidate", {
             fromUsername,
+            queued: true,
+            pendingCount: pendingIceCandidatesRef.current[fromUsername].length,
+          });
+          return;
+        }
+
+        if (!peerConnection.remoteDescription) {
+          pendingIceCandidatesRef.current[fromUsername] = [
+            ...(pendingIceCandidatesRef.current[fromUsername] || []),
+            candidate,
+          ];
+          warn("Queued ICE candidate because remoteDescription is missing", {
+            fromUsername,
+            pendingCount: pendingIceCandidatesRef.current[fromUsername].length,
+            signalingState: peerConnection.signalingState,
           });
           return;
         }
@@ -554,6 +696,8 @@ export default function useGroupWebRTC(options = {}) {
 
         delete peerConnectionsRef.current[username];
       }
+
+      delete pendingIceCandidatesRef.current[username];
 
       const remoteStream = remoteStreamsRef.current[username];
 
@@ -615,6 +759,7 @@ export default function useGroupWebRTC(options = {}) {
       });
 
       peerConnectionsRef.current = {};
+      pendingIceCandidatesRef.current = {};
 
       Object.keys(remoteStreamsRef.current).forEach((username) => {
         const stream = remoteStreamsRef.current[username];
@@ -845,6 +990,18 @@ export default function useGroupWebRTC(options = {}) {
         };
       }),
       remoteStreamUsernames: Object.keys(remoteStreamsRef.current),
+      remoteStreams: Object.fromEntries(
+        Object.entries(remoteStreamsRef.current).map(([username, stream]) => [
+          username,
+          describeStream(stream),
+        ])
+      ),
+      pendingIceCandidates: Object.fromEntries(
+        Object.entries(pendingIceCandidatesRef.current).map(([username, candidates]) => [
+          username,
+          candidates.length,
+        ])
+      ),
       audioEnabled,
       videoEnabled,
       error,
