@@ -9,6 +9,27 @@ import LinkPreview from './LinkPreview';
 import WaveformVoicePlayer from './WaveformVoicePlayer';
 import api from '../../services/api';
 
+const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tiff', '.svg', '.heic', '.heif'];
+const VIDEO_EXTENSIONS = ['.mp4', '.mov', '.m4v', '.avi', '.mkv', '.webm', '.flv', '.3gp', '.3g2', '.wmv'];
+
+const getAttachmentKind = (fileType = '', fileName = '', fileData = '') => {
+    const type = String(fileType).toLowerCase();
+    const name = String(fileName).toLowerCase();
+    const source = String(fileData).toLowerCase();
+
+    if (type.startsWith('image/') || type === 'image') return 'image';
+    if (type.startsWith('video/') || type === 'video') return 'video';
+    if (type.startsWith('audio/') || type === 'audio') return 'audio';
+
+    if (IMAGE_EXTENSIONS.some(ext => name.endsWith(ext))) return 'image';
+    if (VIDEO_EXTENSIONS.some(ext => name.endsWith(ext))) return 'video';
+    if (IMAGE_EXTENSIONS.some(ext => source.includes(ext))) return 'image';
+    if (VIDEO_EXTENSIONS.some(ext => source.includes(ext))) return 'video';
+
+    if (type.includes('gif') || name.endsWith('.gif') || source.includes('.gif')) return 'image';
+    return 'file';
+};
+
 const MessageItem = ({
     msg, user, isMe, sOnline, darkMode, sharedE2EEKey, searchContent,
     translatedMessages, translatingMessageId, showReactionMenu, editingMessage, editText,
@@ -17,6 +38,10 @@ const MessageItem = ({
     handleReactToMessage, handleOpenReportModal, handleEditMessage, handleSaveEdit, handleCancelEdit,
     deleteForMe, unsendEverywhere, onImageClick
 }) => {
+    const senderLabel = msg.sender || msg.senderUsername || '?';
+    const pollOptions = Array.isArray(msg.pollData?.options) ? msg.pollData.options : [];
+    const eventDateParts = msg.eventData?.date ? msg.eventData.date.split('-') : [];
+    const attachmentKind = getAttachmentKind(msg.fileType, msg.fileName, msg.fileData);
 
     // === Giao diện khi tin nhắn bị thu hồi ===
     if (msg.isRevoked) {
@@ -49,7 +74,7 @@ const MessageItem = ({
                             <img src={sOnline.avatar} className="w-full h-full object-cover" alt="avatar" />
                         ) : (
                             <div className="w-full h-full flex items-center justify-center text-white font-bold text-sm bg-gradient-to-tr from-blue-500 to-indigo-500">
-                                {msg.sender[0]?.toUpperCase()}
+                                {senderLabel[0]?.toUpperCase()}
                             </div>
                         )}
                     </div>
@@ -175,8 +200,8 @@ const MessageItem = ({
                                         </div>
                                     </div>
                                     <div className="space-y-1.5">
-                                        {msg.pollData?.options.map((opt, i) => {
-                                            const totalVotes = msg.pollData.options.reduce((sum, o) => sum + (o.votes?.length || 0), 0);
+                                                {pollOptions.map((opt, i) => {
+                                                    const totalVotes = pollOptions.reduce((sum, o) => sum + (o.votes?.length || 0), 0);
                                             const pct = totalVotes === 0 ? 0 : Math.round(((opt.votes?.length || 0) / totalVotes) * 100);
                                             const hasVoted = opt.votes?.includes(user.username);
                                             
@@ -216,8 +241,8 @@ const MessageItem = ({
                                 <div className="min-w-[260px]">
                                     <div className={`flex items-stretch rounded-xl overflow-hidden border shadow-sm ${darkMode && !isMe ? 'border-white/10' : 'border-black/5'}`}>
                                         <div className="w-[60px] bg-red-500 flex flex-col items-center justify-center text-white p-2 shrink-0">
-                                            <span className="text-[10px] font-black uppercase tracking-widest opacity-90 mb-0.5">Tháng {msg.eventData?.date.split('-')[1]}</span>
-                                            <span className="text-2xl font-black leading-none">{msg.eventData?.date.split('-')[2]}</span>
+                                            <span className="text-[10px] font-black uppercase tracking-widest opacity-90 mb-0.5">Tháng {eventDateParts[1] || '--'}</span>
+                                            <span className="text-2xl font-black leading-none">{eventDateParts[2] || '--'}</span>
                                         </div>
                                         <div className={`flex-1 p-3 flex flex-col justify-center ${isMe ? 'bg-white/10' : (darkMode ? 'bg-white/5' : 'bg-gray-50')}`}>
                                             <div className="font-bold text-[15px] mb-1 line-clamp-2 leading-tight">{msg.eventData?.title}</div>
@@ -319,18 +344,18 @@ const MessageItem = ({
                                     {/* File Attachments */}
                                     {msg.fileData && (
                                         <div className="mt-2">
-                                            {msg.fileType === 'audio' ? (
+                                            {attachmentKind === 'audio' ? (
                                                 <div className={`p-1 rounded-xl ${isMe ? '' : ''}`}>
                                                     <WaveformVoicePlayer src={msg.fileData} darkMode={darkMode} />
                                                 </div>
-                                            ) : msg.fileType === 'image' ? (
+                                            ) : attachmentKind === 'image' ? (
                                                 <img 
                                                     src={msg.fileData} 
                                                     onClick={onImageClick} 
                                                     className="max-w-[200px] sm:max-w-xs rounded-xl shadow-sm border border-white/5 cursor-pointer hover:opacity-90 transition-all duration-200" 
                                                     alt="attachment" 
                                                 />
-                                            ) : msg.fileType === 'video' ? (
+                                            ) : attachmentKind === 'video' ? (
                                                 <video controls src={msg.fileData} className="max-w-[200px] sm:max-w-xs rounded-xl shadow-sm border border-white/5" />
                                             ) : (
                                                 <a href={msg.fileData} download={msg.fileName} className={`flex items-center gap-3 p-2.5 rounded-xl text-[13px] font-bold transition-all border ${
