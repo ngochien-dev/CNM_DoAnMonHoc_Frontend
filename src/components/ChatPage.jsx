@@ -1260,8 +1260,36 @@ const ChatPage = ({ user, setUser }) => {
 
     const handleFileUpload = (e) => {
         const file = e.target.files?.[0];
-        if (!file || !user?.username || !activeRoom?.id) return;
-        if (file.size > 5000000) return alert("File quá nặng!");
+        try { console.log('[handleFileUpload] file selected:', file && { name: file.name, type: file.type, size: file.size }); } catch(e){}
+        if (!file || !user?.username || !activeRoom?.id) {
+            // clear input so same file can be selected later
+            try { e.target.value = ''; } catch (err) {}
+            return;
+        }
+
+        // Size limits: images smaller, videos allowed larger
+        const maxImageSize = 5 * 1024 * 1024; // 5 MB
+        const maxVideoSize = 25 * 1024 * 1024; // 25 MB
+
+        if (file.type.startsWith('image')) {
+            if (file.size > maxImageSize) {
+                toast.error('File quá nặng! Ảnh tối đa 5MB');
+                return;
+            }
+        } else if (file.type.startsWith('video')) {
+            if (file.size > maxVideoSize) {
+                toast.error('File quá nặng! Video tối đa 25MB');
+                return;
+            }
+        } else {
+            // Generic limit for other file types
+            if (file.size > 10 * 1024 * 1024) {
+                toast.error('File quá nặng!');
+                return;
+            }
+        }
+
+        const toastId = toast.loading('Đang gửi tập tin...');
         const reader = new FileReader();
         reader.onloadend = () => {
             const payload = {
@@ -1284,8 +1312,34 @@ const ChatPage = ({ user, setUser }) => {
                     iv: replyingToMessage.iv || null
                 };
             }
-            socket.emit('send_message', payload);
+            if (!socket || !socket.connected) {
+                console.warn('[handleFileUpload] socket not connected, enqueueing to offline queue');
+                // fallback: send via offline sync if available
+                try {
+                    sendOfflineMessage({ ...payload }, activeRoom.id).then(opt => {
+                        toast.success('Đã lưu ngoại tuyến (sẽ gửi khi online)', { id: toastId });
+                        console.log('[handleFileUpload] saved offline', opt?.messageId || null);
+                    }).catch(err => {
+                        console.error('[handleFileUpload] save offline failed', err);
+                        toast.error('Gửi thất bại (ngoại tuyến)', { id: toastId });
+                    });
+                } catch (err) {
+                    console.error('[handleFileUpload] offline fallback error', err);
+                    toast.error('Gửi thất bại', { id: toastId });
+                }
+            } else {
+                try {
+                    socket.emit('send_message', payload);
+                    toast.success('Đã gửi', { id: toastId });
+                    console.log('[handleFileUpload] payload sent', { fileName: file.name, fileType: payload.fileType, size: file.size });
+                } catch (err) {
+                    console.error('[handleFileUpload] emit failed', err);
+                    toast.error('Gửi thất bại', { id: toastId });
+                }
+            }
             setReplyingToMessage(null);
+            // clear input so selecting same file again triggers change
+            try { e.target.value = ''; } catch (err) {}
         };
         reader.readAsDataURL(file);
     };
