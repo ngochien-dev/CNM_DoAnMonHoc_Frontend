@@ -1,8 +1,10 @@
 export default function GroupCallControls({
   audioEnabled,
   videoEnabled,
+  isScreenSharing,
   onToggleAudio,
   onToggleVideo,
+  onScreenShare,
   onLeave,
   onEnd,
   canEnd = false,
@@ -32,6 +34,8 @@ export default function GroupCallControls({
         backdropFilter: "blur(10px)",
         border: "1px solid rgba(255,255,255,0.12)",
         zIndex: 10002,
+        flexWrap: "wrap",
+        justifyContent: "center",
       }}
     >
       <button
@@ -56,6 +60,19 @@ export default function GroupCallControls({
         title={videoEnabled ? "Tắt camera" : "Bật camera"}
       >
         {videoEnabled ? "📹 Camera" : "🚫 Camera"}
+      </button>
+
+      <button
+        type="button"
+        onClick={onScreenShare}
+        style={{
+          ...buttonStyle,
+          background: isScreenSharing ? "#0891b2" : "rgba(255,255,255,0.16)",
+          boxShadow: isScreenSharing ? "0 0 0 2px #67e8f9" : "none",
+        }}
+        title={isScreenSharing ? "Dừng chia sẻ" : "Chia sẻ màn hình"}
+      >
+        {isScreenSharing ? "🖥️ Dừng chia sẻ" : "🖥️ Chia sẻ"}
       </button>
 
       <button
@@ -85,4 +102,4 @@ export default function GroupCallControls({
       )}
     </div>
   );
-}
+}

@@ -550,6 +550,7 @@ export function GroupCallProvider({ children, user }) {
     audioEnabled,
     videoEnabled,
     isInitialized,
+    isScreenSharing,
     error: webRTCError,
 
     initLocalStream,
@@ -561,6 +562,8 @@ export function GroupCallProvider({ children, user }) {
     cleanupAllPeers,
     toggleAudio: toggleWebRTCAudio,
     toggleVideo: toggleWebRTCVideo,
+    startScreenShare,
+    stopScreenShare,
     getDebugState,
   } = useGroupWebRTC({
     onSendOffer: sendOffer,
@@ -1483,6 +1486,7 @@ export function GroupCallProvider({ children, user }) {
       audioEnabled,
       videoEnabled,
       isInitialized,
+      isScreenSharing,
 
       error: error || webRTCError,
 
@@ -1496,6 +1500,8 @@ export function GroupCallProvider({ children, user }) {
       endGroupCall,
       toggleAudio,
       toggleVideo,
+      startScreenShare,
+      stopScreenShare,
 
       getDebugState,
     }),
@@ -1510,6 +1516,7 @@ export function GroupCallProvider({ children, user }) {
       audioEnabled,
       videoEnabled,
       isInitialized,
+      isScreenSharing,
       error,
       webRTCError,
       canEnd,
@@ -1520,6 +1527,8 @@ export function GroupCallProvider({ children, user }) {
       endGroupCall,
       toggleAudio,
       toggleVideo,
+      startScreenShare,
+      stopScreenShare,
       getDebugState,
     ]
   );

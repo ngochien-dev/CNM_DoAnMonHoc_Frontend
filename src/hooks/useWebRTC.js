@@ -235,6 +235,7 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
     const connectionStateCallbackRef = useRef(onConnectionStateChange);
     const currentCallIdRef = useRef(null);
     const peerRoleRef = useRef(null);
+    const screenStreamRef = useRef(null);
     const localStreamPromiseRef = useRef(null);
 
     const [localStream, setLocalStream] = useState(null);
@@ -244,6 +245,8 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
     const [iceConnectionState, setIceConnectionState] = useState('new');
     const [isMicEnabled, setIsMicEnabled] = useState(true);
     const [isCameraEnabled, setIsCameraEnabled] = useState(true);
+    const [isScreenSharing, setIsScreenSharing] = useState(false);
+    const isCameraEnabledRef = useRef(true);
 
     useEffect(() => {
         connectionStateCallbackRef.current = onConnectionStateChange;
@@ -413,6 +416,7 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
         setLocalStream(null);
         setIsMicEnabled(true);
         setIsCameraEnabled(true);
+        isCameraEnabledRef.current = true;
     }
 
     async function ensureLocalStream() {
@@ -487,6 +491,7 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
             setLocalStream(stream);
             setIsMicEnabled(true);
             setIsCameraEnabled(true);
+            isCameraEnabledRef.current = true;
             localStreamPromiseRef.current = null;
 
             const devicesAfterSuccess = await enumerateMediaDevicesSnapshot('after-getUserMedia-success');
@@ -930,6 +935,133 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
         });
 
         setIsCameraEnabled(nextValue);
+        isCameraEnabledRef.current = nextValue;
+    }
+
+    // ─── Screen Share helpers ────────────────────────────────────────────────
+
+    async function replaceOutgoingVideoTrack(track) {
+        const peerConnection = peerConnectionRef.current;
+        if (!peerConnection || peerConnection.connectionState === 'closed') {
+            if (CALL_DEBUG_ENABLED) {
+                console.warn('[ScreenShare] replaceOutgoingVideoTrack: peerConnection not available or closed.');
+            }
+            return false;
+        }
+
+        const sender = peerConnection.getSenders().find(
+            (s) => s.track && s.track.kind === 'video'
+        );
+
+        if (!sender) {
+            if (CALL_DEBUG_ENABLED) {
+                console.warn('[ScreenShare] replaceOutgoingVideoTrack: no video sender found.');
+            }
+            return false;
+        }
+
+        try {
+            await sender.replaceTrack(track);
+            if (CALL_DEBUG_ENABLED) {
+                console.debug('[ScreenShare] replaceOutgoingVideoTrack: replaced successfully.', {
+                    trackKind: track?.kind,
+                    trackLabel: track?.label,
+                });
+            }
+            return true;
+        } catch (err) {
+            console.error('[ScreenShare] replaceOutgoingVideoTrack failed:', err);
+            return false;
+        }
+    }
+
+    async function startScreenShare() {
+        if (isScreenSharing) return;
+
+        if (!navigator.mediaDevices?.getDisplayMedia) {
+            console.warn('[ScreenShare] Trình duyệt không hỗ trợ chia sẻ màn hình.');
+            return;
+        }
+
+        let screenStream;
+        try {
+            screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+        } catch (err) {
+            if (err.name === 'NotAllowedError' || err.name === 'AbortError') {
+                if (CALL_DEBUG_ENABLED) {
+                    console.debug('[ScreenShare] User cancelled screen share picker.', { errorName: err.name });
+                }
+                return;
+            }
+            console.error('[ScreenShare] getDisplayMedia failed:', err);
+            return;
+        }
+
+        const screenTrack = screenStream.getVideoTracks()[0];
+        if (!screenTrack) {
+            console.warn('[ScreenShare] No video track in screen stream.');
+            screenStream.getTracks().forEach((t) => t.stop());
+            return;
+        }
+
+        screenStreamRef.current = screenStream;
+
+        const ok = await replaceOutgoingVideoTrack(screenTrack);
+        if (!ok) {
+            screenStream.getTracks().forEach((t) => t.stop());
+            screenStreamRef.current = null;
+            setIsScreenSharing(false);
+            return;
+        }
+
+        setIsScreenSharing(true);
+
+        // Handle browser's native "Stop sharing" button
+        screenTrack.onended = () => {
+            stopScreenShare();
+        };
+
+        if (CALL_DEBUG_ENABLED) {
+            console.debug('[ScreenShare] Screen sharing started.', {
+                callId: currentCallIdRef.current,
+                trackLabel: screenTrack.label,
+            });
+        }
+    }
+
+    async function stopScreenShare() {
+        // Stop screen tracks
+        if (screenStreamRef.current) {
+            screenStreamRef.current.getTracks().forEach((t) => t.stop());
+            screenStreamRef.current = null;
+        }
+
+        setIsScreenSharing(false);
+
+        // Restore camera track
+        const cameraTrack = localStreamRef.current?.getVideoTracks()?.[0];
+        if (cameraTrack) {
+            // Tôn trọng trạng thái camera hiện tại
+            cameraTrack.enabled = isCameraEnabledRef.current;
+            await replaceOutgoingVideoTrack(cameraTrack);
+
+            if (CALL_DEBUG_ENABLED) {
+                console.debug('[ScreenShare] Restored camera track.', {
+                    callId: currentCallIdRef.current,
+                    cameraEnabled: isCameraEnabledRef.current,
+                    trackLabel: cameraTrack.label,
+                });
+            }
+        } else {
+            console.warn('[ScreenShare] stopScreenShare: no camera track to restore.');
+        }
+    }
+
+    function stopScreenStreamIfActive() {
+        if (!screenStreamRef.current) return;
+        screenStreamRef.current.getTracks().forEach((t) => t.stop());
+        screenStreamRef.current = null;
+        setIsScreenSharing(false);
     }
 
     function cleanupSession(reason = 'cleanup-session') {
@@ -941,6 +1073,9 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
             remoteStream: describeStream(remoteStreamRef.current),
             pendingIceCandidates: pendingCandidatesRef.current.length,
         });
+
+        // Dừng screen stream nếu đang share màn hình trước khi cleanup
+        stopScreenStreamIfActive();
 
         resetPeerConnection({
             reason,
@@ -987,11 +1122,14 @@ export default function useWebRTC({ iceServers = DEFAULT_WEBRTC_ICE_SERVERS, onC
         iceConnectionState,
         isCameraEnabled,
         isMicEnabled,
+        isScreenSharing,
         getDebugSnapshot,
         getMediaFailureDebugInfo,
         localStream,
         remoteStream,
         signalingState,
+        startScreenShare,
+        stopScreenShare,
         toggleCamera,
         toggleMic,
     };

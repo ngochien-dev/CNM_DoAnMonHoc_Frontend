@@ -13,6 +13,7 @@ export default function GroupCallOverlay() {
     remoteStreams,
     audioEnabled,
     videoEnabled,
+    isScreenSharing,
     error,
     canEnd,
     currentUsername,
@@ -20,6 +21,8 @@ export default function GroupCallOverlay() {
     endGroupCall,
     toggleAudio,
     toggleVideo,
+    startScreenShare,
+    stopScreenShare,
     getDebugState,
   } = useGroupCall();
 
@@ -175,8 +178,10 @@ export default function GroupCallOverlay() {
       <GroupCallControls
         audioEnabled={audioEnabled}
         videoEnabled={videoEnabled}
+        isScreenSharing={isScreenSharing}
         onToggleAudio={toggleAudio}
         onToggleVideo={toggleVideo}
+        onScreenShare={isScreenSharing ? stopScreenShare : startScreenShare}
         onLeave={leaveGroupCall}
         onEnd={endGroupCall}
         canEnd={canEnd}

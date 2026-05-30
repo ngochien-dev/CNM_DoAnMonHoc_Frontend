@@ -544,11 +544,14 @@ export function CallProvider({ children, user }) {
         iceConnectionState,
         isCameraEnabled,
         isMicEnabled,
+        isScreenSharing,
         getDebugSnapshot: getWebRTCDebugSnapshot,
         getMediaFailureDebugInfo,
         localStream,
         remoteStream,
         signalingState,
+        startScreenShare,
+        stopScreenShare,
         toggleCamera,
         toggleMic,
     } = useWebRTC({
@@ -1691,11 +1694,14 @@ export function CallProvider({ children, user }) {
                 isCallBusy: callState.status !== 'idle',
                 isCameraEnabled,
                 isMicEnabled,
+                isScreenSharing,
                 localStream,
                 remoteStream,
                 rejectIncomingCall,
                 ringCountdownSec,
                 startCall,
+                startScreenShare,
+                stopScreenShare,
                 toggleCamera,
                 toggleMic,
             }}
@@ -1730,8 +1736,11 @@ export function CallProvider({ children, user }) {
                 remoteStream={remoteStream}
                 isMicEnabled={isMicEnabled}
                 isCameraEnabled={isCameraEnabled}
+                isScreenSharing={isScreenSharing}
                 onToggleMic={toggleMic}
                 onToggleCamera={toggleCamera}
+                onStartScreenShare={startScreenShare}
+                onStopScreenShare={stopScreenShare}
                 onEndCall={() => endCall('ended')}
                 connectionLabel={connectionLabel}
                 connectionState={connectionState}
