@@ -6,6 +6,10 @@ Tài liệu này cung cấp chi tiết về kiến trúc giao diện, chức nă
 
 ---
 
+Link sản phẩm: https://ngochien-ott.duckdns.org/chat
+
+---
+
 ## 🎯 Tổng quan Kiến trúc (Overview)
 
 Ứng dụng phía Client được xây dựng trên nền tảng **React.js** kết hợp với bộ công cụ đóng gói siêu tốc **Vite** và phong cách thiết kế giao diện hiện đại **Tailwind CSS**. Hệ thống hỗ trợ đa nền tảng, thiết kế Responsive, Dark/Light mode và mã hóa đầu cuối (E2EE).
